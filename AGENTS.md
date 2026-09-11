@@ -95,6 +95,11 @@ indexed, or for opening the exact `file:line` graft already pointed you at.
 
 ## Issue workflow
 
+Follow [Issue planning](docs/issue-planning.md) when creating, refining, or
+preparing issues for implementation. Write all issue and milestone content in
+English; keep ADRs in Korean for now. Use Feature issues directly when one PR is
+sufficient, and add Tasks only for distinct implementation boundaries.
+
 No local feature-gate, issue-resolution, or PR-review workflow skills are
 installed in this repository. Do not assume another project's branch naming,
 commit-subject rules, or PR automation applies. Follow the current task's scope
