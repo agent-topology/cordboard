@@ -52,7 +52,7 @@ Attempt Outcome  passed · failed · escalated
 
 ```
 span C  step:draft_commit          cord.outcome=passed
-├ span D  attempt  attempt=1  tier=fast  outcome=escalated
+├ span D  attempt  attempt=1  tier=fast  outcome=failed
 ├ span E  attempt  attempt=2  tier=fast  outcome=escalated
 └ span F  attempt  attempt=3  tier=deep  outcome=passed
   └ span F' chat (LiteLLM 프로세스)  gen_ai.request.model=claude-opus-5
@@ -81,17 +81,24 @@ GROUP BY node ORDER BY 2 DESC LIMIT 10
 
 ### 4. `repaired`가 실제로 발생하는 경로를 유지한다
 
-목록에 있는데 데이터에 한 번도 안 나타나는 값은 검증되지 않는다. 슬라이스 0의 규칙표에 **결정적으로 수리 가능한 규칙 하나**(R5: 마침표 제거)를 항상 켜 둔다. 수리 후 통과하면 Step은 `repaired`다.
+목록에 있는데 데이터에 한 번도 안 나타나는 값은 검증되지 않는다. 슬라이스 0의 규칙표에 **결정적으로 수리 가능한 규칙 하나**(R5: 마침표 제거)를 항상 켜 둔다. 수리 후 통과하면 Step은 `repaired`다. 원래 모델 출력의 검증이 실패한 Attempt는
+`failed`로 남기고 위반 규칙 R5를 보존한다. 결정적 수리는 새 모델 Attempt를 만들지 않는다.
 
 이로써 슬라이스 0이 Outcome 중 넷을 실제로 만들어 낸다 — `passed`, `repaired`, `failed`, 그리고 Attempt의 `escalated`.
 
 ### 5. 재시도와 승격을 구분할 수 있게 시도 정책을 짠다
 
 ```
-attempt 1   tier=fast   outcome=escalated
-attempt 2   tier=fast   outcome=escalated    ← 같은 Tier 재시도
+attempt 1   tier=fast   outcome=failed       ← 다음도 fast: 같은 Tier 재시도
+attempt 2   tier=fast   outcome=escalated    ← 다음은 deep: 승격
 attempt 3   tier=deep   outcome=passed
 ```
+
+> **2026-09-11 정정 (#4).** 앞선 예제의 첫 Attempt를 `escalated`에서 `failed`로
+> 고쳤다. 같은 Tier 재시도는 승격이 아니므로 위 SQL이 이 시퀀스에서 세는 행은
+> 정확히 1개다. 모두 실패하면 마지막 deep Attempt는 `failed`, Step도 `failed`다.
+> [최소 실행 예제와 테스트](../minimal-graph.md)가 이 순서와 수리 경로를 검증한다.
+> 여기의 실행 기록은 메모리 내 계약이며 span 전송·저장은 후속 작업이다.
 
 2번을 같은 Tier로 두지 않으면 "재시도가 도왔나 승격이 도왔나"를 영원히 구분할 수 없다.
 
@@ -158,7 +165,9 @@ ADR-0004에서 "승격은 그래프가 소유한다"고 정한 것의 데이터 
 `escalated`를 안 찍으면 성공 기준 C가 그 그래프에 대해 0을 답한다. **조용한 실패다.** 완화 둘:
 
 - `cord-runtime`의 승격 헬퍼가 Attempt span 생성과 `escalated` 마킹을 **같이** 한다. 따로 호출할 일이 없다
-- 뷰어가 "한 Step에 Attempt가 2개 이상인데 `escalated`가 하나도 없음"을 경고로 표시한다
+- 뷰어의 누락 경고는 명시적 승격 결정과 Attempt 기록의 불일치를 대상으로 한다.
+  **2026-09-11 정정:** "Attempt 2개 이상 + 승격 0개"만으로 경고하면 정상적인
+  같은 Tier 재시도를 오탐한다. Tier나 모델 문자열 비교로 승격 의도를 추론하지 않는다
 
 두 번째는 ADR-0006의 관문과 같은 발상이다 — 관측층이 자기 결함을 스스로 찾는다.
 
@@ -198,7 +207,10 @@ ADR-0004에서 "승격은 그래프가 소유한다"고 정한 것의 데이터 
 1. [ ] 두 Outcome 목록을 `cord-runtime`에 enum으로 정의. 서로 섞이면 타입 오류가 나게
 2. [ ] 승격 헬퍼 — Attempt span 종료 + `escalated` 마킹 + 다음 Attempt 시작을 한 호출로
 3. [ ] 슬라이스 0 작업 3: Attempt 계층을 의도적으로 잘못 만들어 질의가 깨지는 것을 확인
-4. [ ] 슬라이스 0 규칙표에 R5(마침표 제거)를 항상 켜 둔다 — `repaired` 경로 확보
-5. [ ] 시도 정책을 `fast → fast → deep`으로. 재시도와 승격을 구분 가능하게
-6. [ ] 뷰어에 "Attempt 2개 이상 + `escalated` 0개" 경고 (슬라이스 1)
+4. [x] 최소 예제 규칙표에 R5(마침표 제거)를 항상 켜 둔다 — `repaired` 경로 검증 (#4)
+5. [x] 최소 예제의 시도 정책을 `fast → fast → deep`으로. 승격 1회 및 같은 Tier 재시도 검증 (#4)
+6. [ ] 뷰어에 명시적 승격 결정과 Attempt 기록의 불일치 경고 (슬라이스 1). 같은 Tier 재시도는 경고하지 않는다
 7. [ ] 설계 문서 어휘표에 Outcome이 두 층임을 명시
+
+최소 예제는 두 enum과 런타임 혼용 거부를 구현했다 (#4). Action 1·2의
+`cord-runtime` 및 span 헬퍼 구현 완료를 의미하지 않는다.

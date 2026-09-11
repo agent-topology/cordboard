@@ -46,15 +46,20 @@ MIT 라이선스의 셀프호스트 프록시 한 대. 모든 그래프의 모�
 
 ### 3. 승격은 그래프가 결정한다
 
-Verdict가 실패를 내면 그래프가 다음 Attempt를 **별개의 호출**로 더 높은 Tier에 보낸다. 그리고 직전 Attempt에 `outcome = escalated`를 **선언한다** — 추론하지 않는다.
+Verdict가 실패를 내면 그래프가 같은 Tier 재시도, 더 높은 Tier 승격, 최종 실패 중 하나를 결정한다. 더 높은 Tier로 보내기로 결정할 때만 직전 Attempt에 `outcome = escalated`를 **선언한다** — 추론하지 않는다.
 
 ```
-attempt 1   tier=fast       outcome=escalated
-attempt 2   tier=fast       outcome=escalated   (재시도, 같은 Tier)
+attempt 1   tier=fast       outcome=failed      (다음도 fast: 같은 Tier 재시도)
+attempt 2   tier=fast       outcome=escalated   (다음은 deep: 승격)
 attempt 3   tier=deep       outcome=passed
 ```
 
 2번을 같은 Tier로 두는 이유는 "재시도가 도왔나 승격이 도왔나"를 구분하기 위해서다. 그 구분이 이 플랫폼이 존재하는 이유 중 하나다.
+
+> **2026-09-11 정정 (#4).** 첫 예제는 같은 Tier 재시도까지 승격으로 기록했다.
+> `fast → fast → deep`의 처분은 `failed → escalated → passed`이며 승격은 정확히 1회다.
+> 새 Outcome 값은 추가하지 않는다. [최소 실행 예제](../minimal-graph.md)는 외부 모델 대신
+> 고정 응답을 주입해 이 계약을 검증한다. LiteLLM 및 OTLP 통합은 후속 작업이다.
 
 ### 4. 금지 A — `router_settings.fallbacks`로 별칭 사이를 건너뛰지 않는다
 
