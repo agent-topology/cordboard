@@ -1,0 +1,130 @@
+# Conventions
+
+## Current development surface
+
+This repository currently contains design documents, ADRs, HTML artifacts, and
+agent tooling configuration. There is no application package layout, dependency
+manifest, formatter, CI workflow, or test suite yet. Do not present a proposed
+directory, command, dependency version, or completed upstream task as implemented
+Cordboard functionality.
+
+When adding the first code, choose tooling for the smallest authorized slice and
+document its actual commands here. Examples in the design artifacts do not
+establish a working build system.
+
+## Documentation and decisions
+
+- Keep [ARCHITECTURE.md](ARCHITECTURE.md) focused on boundaries, ownership,
+  contracts, and implementation status. Keep [README.md](README.md) a
+  human-facing introduction and navigation guide, not an agent instruction source.
+- Put agent execution guidance in [AGENTS.md](AGENTS.md). [CLAUDE.md](CLAUDE.md)
+  delegates to it; avoid maintaining competing instructions.
+- Keep project decisions in `docs/decisions/NNNN-short-title.md` and register
+  them in [DECISIONS.md](docs/decisions/DECISIONS.md). Existing ADRs use Markdown
+  metadata (`Status`, `Date`, `Deciders`, related ADRs), not `scope: workspace`
+  front matter. Follow their structure: Context, Decision, Options Considered,
+  Trade-off Analysis, Consequences, and Action Items, as relevant.
+- Preserve decision history with explicit dated corrections. Update affected
+  examples, action items, the index, and root summaries when a decision changes.
+  Do not mark a planned action completed without evidence.
+- Follow explicit ADR corrections over superseded prose. If sources conflict
+  without a clear correction, record the conflict and resolve it before building
+  the affected behavior. Existing conflicts are listed in
+  [Architecture](ARCHITECTURE.md#open-documentation-issues).
+- Keep the language and terminology of an existing document when editing it.
+  Korean ADR prose and English technical identifiers already coexist here.
+- Use relative links for repository documents. Distinguish planned output paths
+  and HTTP endpoints from files that actually exist. Check links after moving or
+  renaming documents.
+- Preserve HTML artifacts as readable design references. Their historical
+  examples do not override later ADR decisions.
+
+## Names and persisted contracts
+
+Follow [ADR-0002](docs/decisions/0002-vocabulary.md). Natural language is not
+subject to a banned-word list. Add source qualifiers such as `otel.` or `lf.`
+when context is ambiguous; preserve protocol fields such as `trace_id`,
+`traceparent`, `span_id`, `session_id`, and `thread_id`.
+
+Use precise names where they persist in data:
+
+- `cord.run.id`, `cord.subject.id`, `cord.subject.type`
+- `cord.node.name`, `cord.step.attempt`, `cord.tier`, `cord.outcome`
+- `cord.signal.id`, `cord.cascade.depth`, `cord.caused_by.run_id`
+- `cord.redacted`, `cord.semconv.version`
+
+Borrow `gen_ai.*` names for concepts already covered by those conventions and
+record `cord.semconv.version` on each Run root span. Changes to persisted keys
+or closed Outcome vocabularies require an explicit decision and consideration
+of previously archived data.
+
+Node means definition; Step means execution; Attempt means a child span within
+that execution. Keep Step and Attempt Outcome values separate as documented in
+[Architecture](ARCHITECTURE.md#identity-and-execution-records). Keep Verdict
+(validation judgment) separate from Outcome (execution disposition).
+
+One repository per Graph is a scaffolding convention, not an identity or
+registration constraint. A Deployment may host multiple Graphs.
+
+## Implementation boundaries
+
+- Platform logic consumes manifests, APIs, and spans. Do not import graph
+  business logic or hard-code a specific graph's Node names or state fields into
+  the catalog, router, or viewer. Domain-specific example graphs and fixtures
+  should remain separate from generic platform behavior.
+- Derive topology in the graph's own process through the public `agent-topology`
+  API. Keep Cordboard policy in `x-cord`; do not add it to upstream core structure
+  or the A2A Agent Card. Treat published structure as generated output and use
+  the explicit synchronization path to refresh it.
+- Use only public `agent-topology` and `redact-secret` APIs. Record missing
+  upstream capabilities and reproductions in the
+  [upstream requirements](docs/decisions/cordboard-upstream-requirements.md),
+  rather than introducing local detector or topology-parser substitutes.
+- Pin integration dependencies when code is introduced and verify their
+  supported versions. Design-session version numbers are not a substitute for
+  compatibility evidence.
+- Keep model escalation decisions in the graph and make them observable as
+  Attempts. Do not hide them in proxy fallbacks or infer them from model strings.
+- Preserve in-process redaction and the Collector gate. Do not add direct
+  telemetry paths that bypass it, or put full prompts, diffs, and model output
+  into span attributes.
+- Keep mutable execution state scoped to the graph execution rather than shared
+  middleware instances. Separate interrupts from side-effect nodes and make
+  side effects idempotent.
+
+## Verification
+
+For documentation changes, check that every local reference exists, metadata
+and examples agree with the cited decisions, and planned behavior is labeled.
+Review HTML content stored in JavaScript as well as static markup when auditing
+the artifacts. Use `git diff --check` for tracked changes; check new untracked
+documents too, since Git's ordinary diff does not include them.
+
+For implementation experiments, state what is being measured separately from
+the input needed to measure it. Use the smallest fixture that can distinguish
+success from failure. An eight-week query window does not require eight weeks
+of live execution: use a small fixture with appropriate timestamps and known
+counts to verify the window, then separately validate live integration.
+
+Before proposing a command likely to take more than five minutes, inspect and
+validate its inputs when doing so is materially cheaper. Start with focused
+checks and expand only when failures or unresolved risks warrant it.
+
+The design's important checks include graph independence, Run/Step/Attempt
+parentage, archive query correctness and deduplication, rejection of unstamped
+telemetry, absence of synthetic secrets in the archive, manifest drift detection,
+and clean reruns versus state-preserving resumes. Add them with the slice that
+introduces the behavior, not as a prerequisite infrastructure project.
+
+## Repository workflow
+
+Use Graft first for code discovery and impact analysis, then RTK to compress
+command output as described in [AGENTS.md](AGENTS.md) and [RTK.md](RTK.md).
+An empty or unindexed graph is a reason to read the relevant documents directly,
+not evidence that the documents are absent.
+
+No repository-local issue-resolution or PR-review skills are installed under
+`.agents/skills/`. No project branch-prefix or commit-subject convention has
+been established here. Do not inherit another project's workflow merely because
+`workbench` appears as a design precedent. Use the current task's authorization
+and preserve unrelated work.

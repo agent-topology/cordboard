@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cordboard — 교차 어휘 사전</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E9EBEE; --plate:#F6F7F9; --ink:#141C26; --soft:#4E5A66; --faint:#7C868F; --rule:#C7CCD3;
+  --cord:#1D4E79; --cord-bg:#E2EAF1;
+  --hot:#A32B2B; --hot-bg:#F5E4E4;
+  --warn:#8F6414; --warn-bg:#F0E8D6;
+  --out:#8A8F96; --sp:clamp(1rem,3vw,1.75rem);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans KR",system-ui,sans-serif;line-height:1.7;letter-spacing:-.005em}
+code,.mono{font-family:"IBM Plex Mono","IBM Plex Sans KR",monospace;letter-spacing:0}
+
+.wrap{max-width:1080px;margin:0 auto;padding:0 var(--sp)}
+section{padding:clamp(2.4rem,5.5vw,3.8rem) 0 0}
+h1,h2,h3{font-weight:600;line-height:1.25;letter-spacing:-.02em;margin:0}
+h2{font-size:clamp(1.25rem,2.9vw,1.7rem)}
+p{margin:.65rem 0}
+.lede{color:var(--soft);max-width:66ch;font-weight:300;font-size:1rem}
+.note{font-size:.85rem;color:var(--faint);max-width:70ch}
+
+/* hero */
+.hero{padding-top:clamp(2.2rem,6vw,4rem)}
+.tagline{font-size:.78rem;color:var(--faint);border-bottom:1px solid var(--rule);
+  padding-bottom:.65rem;margin-bottom:1.4rem;display:flex;gap:.9rem;flex-wrap:wrap}
+.tagline b{font-weight:500;color:var(--soft)}
+.hero h1{font-size:clamp(1.9rem,5.6vw,3.3rem);font-weight:700;letter-spacing:-.045em;line-height:1.05}
+.hero .sub{font-size:clamp(.98rem,2.1vw,1.16rem);font-weight:300;color:var(--soft);
+  max-width:52ch;margin-top:.9rem;line-height:1.55}
+
+.catch{margin-top:1.8rem;display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+@media(min-width:820px){.catch{grid-template-columns:repeat(3,1fr)}}
+.ct{background:#fff;padding:1.15rem 1.1rem;border-top:3px solid var(--hot)}
+.ct .k{font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--hot);font-weight:500;display:block;margin-bottom:.4rem}
+.ct h3{font-size:.95rem;margin-bottom:.3rem}
+.ct p{font-size:.83rem;color:var(--soft);margin:.25rem 0 0}
+.ct .fix{margin-top:.65rem;font-size:.82rem;color:var(--ink);border-left:2px solid var(--cord);padding-left:.6rem}
+
+/* convention */
+.conv{margin-top:1.5rem;display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+@media(min-width:900px){.conv{grid-template-columns:1.1fr 1fr}}
+.conv > div{background:var(--plate);padding:1.3rem 1.25rem}
+.conv h3{margin-bottom:.6rem;font-size:.98rem}
+.conv ol{margin:0;padding-left:1.15rem;font-size:.88rem;color:var(--soft)}
+.conv li{padding:.28rem 0}
+.conv b{color:var(--ink);font-weight:500}
+.pfx{display:grid;grid-template-columns:auto 1fr;gap:.3rem .9rem;font-size:.85rem;align-items:baseline}
+.pfx .p{font-family:"IBM Plex Mono",monospace;font-size:.82rem;color:var(--cord);font-weight:500}
+.pfx .d{color:var(--soft)}
+
+/* controls */
+.controls{position:sticky;top:0;z-index:5;background:var(--paper);
+  padding:1rem 0 .85rem;border-bottom:1px solid var(--rule);margin-top:1.4rem}
+.searchrow{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+#q{flex:1;min-width:210px;font-family:inherit;font-size:.92rem;padding:.55rem .75rem;
+  border:1px solid var(--rule);background:#fff;color:var(--ink)}
+#q:focus{outline:2px solid var(--cord);outline-offset:-1px}
+.count{font-size:.78rem;color:var(--faint);font-family:"IBM Plex Mono",monospace;white-space:nowrap}
+.chips{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.65rem}
+.chip{appearance:none;border:1px solid var(--rule);background:var(--plate);cursor:pointer;
+  font-family:"IBM Plex Mono",monospace;font-size:.75rem;padding:.28rem .55rem;color:var(--soft)}
+.chip:hover{background:#fff}
+.chip[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip.danger[aria-pressed="true"]{background:var(--hot);border-color:var(--hot)}
+.chip:focus-visible{outline:2px solid var(--cord);outline-offset:1px}
+
+/* entries */
+.entries{border-top:1px solid var(--rule);margin-top:0}
+.entry{border-bottom:1px solid var(--rule);background:var(--plate)}
+.entry.hot{background:#fff;border-left:3px solid var(--hot)}
+.entry.warn{border-left:3px solid var(--warn)}
+.ehead{width:100%;appearance:none;border:0;background:none;cursor:pointer;text-align:left;
+  font-family:inherit;padding:.85rem 1.1rem;display:grid;gap:.15rem .9rem;align-items:baseline}
+@media(min-width:760px){.ehead{grid-template-columns:190px 1fr auto}}
+.ehead:hover{background:rgba(255,255,255,.6)}
+.ehead:focus-visible{outline:2px solid var(--cord);outline-offset:-2px}
+.ehead .w{font-size:1rem;font-weight:600}
+.ehead .gist{font-size:.84rem;color:var(--soft)}
+.ehead .n{font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--faint);white-space:nowrap}
+.entry.hot .ehead .n{color:var(--hot)}
+.entry.warn .ehead .n{color:var(--warn)}
+
+.ebody{display:none;padding:0 1.1rem 1.2rem}
+.entry.open .ebody{display:block}
+.defs{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.df{background:#fff;padding:.7rem .85rem;display:grid;gap:.15rem .8rem}
+@media(min-width:640px){.df{grid-template-columns:96px 1fr}}
+.df .s{font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--faint);font-weight:500}
+.df.own{background:var(--cord-bg)}
+.df.own .s{color:var(--cord)}
+.df .t{font-size:.86rem;color:var(--soft)}
+.df .t b{color:var(--ink);font-weight:500}
+.ruling{margin-top:.85rem;font-size:.87rem;color:var(--ink);
+  border-left:2px solid var(--cord);padding-left:.75rem}
+.ruling .lab{font-size:.73rem;font-weight:500;color:var(--cord);display:block;margin-bottom:.2rem}
+.entry.hot .ruling{border-left-color:var(--hot)}
+.entry.hot .ruling .lab{color:var(--hot)}
+
+.empty{padding:2.5rem 1rem;text-align:center;color:var(--faint);font-size:.9rem;display:none}
+
+footer{margin-top:3rem;border-top:1px solid var(--rule);padding:1.8rem 0 3rem;font-size:.82rem;color:var(--faint)}
+footer p{max-width:66ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<section class="hero">
+  <div class="tagline">
+    <span><b>cordboard</b></span>
+    <span>ADR-0002 보조 문서</span>
+    <span>같은 단어, 다른 뜻</span>
+  </div>
+  <h1>이 단어,<br>누구 말인가</h1>
+  <p class="sub">
+    OTel · LangGraph · LangChain · Langfuse · DeepAgents · Agent Protocol · LiteLLM · A2A · redact-secret.
+    아홉 개 출처가 같은 단어를 다르게 쓴다. 여기 없는 단어는 안전하다.
+  </p>
+
+  <div class="catch">
+    <div class="ct">
+      <span class="k">catch 01</span>
+      <h3>Rule이 정면 충돌한다</h3>
+      <p>Langfuse의 Rule도 "필터 + 트리거"다. 같은 프로젝트에서 "룰 추가해"가 통하지 않는다.</p>
+      <p class="fix">→ cordboard 문서에서 <code>Rule</code>은 항상 <code>cord.Rule</code>. Langfuse 것은 <code>lf.Rule</code></p>
+    </div>
+    <div class="ct">
+      <span class="k">catch 02</span>
+      <h3>우리가 금지어를 썼다</h3>
+      <p><code>chain</code>을 금지어로 지정해 놓고 <code>cord.chain.depth</code>에 넣었다. LangChain과 Langfuse 양쪽과 부딪힌다.</p>
+      <p class="fix">→ <code>Cascade Depth</code> / <code>cord.cascade.depth</code> 로 개명</p>
+    </div>
+    <div class="ct">
+      <span class="k">catch 03</span>
+      <h3>Signal도 안전하지 않았다</h3>
+      <p>OTel이 traces·metrics·logs를 "signals"라 부른다. "아무와도 충돌 안 함"은 틀린 판단이었다.</p>
+      <p class="fix">→ 이름은 유지. 대신 충돌 목록에 올리고 텔레메트리 얘기 중엔 항상 수식</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>수식 규칙 — <code>&lt;source&gt;.&lt;word&gt;</code></h2>
+  <p class="lede">
+    접두사는 신호이지 장식이 아니다. 전부 붙이면 아무 의미도 없어진다.
+  </p>
+  <div class="conv">
+    <div>
+      <h3>언제 붙이나</h3>
+      <ol>
+        <li><b>충돌 목록에 있는 단어는 항상.</b> 아래 목록이 그 목록이다</li>
+        <li><b>cordboard 문서 안에서 <code>cord.</code>는 생략 가능.</b> 기본 네임스페이스이므로. 단 같은 문단에 남의 것이 함께 나오면 붙인다</li>
+        <li><b>충돌 없는 단어에는 붙이지 않는다.</b> <code>otel.Collector</code>는 과잉이다 — Collector는 하나뿐이다</li>
+        <li><b>금지어는 수식해도 우리 도메인 명사가 되지 않는다.</b> <code>lf.Event</code>는 남의 것을 가리킬 때만 쓴다</li>
+        <li><b>코드에서는 속성 접두사가 이미 그 일을 한다.</b> <code>cord.tier</code>에 또 붙이지 않는다</li>
+      </ol>
+    </div>
+    <div>
+      <h3>출처 접두사</h3>
+      <div class="pfx">
+        <span class="p">cord.</span><span class="d">우리 것 — 기본 네임스페이스</span>
+        <span class="p">otel.</span><span class="d">OpenTelemetry (SDK · Collector · semconv)</span>
+        <span class="p">lf.</span><span class="d">Langfuse</span>
+        <span class="p">lg.</span><span class="d">LangGraph</span>
+        <span class="p">lc.</span><span class="d">LangChain</span>
+        <span class="p">ap.</span><span class="d">Agent Protocol / Aegra</span>
+        <span class="p">da.</span><span class="d">DeepAgents</span>
+        <span class="p">llm.</span><span class="d">LiteLLM</span>
+        <span class="p">a2a.</span><span class="d">A2A Agent Card</span>
+        <span class="p">ss.</span><span class="d">redact-secret</span>
+        <span class="p">wb.</span><span class="d">workbench (선례)</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>사전</h2>
+  <p class="lede">
+    붉은 항목은 <b>같은 문맥에서 다르게 쓰이는</b> 위험한 단어. 황토는 문맥이 달라 덜 부딪히는 것.
+    회색은 참고용 — 충돌이 없다.
+  </p>
+
+  <div class="controls">
+    <div class="searchrow">
+      <input id="q" type="search" placeholder="단어 검색 — run, span, rule …" aria-label="용어 검색">
+      <span class="count" id="count"></span>
+    </div>
+    <div class="chips" id="chips">
+      <button class="chip danger" data-f="hot" aria-pressed="false">🔴 충돌</button>
+      <button class="chip" data-f="warn" aria-pressed="false">🟡 주의</button>
+      <button class="chip" data-f="cordboard" aria-pressed="false">cordboard</button>
+      <button class="chip" data-f="otel" aria-pressed="false">otel</button>
+      <button class="chip" data-f="lf" aria-pressed="false">lf</button>
+      <button class="chip" data-f="lg" aria-pressed="false">lg</button>
+      <button class="chip" data-f="lc" aria-pressed="false">lc</button>
+      <button class="chip" data-f="ap" aria-pressed="false">ap</button>
+      <button class="chip" data-f="da" aria-pressed="false">da</button>
+      <button class="chip" data-f="llm" aria-pressed="false">llm</button>
+      <button class="chip" data-f="a2a" aria-pressed="false">a2a</button>
+      <button class="chip" data-f="ss" aria-pressed="false">ss</button>
+      <button class="chip" data-f="wb" aria-pressed="false">wb</button>
+    </div>
+  </div>
+
+  <div class="entries" id="entries"></div>
+  <div class="empty" id="empty">해당하는 항목이 없습니다.</div>
+</section>
+
+<footer>
+  <p>
+    ADR-0002(어휘)의 보조 문서. 충돌 항목이 추가되면 ADR도 함께 갱신한다.
+    여기 없는 단어는 안전하다는 뜻이므로, 새 의존성을 채택할 때 이 목록을 먼저 훑는다.
+  </p>
+</footer>
+</div>
+
+<script>
+const T = [
+/* ── 🔴 HOT ─────────────────────────────────────────── */
+{w:"Rule", lvl:"hot", gist:"양쪽 다 필터 + 트리거다",
+ defs:[
+  {s:"cordboard", own:1, t:"Signal을 Assistant + 입력으로 바꾸는 선언. <b>cord.yaml의 triggers</b>"},
+  {s:"lf", t:"필터와 샘플링 비율로 들어오는 observation을 선택해 evaluator를 실행하는 설정"},
+ ],
+ rule:"cordboard 문서에서는 <code>cord.Rule</code>로 고정. Langfuse의 것은 <code>lf.Rule</code>로만 부른다. 평가는 out-of-scope라 실무에서 부딪힐 일은 적지만, Langfuse UI를 보면서 대화하면 즉시 혼선이 난다."},
+
+{w:"Span", lvl:"hot", gist:"Langfuse는 observation 타입 중 하나로 좁혔다",
+ defs:[
+  {s:"cordboard", own:1, t:"노드마다 뱉는 기록. OTel span과 같은 것"},
+  {s:"otel", t:"이름·시작·끝·부모를 가진 <b>구간</b> 하나. trace의 구성 단위"},
+  {s:"lf", t:"observation <b>타입 중 하나</b>. 작업 구간을 뜻하며 generation·event·tool과 나란히 있다"},
+ ],
+ rule:"우리 Span은 otel 의미다. Langfuse 화면에서 'Span'이라고 적힌 배지는 <code>lf.Span</code>(타입 라벨)이지 우리 Span이 아니다. 우리 Attempt는 <code>lf.Generation</code> 타입으로 들어간다."},
+
+{w:"Event", lvl:"hot", gist:"세 가지를 가리켜서 우리는 금지했다",
+ defs:[
+  {s:"cordboard", own:1, t:"<b>금지어.</b> 외부 사건은 Signal, 노드 기록은 Span"},
+  {s:"otel", t:"span 안에 찍는 <b>순간</b> 표시. 지속시간도 자식도 없다"},
+  {s:"lf", t:"observation 타입 중 하나. 트레이싱의 기본 구성 요소"},
+  {s:"", t:"일상어 — 깃허브 웹훅 같은 외부에서 오는 것"},
+ ],
+ rule:"우리 문서에서 수식 없는 'event'는 오류다. 남의 것을 가리킬 때만 <code>otel.Event</code> / <code>lf.Event</code>."},
+
+{w:"Agent", lvl:"hot", gist:"제품명·타입·개념이 다 이 단어다",
+ defs:[
+  {s:"cordboard", own:1, t:"<b>금지어.</b> 우리는 Graph라 부른다"},
+  {s:"lf", t:"observation 타입 중 하나. 다단계 추론·도구 오케스트레이션 워크플로를 나타낸다"},
+  {s:"da", t:"<code>create_deep_agent()</code>가 만드는 것. 미들웨어 스택이 붙은 CompiledStateGraph"},
+  {s:"a2a", t:"주소를 갖고 카드를 내는 단위"},
+  {s:"", t:"일상어 — 도구를 쓰는 모델"},
+ ],
+ rule:"<code>gen_ai.*</code> 속성 이름 안에서만 허용(<code>gen_ai.agent.*</code>). 그 외에는 Graph."},
+
+{w:"Graph", lvl:"hot", gist:"Langfuse에도 'Agent Graph' 기능이 있다",
+ defs:[
+  {s:"cordboard", own:1, t:"코드. 레포 하나. 자기 프로세스와 오리진을 갖는다"},
+  {s:"lg", t:"<code>StateGraph</code> — 노드와 엣지로 된 실행 정의"},
+  {s:"lf", t:"<b>Agent Graph</b> — 한 trace 안의 observation 흐름을 시각화하는 화면"},
+ ],
+ rule:"우리 Graph는 <b>정의된 코드 단위</b>, <code>lf.AgentGraph</code>는 <b>한 실행의 시각화</b>다. 우리 뷰어는 Manifest에서 그리므로 Run이 없어도 그려진다 — 그게 <code>lf.AgentGraph</code>와의 결정적 차이다."},
+
+{w:"Chain", lvl:"hot", gist:"우리가 금지해 놓고 속성 이름에 썼다",
+ defs:[
+  {s:"cordboard", own:1, t:"<b>금지어.</b> 그런데 <code>cord.chain.depth</code>에 쓰고 있었다 → <code>cord.cascade.depth</code>로 개명"},
+  {s:"lc", t:"LangChain의 원래 개념 — 호출을 순서대로 엮은 것"},
+  {s:"lf", t:"observation 타입 중 하나. retriever에서 LLM 호출로 컨텍스트를 넘기는 것 같은 단계 간 연결"},
+ ],
+ rule:"Run이 Run을 부르는 깊이는 <b>Cascade Depth</b>로 부른다. ADR-0002의 명사표를 고쳐야 한다."},
+
+{w:"Assistant", lvl:"hot", gist:"Langfuse에도 같은 이름의 제품이 있다",
+ defs:[
+  {s:"cordboard", own:1, t:"Graph + 고정 설정. <b>API 경계에서만</b> 쓴다"},
+  {s:"ap", t:"<code>/assistants</code> — graph_id에서 만드는 실행 가능한 등록 단위"},
+  {s:"lf", t:"<b>Langfuse Assistant</b> — 제품 안의 AI 도우미. 자연어로 데이터를 탐색한다"},
+ ],
+ rule:"우리 것은 <code>ap.Assistant</code>에서 빌린 것이다. 사람이 읽는 화면과 문서에서는 '등록된 그래프'라고 쓴다."},
+
+{w:"Trace", lvl:"hot", gist:"otel과 lf가 미묘하게 다르다",
+ defs:[
+  {s:"cordboard", own:1, t:"<b>금지어.</b> 우리는 Run이라 부른다. 1 Run = 1 trace"},
+  {s:"otel", t:"같은 <code>trace_id</code>를 가진 span들의 트리"},
+  {s:"lf", t:"애플리케이션의 요청 하나. 전체 입출력·메타데이터와 중첩된 observation들을 담는다"},
+ ],
+ rule:"Langfuse의 trace는 <b>자체 필드를 가진 엔티티</b>라 otel의 '루트 span'과 완전히 같지 않다. 우리는 Run으로만 말한다."},
+
+{w:"Session", lvl:"hot", gist:"우리 Subject가 여기로 매핑된다",
+ defs:[
+  {s:"cordboard", own:1, t:"<b>금지어.</b> 묶음은 Subject다"},
+  {s:"lf", t:"같은 사용자 상호작용에 속한 trace들을 묶는 것. 멀티턴 대화나 채팅 스레드에 쓴다"},
+ ],
+ rule:"<code>cord.subject.id</code> → <code>lf.session_id</code>로 내보낸다. 매핑은 하되 이름은 안 빌린다 — 대화형 전제가 우리와 안 맞기 때문."},
+
+{w:"Thread", lvl:"hot", gist:"라벨처럼 생겼지만 저장소다",
+ defs:[
+  {s:"cordboard", own:1, t:"<b>금지어.</b> 플랫폼이 해석하지 않는다 (ADR-0003)"},
+  {s:"lg", t:"체크포인터의 <b>기본 키</b>. 상태 스냅샷의 저장·조회 단위이고 상태가 누적된다"},
+  {s:"ap", t:"Run이 속하는 단위. <code>/threads</code>"},
+  {s:"lf", t:"Session 설명에 '채팅 스레드'로 등장 — 개념적 묶음"},
+ ],
+ rule:"1 Run = 1 Thread. 재개는 같은 Thread(같은 Run이 이어짐), 재실행은 새 Thread(깨끗한 시작)."},
+
+{w:"Signal", lvl:"hot", gist:"OTel이 텔레메트리 종류를 이렇게 부른다",
+ defs:[
+  {s:"cordboard", own:1, t:"외부에서 오는 사건. webhook · file · schedule · manual · run.finished"},
+  {s:"otel", t:"텔레메트리 <b>종류</b> — traces, metrics, logs, profiles를 signals라 부른다"},
+ ],
+ rule:"이름은 유지한다. otel의 용법은 스펙·아키텍처 층에서만 나오고 일상 코드에는 거의 안 쓰이기 때문. 다만 텔레메트리 파이프라인을 논할 때는 <code>cord.Signal</code>로 수식한다."},
+
+/* ── 🟡 WARN ────────────────────────────────────────── */
+{w:"Node", lvl:"warn", gist:"우리는 정의와 실행을 갈랐다",
+ defs:[
+  {s:"cordboard", own:1, t:"Graph <b>정의</b> 안의 한 자리. Manifest에 있다. 실행된 것은 Step"},
+  {s:"lg", t:"그래프의 정점. 상태를 받아 상태 갱신을 반환하는 함수"},
+ ],
+ rule:"LangGraph는 정의와 실행을 한 단어로 부른다. 우리는 뷰어가 실행 없는 그래프도 그려야 해서 갈랐다."},
+
+{w:"Step", lvl:"warn", gist:"Node의 실행 인스턴스",
+ defs:[
+  {s:"cordboard", own:1, t:"Node가 한 Run에서 실제로 실행된 것. <code>lf.Observation(type=span)</code>으로 나간다"},
+  {s:"lg", t:"슈퍼스텝 — 체크포인트 단위. 우리 Step과 경계가 다를 수 있다"},
+ ],
+ rule:"<code>lg</code>의 슈퍼스텝은 병렬 노드를 묶을 수 있어 우리 Step과 1:1이 아니다. 혼동 시 수식."},
+
+{w:"Observation", lvl:"warn", gist:"Langfuse에서 Step과 Attempt 둘 다가 된다",
+ defs:[
+  {s:"lf", t:"trace 안의 개별 단계. span·generation·event·tool 등 타입이 있고 중첩된다"},
+  {s:"cordboard", own:1, t:"직접 쓰지 않는다. Step → <code>type=span</code>, Attempt → <code>type=generation</code>"},
+ ],
+ rule:"Langfuse 데이터 모델을 얘기할 때만 쓴다. 우리 도메인 명사는 Step과 Attempt."},
+
+{w:"Task", lvl:"warn", gist:"Langfuse에서는 실험용 함수다",
+ defs:[
+  {s:"cordboard", own:1, t:"<b>금지어.</b> Run이라 부른다"},
+  {s:"lf", t:"실험 중 dataset item을 처리하는 함수 정의. 테스트 대상 애플리케이션 코드"},
+ ],
+ rule:"평가가 out-of-scope라 실무 충돌은 낮다. 그래도 금지어 유지."},
+
+{w:"Score", lvl:"warn", gist:"우리 Verdict가 여기로 들어간다",
+ defs:[
+  {s:"lf", t:"주석이나 자동 평가의 출력. 숫자·범주형·불리언·텍스트 값을 trace·observation·session·dataset run에 붙인다"},
+  {s:"cordboard", own:1, t:"쓰지 않는다. 우리 개념은 <b>Verdict</b> — 결정적 규칙표의 판정"},
+ ],
+ rule:"저장 구조만 빌린다. score라고 부르면 평가(eval)와 섞이고, 평가는 out-of-scope다."},
+
+{w:"Evaluator", lvl:"warn", gist:"평가 쪽 단어라 우리는 안 쓴다",
+ defs:[
+  {s:"lf", t:"observation 타입이자 실험 결과를 채점하는 함수. LLM-as-a-Judge를 포함"},
+  {s:"cordboard", own:1, t:"쓰지 않는다. 우리 검증기는 <b>결정적 규칙표</b>이고 두 번째 모델 호출이 아니다"},
+ ],
+ rule:"'검증기'와 'evaluator'를 같은 것으로 번역하지 않는다."},
+
+{w:"Model", lvl:"warn", gist:"Langfuse의 Model Definition은 가격표다",
+ defs:[
+  {s:"cordboard", own:1, t:"프로바이더 문자열. <code>claude-opus-5</code> 같은 것. 그래프는 이걸 보지 않는다"},
+  {s:"llm", t:"<code>litellm_params.model</code> — 실제 배포. 공개 별칭은 <code>model_name</code>"},
+  {s:"lf", t:"<b>Model Definition</b> — 토큰당 가격을 담은 설정. 비용 계산용"},
+ ],
+ rule:"우리 층에서 노드가 선언하는 것은 <b>Tier</b>이지 Model이 아니다."},
+
+{w:"Tier", lvl:"warn", gist:"우리 것. LiteLLM의 model_name으로 구현된다",
+ defs:[
+  {s:"cordboard", own:1, t:"모델 능력 등급의 이름. <code>fast</code>/<code>standard</code>/<code>deep</code>. 사다리는 순서가 있고 능력 별칭은 없다"},
+  {s:"llm", t:"대응 개념 없음. <code>model_name</code> 공개 별칭으로 구현한다"},
+ ],
+ rule:"승격은 Tier가 올라간 것이지 모델 문자열이 바뀐 게 아니다. 로드밸런싱으로도 문자열은 바뀐다."},
+
+{w:"Tool", lvl:"warn", gist:"어디서나 쓰지만 층이 다르다",
+ defs:[
+  {s:"lc", t:"모델이 호출할 수 있는 함수"},
+  {s:"lf", t:"observation 타입 중 하나. 도구 호출을 나타낸다"},
+  {s:"da", t:"<code>interrupt_on</code>으로 도구 단위 승인을 선언할 수 있는 대상"},
+  {s:"cordboard", own:1, t:"도메인 명사가 아니다. 그래프 내부 사정"},
+ ],
+ rule:"플랫폼은 도구를 모른다. Step 아래 자식 span으로 나타날 뿐이다."},
+
+{w:"Deployment", lvl:"warn", gist:"우리 것은 프로세스 하나",
+ defs:[
+  {s:"cordboard", own:1, t:"Graph를 호스팅하는 프로세스 하나. 기본적으로 Graph와 1:1"},
+  {s:"lg", t:"LangGraph Platform의 배포 단위 — 관제면 개념"},
+  {s:"lf", t:"self-hosting 문서에서 인스턴스를 뜻함 (dev/staging/prod)"},
+ ],
+ rule:"우리는 프로덕션 배포를 out-of-scope로 뒀다. <code>cord.Deployment</code>는 로컬 프로세스를 뜻한다."},
+
+{w:"Processor", lvl:"warn", gist:"OTel 자체가 두 가지로 쓴다",
+ defs:[
+  {s:"otel", t:"<b>SDK의 SpanProcessor</b> — 프로세스 안에서 span이 나가기 전 가로채는 훅"},
+  {s:"otel", t:"<b>Collector의 processor</b> — 수집기 파이프라인의 중간 단계"},
+  {s:"cordboard", own:1, t:"마스킹은 전자(①), 관문은 후자(③). 둘 다 쓴다"},
+ ],
+ rule:"ADR-0006을 읽을 때 이 둘을 구분해야 한다. 'SpanProcessor'와 'Collector processor'로 항상 풀어 쓴다."},
+
+{w:"Policy", lvl:"warn", gist:"redact-secret의 핵심 개념",
+ defs:[
+  {s:"ss", t:"평문 없는 메타데이터를 받아 <code>block</code>·<code>redact</code>·<code>warn</code>·<code>allow</code> 중 하나를 반환하는 함수"},
+  {s:"cordboard", own:1, t:"ss의 것을 그대로 쓴다. 정책 값은 우리가 정한다 — 개인키는 block"},
+ ],
+ rule:"탐지는 ss가, 처분은 cordboard가. 이 분리가 ADR-0006의 구조다."},
+
+{w:"Finding", lvl:"warn", gist:"평문을 담지 않는 것이 핵심",
+ defs:[
+  {s:"ss", t:"탐지 결과. 분류·액션·원본 오프셋만 담고 <b>평문을 절대 담지 않는다</b>"},
+ ],
+ rule:"로그가 2차 유출 경로가 되는 걸 구조적으로 막는 장치. 우리 코드도 이 성질을 깨면 안 된다."},
+
+{w:"Middleware", lvl:"warn", gist:"DeepAgents의 확장 지점",
+ defs:[
+  {s:"da", t:"<code>AgentMiddleware</code> — <code>wrap_tool_call</code> 등으로 에이전트 동작을 가로챈다. 이름이 내장 항목과 같으면 그 자리를 교체"},
+  {s:"cordboard", own:1, t:"<code>cord-runtime</code>이 SpanProcessor와 이것 두 형태로 같은 로직을 낸다"},
+ ],
+ rule:"<code>--template deep</code> 그래프에서만 등장한다."},
+
+/* ── 참고 (충돌 없음) ───────────────────────────────── */
+{w:"Subject", lvl:"", gist:"우리 것. 충돌 없음",
+ defs:[{s:"cordboard", own:1, t:"Run이 다루는 외부 대상. URI 문자열. 필수 필드"}],
+ rule:"아홉 출처 어디에도 같은 이름이 없다. Thread 대신 이걸 만든 이유는 ADR-0003."},
+
+{w:"Attempt", lvl:"", gist:"Step 안의 시도 하나",
+ defs:[
+  {s:"cordboard", own:1, t:"자식 span으로 기록된다. <code>lf.Generation</code> 타입"},
+  {s:"wb", t:"원래 이벤트 스키마의 '시도/승격 회차'"},
+ ],
+ rule:"metadata가 아니라 <b>행</b>이 되는 것이 ADR-0008의 핵심."},
+
+{w:"Outcome", lvl:"", gist:"두 층으로 갈렸다",
+ defs:[
+  {s:"cordboard", own:1, t:"Step: passed·repaired·failed·awaiting_approval·halted<br>Attempt: passed·failed·escalated"},
+  {s:"wb", t:"원래는 하나의 닫힌 목록이었다"},
+ ],
+ rule:"값 추가는 코드 변경이 아니라 어휘 변경이다."},
+
+{w:"Verdict", lvl:"", gist:"결정적 규칙표의 판정",
+ defs:[{s:"cordboard", own:1, t:"위반 규칙 목록을 항상 동반한다. <code>lf.Score</code> + comment로 저장"}],
+ rule:"Outcome과 다르다 — Verdict는 출력물에 대한 판정, Outcome은 스텝에 대한 처분."},
+
+{w:"Manifest", lvl:"", gist:"cord.yaml. 계약의 전부",
+ defs:[
+  {s:"cordboard", own:1, t:"두 well-known 문서와 실행 설정이 여기서 생성된다"},
+  {s:"a2a", t:"대응 개념은 <b>Agent Card</b> — 다만 내부를 감추는 불투명 계약이라 역할이 다르다"},
+ ],
+ rule:"<code>/.well-known/agent-card.json</code>(외부용)과 <code>/.well-known/agent-topology.manifest.json</code>(내부 구조)이 여기서 나온다."},
+
+{w:"Interrupt", lvl:"", gist:"빌린 이름. 뜻이 같다",
+ defs:[
+  {s:"lg", t:"<code>interrupt()</code> — 실행을 멈추고 사람의 입력을 기다린다. 재개 시 노드가 처음부터 다시 돈다"},
+  {s:"ap", t:"Run이 멈춘 상태"},
+  {s:"cordboard", own:1, t:"같은 뜻. Approval이 <code>interrupt_id</code>와 함께 재개한다"},
+ ],
+ rule:"대기 중 인터럽트가 여럿이면 ID 지정이 필수다. 병렬 분기 안의 인터럽트는 등록 거부(ADR-0007 예정)."},
+
+{w:"Checkpoint", lvl:"", gist:"LangGraph 내부. 우리는 안 쓴다",
+ defs:[{s:"lg", t:"슈퍼스텝마다 저장되는 상태 스냅샷. <code>thread_id</code>가 키"}],
+ rule:"플랫폼은 체크포인트를 모른다. 재개가 가능하다는 사실만 안다."},
+
+{w:"Collector", lvl:"", gist:"충돌 없음. 수식 불필요",
+ defs:[{s:"otel", t:"수신·처리·내보내기 파이프라인을 갖는 별도 프로세스"}],
+ rule:"우리 어휘층이 사는 곳이자 마스킹의 강제 지점."},
+
+{w:"Baggage", lvl:"", gist:"컨텍스트에 실려 전파되는 키-값",
+ defs:[
+  {s:"otel", t:"trace context와 함께 프로세스 경계를 넘어 전파되는 키-값"},
+  {s:"cordboard", own:1, t:"<code>cord.subject.id</code>와 <code>cord.cascade.depth</code>를 여기 싣는다"},
+ ],
+ rule:"span attribute와 다르다 — baggage는 자동 전파되고 attribute는 안 된다."},
+
+{w:"Generation", lvl:"", gist:"Langfuse의 LLM 호출 타입",
+ defs:[{s:"lf", t:"observation 타입. 프롬프트·완성·토큰 사용량·비용을 기록한다. LLM 호출에 가장 흔한 타입"}],
+ rule:"우리 Attempt가 이 타입으로 나간다."},
+
+{w:"State", lvl:"", gist:"그래프 내부. 플랫폼이 모른다",
+ defs:[
+  {s:"lg", t:"노드가 읽고 쓰는 TypedDict. 리듀서가 붙으면 누적된다. <b>스레드 범위</b>라 동시성 하에서 안전"},
+  {s:"da", t:"훅에서 인스턴스 속성 대신 여기 써야 한다 — 병렬 호출 때문"},
+ ],
+ rule:"플랫폼 저장소에 특정 그래프의 상태 이름이 등장하면 실패 모드 A다."},
+];
+
+const el = document.getElementById('entries');
+const q = document.getElementById('q');
+const cnt = document.getElementById('count');
+const empty = document.getElementById('empty');
+let filters = new Set();
+
+const LVL = {hot:"🔴 충돌", warn:"🟡 주의", "":"참고"};
+
+function render(){
+  const term = q.value.trim().toLowerCase();
+  let shown = 0;
+  el.innerHTML = T.map((e,i)=>{
+    const srcs = e.defs.map(d=>d.s).filter(Boolean);
+    let ok = true;
+    if(filters.size){
+      ok = [...filters].some(f => f===e.lvl || srcs.includes(f));
+    }
+    if(ok && term){
+      const hay = (e.w+" "+e.gist+" "+e.defs.map(d=>d.s+" "+d.t).join(" ")+" "+e.rule).toLowerCase();
+      ok = hay.includes(term);
+    }
+    if(!ok) return "";
+    shown++;
+    return `<div class="entry ${e.lvl}" id="e${i}">
+      <button class="ehead" aria-expanded="false" data-i="${i}">
+        <span class="w">${e.w}</span>
+        <span class="gist">${e.gist}</span>
+        <span class="n">${LVL[e.lvl]} · ${srcs.length||1}</span>
+      </button>
+      <div class="ebody">
+        <div class="defs">${e.defs.map(d=>`
+          <div class="df ${d.own?'own':''}">
+            <span class="s">${d.s?d.s+'.':'일상어'}</span>
+            <span class="t">${d.t}</span>
+          </div>`).join("")}</div>
+        <div class="ruling"><span class="lab">cordboard 판정</span>${e.rule}</div>
+      </div>
+    </div>`;
+  }).join("");
+  cnt.textContent = `${shown} / ${T.length}`;
+  empty.style.display = shown ? "none" : "block";
+}
+
+el.addEventListener('click', ev=>{
+  const b = ev.target.closest('.ehead');
+  if(!b) return;
+  const box = b.parentElement;
+  const open = box.classList.toggle('open');
+  b.setAttribute('aria-expanded', open?'true':'false');
+});
+
+document.getElementById('chips').addEventListener('click', ev=>{
+  const c = ev.target.closest('.chip');
+  if(!c) return;
+  const f = c.dataset.f;
+  if(filters.has(f)){ filters.delete(f); c.setAttribute('aria-pressed','false'); }
+  else { filters.add(f); c.setAttribute('aria-pressed','true'); }
+  render();
+});
+
+q.addEventListener('input', render);
+render();
+</script>
+</body>
+</html>
