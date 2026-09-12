@@ -78,12 +78,15 @@ class Run:
 
 
 @contextmanager
-def run(tracer: trace.Tracer, subject: str, subject_type: str, *, graph_id: str):
-    if not subject or ":" not in subject or not subject_type:
-        raise ValueError("Subject URI and type are required")
+def run(tracer: trace.Tracer, subject: str, subject_type: str, *, graph_id: str,
+        run_id: str | None = None):
+    if not isinstance(subject, str) or not subject.strip() or not subject_type:
+        raise ValueError("Subject and type are required")
     if not isinstance(graph_id, str) or not graph_id.strip():
         raise ValueError("explicit Graph identity is required")
-    attributes = {"cord.graph.id": graph_id, "cord.run.id": str(uuid4()), "cord.subject.id": subject,
+    if run_id is not None and (not isinstance(run_id, str) or not run_id.strip()):
+        raise ValueError("Run identity must be a non-empty string")
+    attributes = {"cord.graph.id": graph_id, "cord.run.id": run_id or str(uuid4()), "cord.subject.id": subject,
                   "cord.subject.type": subject_type}
     with tracer.start_as_current_span(
         "run", context=Context(), record_exception=False,

@@ -38,7 +38,8 @@ secret manager or a hidden terminal input for the key; do not put credentials
 in YAML, command arguments, shell history, issue text, or captured output.
 Model values use LiteLLM's provider-prefixed identifiers. The same chat request
 contract applies to Sonnet and GPT 5.5 mappings; neither is claimed verified
-until its real-provider smoke succeeds.
+until its real-provider smoke succeeds. [Aegra integration and the Slice 0
+evidence checklist](aegra.md) preserve this outstanding check.
 
 For separate providers, edit each alias's `api_base` and `api_key` references to
 distinct `os.environ/CORD_PROVIDER_*` variables. Keep `callback.py` alongside
@@ -160,7 +161,8 @@ acceptance check for #8; do not mark it passed based on deterministic tests.
 
 Streaming, tool calls, multimodal input, provider-native features, durable
 telemetry delivery during Collector downtime, and availability failover under
-real outages are not claimed. Full graph business results remain in memory.
+real outages are not claimed. Standalone graph business results remain in memory;
+the separate #9 Aegra path persists checkpoint state in Postgres.
 The generic atomic next-Attempt escalation helper remains planned; this graph
 uses existing runtime contexts and sets its declared outcome before closing.
 

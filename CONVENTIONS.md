@@ -4,7 +4,8 @@
 
 The runnable slices are `examples/minimal_graph.py` and the archive integration
 in `src/cord_runtime`, `collector`, and `examples/archive_fixture.py`, plus the
-[archive query](docs/archive-query.md) and [LiteLLM integration](docs/model-proxy.md). These use
+[archive query](docs/archive-query.md), [LiteLLM integration](docs/model-proxy.md),
+and [Aegra integration](docs/aegra.md). These use
 Python 3.12, exact direct dependencies in `pyproject.toml`, and transitive pins
 in `uv.lock`.
 
@@ -12,7 +13,11 @@ Run `uv sync --locked --python 3.12` and
 `uv run --locked python -m examples.minimal_graph` from the repository root.
 Service-free tests use `uv run --locked pytest -q -m "not collector"`.
 The complete suite uses `uv run --locked pytest -q` after installing the pinned
-binaries in [Archive setup](docs/archive.md). See also the
+binaries in [Archive setup](docs/archive.md), synchronizing the separate
+`aegra` project and preparing Docker/Postgres per [Aegra setup](docs/aegra.md).
+Root defaults include the `dev` and `proxy` dependency groups. Aegra has a
+separate lockfile because the two servers require incompatible Uvicorn versions.
+See also the
 [graph execution contract](docs/minimal-graph.md).
 
 Keep graph-specific logic under `examples/`; do not promote it into generic

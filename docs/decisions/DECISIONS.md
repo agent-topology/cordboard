@@ -185,3 +185,16 @@ Collector·아카이브 관문을 완료한 것이 아니다.
   별칭의 모델 매핑 교체 시 승격 0회 확인. 원자적 전환 헬퍼는 미구현.
 
 [실행 증거](../model-proxy.md). 실제 프로바이더 smoke는 자격증명이 없어 미실행이다.
+
+## Aegra 실행과 Slice 0 종료 증거 (2026-09-11, #9)
+
+- **0003:** Aegra 0.10.4는 재개 요청에도 새 API Run ID를 발급한다. 독립 실행은
+  새 Thread/API Run과 하나의 trace로 구현했고, 논리 Run의 재개 연속성은 후속으로
+  명시했다. Subject는 콜론 검사 없이 불투명한 필수 문자열로 기록한다.
+- LiteLLM과 Aegra의 Uvicorn 요구사항 충돌 때문에 별도 uv 환경·lockfile을 사용한다.
+  공통 runtime을 공유하고 Postgres 서비스는 하나다.
+- 실제 Aegra → 그래프 → LiteLLM → Collector 아카이브의 40개 span과 승격 2회,
+  상태 격리, 동시 실행 부모 관계, redaction과 fresh-archive 관문을 검증했다.
+
+[전체 재현과 종료 체크리스트](../aegra.md). #8의 실제 프로바이더 증거는 여전히
+자격증명이 없어 미실행이며 Slice 0·#7·#9의 전체 완료를 주장하지 않는다.

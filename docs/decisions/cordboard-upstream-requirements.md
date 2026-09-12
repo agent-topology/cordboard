@@ -197,3 +197,24 @@ context에 넣지만 두 번째 반환값을 `None`으로 준다. 따라서 성�
 승격 1회, 같은 별칭의 모델 매핑 교체, credential 치환과 PEM block을 검증한다.
 [설정과 검증 기록](../model-proxy.md). 실제 provider 자격증명은 없어 smoke 미실행이다.
 이 기록은 RS-1의 #5 범위를 확장하며 DeepAgents 연결을 완료했다는 뜻은 아니다.
+
+## Aegra — 공개 실행 계약 확인 (2026-09-11, #9)
+
+`aegra-api==0.10.4`의 요청별 async context-manager factory를 사용한다.
+팩터리의 실행 수명 안에서 Run span을 만들고 기존 graph를 반환하면 Aegra가
+Postgres checkpointer를 붙여 실행한다. schema/state 조회에는 Run span을 만들지
+않는다. 내부 실행기나 저장된 span을 수정하지 않는다.
+
+공개 Run 제출은 `command.resume`에도 새 API Run ID를 발급한다. 서버가 graph
+config에 run_id/thread_id를 고정한다. 이는 API 결함이 아니라 Cordboard가 가정한
+논리 Run과 API 호출 정체성이 다르다는 발견이다. [ADR-0003 정정](0003-subject-not-thread.md)에
+반영했으며 복수 API 호출을 같은 논리 Run으로 잇는 재개는 이번 범위 밖이다.
+
+LiteLLM 1.87.0은 Uvicorn 0.33.0 고정, Aegra는 >=0.36.0 요구로 한 환경에서
+해결되지 않았다. 별도 uv 프로젝트와 lockfile로 실제 프로세스 경계를 반영했다.
+업스트림 제약을 무시하거나 낮은 버전을 강제로 설치하지 않았다.
+
+기본 Aegra 관측 exporter는 꺼 두고 graph 팩터리에서 기존 공개 redacting exporter만
+사용한다. 요청별 instrumentation은 closure에 두고 직렬화되는 config에는 넣지 않는다.
+동기 Attempt subgraph는 checkpoint를 상속하지 않고 Step 단위 상태를 호스트가
+저장한다. [실제 OTLP·DB 검증과 한계](../aegra.md).

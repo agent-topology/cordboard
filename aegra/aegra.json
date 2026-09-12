@@ -1,0 +1,6 @@
+{
+  "dependencies": [".."],
+  "graphs": {
+    "minimal-graph": "../examples/aegra_graph.py:graph"
+  }
+}

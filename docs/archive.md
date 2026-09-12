@@ -6,7 +6,8 @@ from the archive fixture. The reusable
 instrumentation accepts graph-owned outcomes; the fixture explicitly declares
 `fast/failed → fast/escalated → deep/passed` without implementing graph routing.
 The [LiteLLM integration](model-proxy.md) now connects the graph to this path.
-Aegra, DeepAgents, Langfuse, lifecycle commands, and CI remain future work.
+[Aegra execution](aegra.md) now verifies this path with Postgres checkpoints.
+DeepAgents, Langfuse, lifecycle commands, and CI remain future work.
 
 ## Setup
 
@@ -91,8 +92,9 @@ of the five spans is checked in as
 ## Contracts and ownership
 
 `execution.run(..., graph_id=...)` creates a fresh trace and UUID Run ID, requires
-an explicit Graph identity and a Subject URI and type, and stamps the Run root
-with `cord.semconv.version=0.2.0` (#6). Its Step and Attempt helpers inherit
+an explicit Graph identity and a non-empty opaque Subject and type, and stamps the Run root
+with `cord.semconv.version=0.2.0` (#6). An optional `run_id` accepts the host's
+identity for independent Aegra executions (#9). Its Step and Attempt helpers inherit
 Graph/Run/Subject identity. The earlier sample and #5 evidence below retain
 their original `0.1.0` format; see the [query migration contract](archive-query.md)
 for the separate fresh capture and known result. Steps carry `cord.node.name` and

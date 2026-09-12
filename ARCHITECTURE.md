@@ -11,6 +11,9 @@ complete Run trees and returns deterministic Graph/Node counts (#6). The
 [LiteLLM integration](docs/model-proxy.md) connects the graph to the archive
 through explicit Attempts and a DB-free proxy (#8). Controlled endpoint tests
 pass; real-provider compatibility remains unverified without operator credentials.
+The [Aegra integration](docs/aegra.md) executes that graph through the public
+API with Postgres checkpoints and verifies the complete archive path (#9).
+Slice 0 remains open until the separate real-provider evidence is available.
 The remaining platform and `cord` lifecycle commands are still planned.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
@@ -89,8 +92,12 @@ The definitions come from [ADR-0002](docs/decisions/0002-vocabulary.md),
 | Verdict | Graph-owned deterministic validation result, accompanied by violated rules |
 | Outcome | Disposition of a Step or Attempt, using separate closed vocabularies |
 
-For non-conversational graphs, a new Run gets a new Thread. Resume continues the
-same Run and Thread; rerun starts fresh. Subject groups executions without
+For non-conversational graphs, a new Run gets a new Thread. Resume is intended
+to continue the same logical Run and Thread; rerun starts fresh. Aegra 0.10.4
+creates a new API Run ID even for resume. The Slice 0 client supports independent
+executions only, mapping their API IDs to `cord.run.id`; logical continuation
+across multiple API invocations is deferred (ADR-0003 correction).
+Subject groups executions without
 sharing checkpoint state and maps to Langfuse `session_id`. A conversational
 graph may manage Thread reuse internally; the platform still groups by Subject.
 
