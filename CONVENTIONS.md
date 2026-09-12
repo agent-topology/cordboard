@@ -2,17 +2,22 @@
 
 ## Current development surface
 
-The archive slice lives in `src/cord_runtime`, `collector`, `examples`, and
-`tests`. Use Python 3.12 and `uv sync --locked`; run unit tests with
-`uv run pytest -q -m "not collector"`, and the complete suite with
-`uv run pytest -q` after installing the pinned binaries in
-[Archive setup](docs/archive.md). `uv.lock` pins transitive dependencies.
-There is no npm build, Rust crate, or CI workflow in this checkout. Remaining
-platform components and `cord` lifecycle commands are still planned.
+The runnable slices are `examples/minimal_graph.py` and the archive integration
+in `src/cord_runtime`, `collector`, and `examples/archive_fixture.py`. Both use
+Python 3.12, exact direct dependencies in `pyproject.toml`, and transitive pins
+in `uv.lock`.
 
-When extending the code, choose tooling for the smallest authorized slice and
-document its actual commands here. Examples in the design artifacts do not
-establish a working build system.
+Run `uv sync --locked --python 3.12` and
+`uv run --locked python -m examples.minimal_graph` from the repository root.
+Service-free tests use `uv run --locked pytest -q -m "not collector"`.
+The complete suite uses `uv run --locked pytest -q` after installing the pinned
+binaries in [Archive setup](docs/archive.md). See also the
+[graph execution contract](docs/minimal-graph.md).
+
+Keep graph-specific logic under `examples/`; do not promote it into generic
+platform infrastructure. There is no npm build, Rust crate, formatter, or CI
+workflow here. Remaining platform components and `cord` lifecycle commands
+are planned unless explicitly documented as executable.
 
 ## Documentation and decisions
 

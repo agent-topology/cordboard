@@ -1,7 +1,8 @@
 # Redacted execution archive (#5)
 
 This checkout implements the archive boundary with a small Python fixture. It
-does not yet contain the LangGraph example from prerequisite #4. The reusable
+also contains the LangGraph example from prerequisite #4, which remains separate
+from the archive fixture. The reusable
 instrumentation accepts graph-owned outcomes; the fixture explicitly declares
 `fast/failed → fast/escalated → deep/passed` without implementing graph routing.
 LiteLLM, Aegra, DeepAgents, Langfuse, lifecycle commands, and CI remain future work.
@@ -11,7 +12,7 @@ LiteLLM, Aegra, DeepAgents, Langfuse, lifecycle commands, and CI remain future w
 Verified on macOS arm64, Python 3.12.14. Python dependencies are in
 [pyproject.toml](../pyproject.toml) and [uv.lock](../uv.lock):
 `redact-secret==0.1.0b1`, OTel SDK/OTLP `1.39.1`, protobuf `6.33.6`, requests
-`2.34.2`, and pytest `8.4.2`. No provider credential or Docker daemon is needed.
+`2.34.2`, and pytest `9.1.1`. No provider credential or Docker daemon is needed.
 
 ```sh
 uv sync --locked
@@ -178,6 +179,13 @@ Append is checked across actual Collector restarts. Date separation is checked
 with a second temporary config changing only the clock expression to a fixed
 next date; the test does not claim a 24-hour live rollover. Closed-file gzip is
 round-tripped and rescanned. The upstream full qualification matrix was not run.
+
+## Verification after merging #4
+
+With both dependency sets combined and pytest pinned to `9.1.1`,
+`uv sync --locked` succeeded and `uv run --locked pytest -q` passed all 49 tests
+(27 graph tests and 22 archive tests). The graph module still produced `hello`
+with exactly one escalation. Graph and archive fixtures remain separate.
 
 ## Public references
 

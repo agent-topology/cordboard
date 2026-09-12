@@ -3,6 +3,8 @@ node_modules/
 /packages/typescript/spec/src/generated/
 __pycache__/
 *.pyc
+.venv/
+.pytest_cache/
 .DS_Store
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).

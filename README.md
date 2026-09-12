@@ -9,11 +9,21 @@ The planned command is `cord`.
 
 ## Status
 
-The first archive integration is runnable: Python 3.12/uv, Run/Step/Attempt
-instrumentation, in-process redaction, a pinned Collector gate, and raw OTLP
-JSONL persistence. See [Archive setup and verification](docs/archive.md).
-The graph in issue #4 and the remaining platform are not implemented here.
-Commands such as `cord up` remain proposed interfaces.
+This repository contains a deterministic `fetch → draft → verify` LangGraph
+example and a separate archive fixture with Run/Step/Attempt instrumentation,
+in-process redaction, a Collector gate, and raw OTLP JSONL persistence.
+Neither example requires model credentials. Graph-to-archive wiring and the
+remaining platform, including `cord up`, are still planned.
+
+```sh
+uv sync --locked --python 3.12
+uv run --locked python -m examples.minimal_graph
+uv run --locked pytest -q -m "not collector"
+```
+
+See [the minimal graph contract](docs/minimal-graph.md) for graph fixtures and
+[Archive setup and verification](docs/archive.md) for the Collector binaries,
+archive commands, and full test suite.
 
 The project is intended for a single operator on a local laptop. Its design
 aims to make the platform usable without a hosted platform account or paid
@@ -62,6 +72,7 @@ OTel Collector, an archive, and a query with a known answer. LiteLLM and Aegra
 then exercise the model and process boundaries. Langfuse follows in Slice 0.5;
 the catalog, viewer, and CLI lifecycle arrive with the second graph in Slice 1.
 
-Redaction release availability and the archive gate are verified. Before wiring
-the graph, reconcile the escalation examples called out in [Architecture](ARCHITECTURE.md#open-documentation-issues).
+Issue #4 establishes the graph contract and corrects the escalation examples.
+Issue #5 verifies redaction release availability and the archive gate with a
+separate fixture. Connecting the two execution paths remains follow-up work.
 The existing slice descriptions are plans, not evidence that work has shipped.

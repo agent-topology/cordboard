@@ -2,11 +2,12 @@
 
 ## Status and source of truth
 
-Cordboard has a minimal archive integration as of 2026-09-11: `cord-runtime`,
-OTel instrumentation, redaction, Collector configuration, and integration tests.
-[Archive setup and evidence](docs/archive.md) distinguish this runnable slice
-from the intended architecture below. Graph execution (#4), model/proxy hosting,
-and the remaining platform are not implemented here.
+Cordboard has a [minimal executable graph](docs/minimal-graph.md) with
+in-memory execution records (#4), plus a separate archive integration (#5):
+`cord-runtime`, OTel instrumentation, redaction, and Collector persistence.
+[Archive setup and evidence](docs/archive.md) describe the runnable archive
+fixture. Wiring the graph to this exporter, model/proxy hosting, and the
+remaining platform and `cord` lifecycle commands are still planned.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
@@ -100,8 +101,11 @@ Run (trace)
 Step Outcomes are `passed`, `repaired`, `failed`, `awaiting_approval`, and
 `halted`. Attempt Outcomes are `passed`, `failed`, and `escalated`.
 `escalated` belongs only to Attempts and is declared by the graph when it chooses
-a higher Tier; it is not inferred from changing provider model strings. The
-same-tier examples in the ADRs still require correction before implementation.
+a higher Tier; it is not inferred from changing provider model strings. The corrected
+`fast → fast → deep` fixture records `failed → escalated → passed`: exactly one
+escalation. A same-tier retry can succeed with no escalation. A deterministic
+repair yields a `repaired` Step while retaining the original failed Attempt
+and its violated rules.
 
 ## Generated discovery contracts
 
@@ -221,7 +225,6 @@ as executable specifications.
 
 | Finding | Sources and required follow-up |
 | --- | --- |
-| Same-tier retries are labeled `escalated` | ADR-0004 and ADR-0008 show `fast → fast → deep` with both early Attempts escalated, despite defining escalation as choosing a higher Tier next. Reconcile the fixture, outcome semantics, and expected query count. |
 | Wire examples span multiple topology revisions | ADR-0007/0011 retain literal `derived` references; ADR-0009/0012 use `structure` and `x-cord`. ADR-0011 also mixes old source-hash/`derive.xray` text with structure-hash/`derive.depth` corrections. Validate against a pinned upstream schema before implementing. |
 | R3 index summary is stale | The decision index's 2026-09-10 summary calls R3 LangGraph-only; ADR-0007 explicitly retracts that on 2026-09-11. AT-3 still asks for confirmation of parallel semantics. |
 | Vocabulary artifacts predate ADR-0002 | Both HTML artifacts retain banned-word rules or old Graph/Manifest definitions; ADR-0003 also retains a banned-word reference. Use context-sensitive mappings, contract-based Graph identity, and `cord.cascade.depth`. |
