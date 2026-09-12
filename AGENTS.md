@@ -13,10 +13,18 @@ metadata and update the index when adding or changing a decision. There is no
 
 ## Project context
 
-Cordboard is a design-only local tool for connecting agent graphs and recording
-their execution. There is no application implementation or build/test setup yet.
-Treat `cord` commands, package layouts, and slice descriptions in the design as
-planned interfaces until they exist in this repository.
+Cordboard is a local tool for connecting agent graphs and recording their
+execution. Implementation has begun: the `cord_runtime` package under `src/`
+with tests under `tests/`, on Python 3.12 and uv (`uv run --locked pytest`).
+Some integration tests require Docker or pinned external binaries; see the
+markers declared in `pyproject.toml`.
+
+[ARCHITECTURE.md](ARCHITECTURE.md#status-and-source-of-truth) states what is
+implemented, what is verified, and what is still planned. Read it instead of
+inferring status from the design documents, and keep it current when a slice
+lands. Design material describes target interfaces — the `cord` lifecycle
+commands in particular do not exist yet — so do not cite it as evidence that
+something works, and do not record an unrun check as passed.
 
 - The platform consumes manifests, execution APIs, and spans; graph business
   logic and graph-specific state stay inside the graph.
@@ -28,8 +36,9 @@ planned interfaces until they exist in this repository.
 - Explicit ADR corrections supersede older examples and HTML artifacts. Check
   the open documentation issues in `ARCHITECTURE.md` before implementing an
   affected contract. Do not silently turn conflicting notes into decisions.
-- Preserve existing user work. Documentation edits need reference and
-  consistency checks, not a speculative application build.
+- Preserve existing user work. Verify a documentation change with reference and
+  consistency checks; do not write application code to satisfy a documentation
+  task, and do not extend the implementation beyond the current slice.
 
 ## 일 좀 똑바로 하자
 
