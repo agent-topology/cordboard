@@ -9,10 +9,19 @@ The planned command is `cord`.
 
 ## Status
 
-This repository currently contains design documents and architecture decisions.
-There is no application implementation, installable CLI, dependency manifest,
-or build/test setup yet. Commands such as `cord up` in the design are proposed
-interfaces, not commands available from this checkout.
+This repository contains design documents and a runnable, deterministic
+`fetch → draft → verify` LangGraph example. The platform and commands such as
+`cord up` remain planned. The example requires no platform service or model
+credential.
+
+```sh
+uv sync --locked --python 3.12
+uv run --locked python -m examples.minimal_graph
+uv run --locked pytest -q
+```
+
+See [the minimal graph contract](docs/minimal-graph.md) for fixtures, dependency
+pins, and verification results.
 
 The project is intended for a single operator on a local laptop. Its design
 aims to make the platform usable without a hosted platform account or paid
@@ -61,6 +70,7 @@ OTel Collector, an archive, and a query with a known answer. LiteLLM and Aegra
 then exercise the model and process boundaries. Langfuse follows in Slice 0.5;
 the catalog, viewer, and CLI lifecycle arrive with the second graph in Slice 1.
 
-Before implementing Slice 0, reconcile the masking prerequisite and escalation
-examples called out in [Architecture](ARCHITECTURE.md#open-documentation-issues).
+Issue #4 establishes the graph contract and corrects the escalation examples.
+Before adding telemetry, reconcile the masking prerequisite called out in
+[Architecture](ARCHITECTURE.md#open-documentation-issues).
 The existing slice descriptions are plans, not evidence that work has shipped.

@@ -1,0 +1,13 @@
+[project]
+name = "cordboard-example"
+version = "0.1.0"
+description = "Deterministic, service-free Cordboard execution contract example"
+requires-python = ">=3.12,<3.13"
+dependencies = ["langgraph==1.2.11", "langsmith==0.12.4"]
+
+[dependency-groups]
+dev = ["pytest==9.1.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

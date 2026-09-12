@@ -2,9 +2,11 @@
 
 ## Status and source of truth
 
-Cordboard is currently a design-only repository. This document summarizes the
-intended architecture reviewed against `docs/` on 2026-09-11; components and
-commands below have not been implemented here.
+Cordboard now has a [minimal executable graph](docs/minimal-graph.md) with
+deterministic model responses and in-memory execution records (issue #4).
+The platform remains planned. This document summarizes the intended architecture
+reviewed against `docs/` on 2026-09-11; platform components and `cord` commands
+below have not been implemented here.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
@@ -98,8 +100,11 @@ Run (trace)
 Step Outcomes are `passed`, `repaired`, `failed`, `awaiting_approval`, and
 `halted`. Attempt Outcomes are `passed`, `failed`, and `escalated`.
 `escalated` belongs only to Attempts and is declared by the graph when it chooses
-a higher Tier; it is not inferred from changing provider model strings. The
-same-tier examples in the ADRs still require correction before implementation.
+a higher Tier; it is not inferred from changing provider model strings. The corrected
+`fast → fast → deep` fixture records `failed → escalated → passed`: exactly one
+escalation. A same-tier retry can succeed with no escalation. A deterministic
+repair yields a `repaired` Step while retaining the original failed Attempt
+and its violated rules.
 
 ## Generated discovery contracts
 
@@ -217,7 +222,6 @@ as executable specifications.
 | Finding | Sources and required follow-up |
 | --- | --- |
 | Masking prerequisite conflicts | ADR-0006 and the decision index block Slice 0 on redaction availability; upstream RS-5 says to start without masking. Resolve the sequencing explicitly. This summary does not authorize bypassing the archive gate. |
-| Same-tier retries are labeled `escalated` | ADR-0004 and ADR-0008 show `fast → fast → deep` with both early Attempts escalated, despite defining escalation as choosing a higher Tier next. Reconcile the fixture, outcome semantics, and expected query count. |
 | Wire examples span multiple topology revisions | ADR-0007/0011 retain literal `derived` references; ADR-0009/0012 use `structure` and `x-cord`. ADR-0011 also mixes old source-hash/`derive.xray` text with structure-hash/`derive.depth` corrections. Validate against a pinned upstream schema before implementing. |
 | R3 index summary is stale | The decision index's 2026-09-10 summary calls R3 LangGraph-only; ADR-0007 explicitly retracts that on 2026-09-11. AT-3 still asks for confirmation of parallel semantics. |
 | Redaction leftovers contradict corrections | ADR-0006 still lists a custom policy and graph-specific detectors in older prose/action items. Its updated default-policy decision and upstream RS-3/RS-4 reject those plans. |
