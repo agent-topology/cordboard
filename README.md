@@ -23,7 +23,8 @@ uv run --locked pytest -q -m "not collector"
 
 See [the minimal graph contract](docs/minimal-graph.md) for graph fixtures and
 [Archive setup and verification](docs/archive.md) for the Collector binaries,
-archive commands, and full test suite.
+archive commands, and full test suite. The [escalation query](docs/archive-query.md)
+provides deterministic eight-week Graph/Node counts from the archive.
 
 The project is intended for a single operator on a local laptop. Its design
 aims to make the platform usable without a hosted platform account or paid
@@ -42,7 +43,8 @@ platform tier. Model-provider access is a separate integration concern.
 The central test is whether an unrelated second graph can be registered, run,
 and inspected without changing platform code. Another is whether one query can
 answer: “Across all graphs in the last eight weeks, which ten Nodes escalated
-model Tier most often?” These are success criteria, not completed capabilities.
+model Tier most often?” The archive query now verifies the latter with fixed-time
+fixtures and a real Collector capture. Registration remains planned.
 
 Cordboard builds around Aegra, LangGraph, LiteLLM, OpenTelemetry, and uv. It
 consumes topology from the independent `agent-topology` project and delegates

@@ -8,7 +8,7 @@ from uuid import uuid4
 from opentelemetry import trace
 from opentelemetry.context import Context
 
-SEMCONV_VERSION = "0.1.0"
+SEMCONV_VERSION = "0.2.0"
 
 
 class StepOutcome(Enum):
@@ -78,10 +78,12 @@ class Run:
 
 
 @contextmanager
-def run(tracer: trace.Tracer, subject: str, subject_type: str):
+def run(tracer: trace.Tracer, subject: str, subject_type: str, *, graph_id: str):
     if not subject or ":" not in subject or not subject_type:
         raise ValueError("Subject URI and type are required")
-    attributes = {"cord.run.id": str(uuid4()), "cord.subject.id": subject,
+    if not isinstance(graph_id, str) or not graph_id.strip():
+        raise ValueError("explicit Graph identity is required")
+    attributes = {"cord.graph.id": graph_id, "cord.run.id": str(uuid4()), "cord.subject.id": subject,
                   "cord.subject.type": subject_type}
     with tracer.start_as_current_span(
         "run", context=Context(), record_exception=False,

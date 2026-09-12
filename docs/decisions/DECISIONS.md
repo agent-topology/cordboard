@@ -163,3 +163,14 @@ Collector·아카이브 관문을 완료한 것이 아니다.
 - **0002:** Run 루트에 `cord.semconv.version=0.1.0`을 기록하는 헬퍼가 생겼다.
 
 전체 플랫폼이 구현됐다는 뜻은 아니다. [범위·검증](../archive.md)을 참조한다.
+
+
+## 아카이브 질의 구현 정정 (2026-09-11, #6)
+
+- **0002:** 명시적 `cord.graph.id` 전파와 Run semconv `0.2.0`. 기존 정체성 없는
+  아카이브는 수정·추론 없이 거부하고 재실행한다.
+- **0005:** `archive-escalations` 구현. 종료 시각 56일 경계, span_id 중복 제거,
+  Graph/Node별 결정적 top-N 및 실제 Collector 캡처의 알려진 정답을 검증했다.
+- **0008:** Graph/Node 복합 집계로 예제 정정, 잘못된 Attempt 부모의 오류 검증 완료.
+
+[명령과 증거](../archive-query.md). #4 그래프와 #5 exporter의 직접 연결은 여전히 후속이다.

@@ -94,7 +94,7 @@ def test_actual_sdk_export_and_whole_archive(tmp_path, cli):
         provider = TracerProvider(resource=Resource({"service.name": "fixture", "detail": CREDENTIAL}))
         provider.add_span_processor(SimpleSpanProcessor(RedactingOTLPExporter(endpoint)))
         tracer = provider.get_tracer("fixture")
-        with run(tracer, "urn:test:5", "fixture") as execution:
+        with run(tracer, "urn:test:5", "fixture", graph_id="archive-fixture") as execution:
             with execution.step("draft", StepOutcome.PASSED) as step:
                 for n, tier, outcome in [(1,"fast",AttemptOutcome.FAILED),(2,"fast",AttemptOutcome.ESCALATED),(3,"deep",AttemptOutcome.PASSED)]:
                     with step.attempt(n, tier, outcome) as attempt:
@@ -116,7 +116,7 @@ def test_actual_sdk_export_and_whole_archive(tmp_path, cli):
     assert step["parentSpanId"] == root["spanId"]
     assert all(s["parentSpanId"] == step["spanId"] for s in attempts)
     assert len({s["traceId"] for s in [root, step, *attempts]}) == 1
-    assert attributes(root)["cord.semconv.version"] == "0.1.0"
+    assert attributes(root)["cord.semconv.version"] == "0.2.0"
     assert [(attributes(s)["cord.tier"],attributes(s)["cord.outcome"]) for s in attempts] == [("fast","failed"),("fast","escalated"),("deep","passed")]
     assert all(attributes(s)["cord.run.id"] == attributes(root)["cord.run.id"] for s in [step, *attempts])
     assert all(attributes(s)["cord.subject.id"] == "urn:test:5" for s in [root, step, *attempts])
@@ -222,3 +222,21 @@ def test_archive_check_decodes_nested_payload_and_failure_precedence(tmp_path, c
     invalid.write_bytes(b"\xff")
     assert check([path, invalid], cli) == 2
     assert check([tmp_path / "missing"], cli) == 2
+
+
+def test_query_actual_archive_fixture(tmp_path):
+    from examples.archive_fixture import emit
+    from cord_runtime.archive_query import query, reference_ns
+
+    directory = tmp_path / 'query'
+    with collector(directory) as endpoint:
+        emit(endpoint)
+    reference = datetime.now(timezone.utc).isoformat()
+    expected = [{'graph': 'archive-fixture', 'node': 'draft', 'count': 1}]
+    assert query([directory], reference=reference_ns(reference)) == expected
+    result = subprocess.run(
+        [str(ROOT / '.venv/bin/archive-escalations'), str(directory),
+         '--reference-time', reference, '--top', '10'],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0 and json.loads(result.stdout) == expected
