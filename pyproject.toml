@@ -30,6 +30,7 @@ packages = ["src/cord_runtime"]
 
 [project.scripts]
 archive-escalations = "cord_runtime.archive_query:main"
+langfuse-compare = "cord_runtime.langfuse_query:main"
 archive-check = "cord_runtime.archive_check:main"
 
 [tool.pytest.ini_options]
@@ -37,5 +38,6 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
   "collector: requires the pinned Collector and redact-secret CLI binaries",
+  "langfuse: requires the pinned self-hosted Langfuse stack",
   "aegra: requires Docker Postgres and the locked aegra environment",
 ]

@@ -5,7 +5,7 @@
 The runnable slices are `examples/minimal_graph.py` and the archive integration
 in `src/cord_runtime`, `collector`, and `examples/archive_fixture.py`, plus the
 [archive query](docs/archive-query.md), [LiteLLM integration](docs/model-proxy.md),
-and [Aegra integration](docs/aegra.md). These use
+[Aegra integration](docs/aegra.md), and [Langfuse comparison](docs/langfuse.md). These use
 Python 3.12, exact direct dependencies in `pyproject.toml`, and transitive pins
 in `uv.lock`.
 
@@ -18,6 +18,9 @@ binaries in [Archive setup](docs/archive.md), synchronizing the separate
 Root defaults include only the `dev` dependency group. Add `--group proxy` to
 `uv sync` and `uv run` when running the optional LiteLLM example or its full suite. Aegra has a
 separate lockfile because the two servers require incompatible Uvicorn versions.
+Langfuse integration tests require the pinned local stack and `CORD_LANGFUSE_TEST=1`;
+without that explicit opt-in they report skips. See its setup guide for the full
+verification command and generated local project credentials.
 See also the
 [graph execution contract](docs/minimal-graph.md).
 

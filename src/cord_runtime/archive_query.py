@@ -113,7 +113,12 @@ def read_spans(paths):
 
 def query(paths: list[Path], *, reference: int, top: int = 10) -> list[dict]:
     require(type(top) is int and top > 0, "top must be a positive integer")
-    spans = read_spans(paths)
+    return query_spans(read_spans(paths), reference=reference, top=top)
+
+
+def query_spans(spans: dict, *, reference: int, top: int = 10) -> list[dict]:
+    """Apply the archive contract to normalized, deduplicated complete trees."""
+    require(type(top) is int and top > 0, "top must be a positive integer")
     counts = Counter()
 
     def role(span):

@@ -217,7 +217,7 @@ Subject를 선택 필드로 두면 값이 없는 Run이 생기고, 그러면 묶
 1. [ ] `cord.yaml`에 `subject: {type, from}` 스키마 정의. `from`은 입력에서 뽑는 식
 2. [ ] 카탈로그 등록 검증에 Subject 추출식 오류 검사 추가 (경고)
 3. [x] `cord-runtime`이 Run 루트 Span에 `cord.subject.id`와 `cord.subject.type` 기록 (#5, #9 통합 검증)
-4. [ ] Langfuse exporter에서 `cord.subject.id` → `session_id` 매핑
+4. [x] #10 Collector Langfuse 분기에서 `cord.subject.id` → `langfuse.session.id`, 공개 trace `sessionId` 검증
 5. [ ] 수동 실행의 합성 Subject 생성 규칙 확정
 6. [ ] Subject 타입 접두사 관례 문서화 (`github:` `file:` `run:` `manual:`) — 강제는 안 함
 7. [ ] 슬라이스 3: `(Assistant, Subject)` 멱등성 관문 구현
@@ -250,3 +250,11 @@ Subject는 형식 검사의 대상이 아니다. 이전 span 헬퍼의 콜론 �
 체크포인트가 후속 실행에 섞이지 않으며 그대로 남는지 확인했다. API의 완료
 `success`와 그래프의 `StepOutcome.failed`도 다르다: 결정적 검증 실패는 정상적으로
 완료한 실행의 결과일 수 있다. [재현·증거·범위](../aegra.md)를 기준으로 삼는다.
+
+
+## 구현 확인 — Langfuse Subject 매핑 (2026-09-11, #10)
+
+Collector의 Langfuse 전용 분기에서 이미 처리된 Subject를 `langfuse.session.id`로
+복사한다. self-hosted 3.225.7의 공개 trace 응답 `sessionId`와 아카이브의 Subject가
+같은지 확인했다. Thread를 묶음 키로 쓰지 않으며 기존 아카이브는 바꾸지 않는다.
+[공개 계약과 실제 검증](../langfuse.md)을 따른다.

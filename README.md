@@ -29,6 +29,8 @@ See [the minimal graph contract](docs/minimal-graph.md) for graph fixtures and
 [Archive setup and verification](docs/archive.md) for the Collector binaries,
 archive commands, and full test suite. The [escalation query](docs/archive-query.md)
 provides deterministic eight-week Graph/Node counts from the archive.
+[Langfuse setup and comparison](docs/langfuse.md) verify those counts through the
+public read API of a pinned self-hosted instance, including model-free execution.
 
 The project is intended for a single operator on a local laptop. Its design
 aims to make the platform usable without a hosted platform account or paid
@@ -78,7 +80,8 @@ the architecture document identifies the material differences.
 Slice 0 is a small end-to-end experiment: graphs, Run/Step/Attempt spans, an
 OTel Collector, an archive, and a query with a known answer. Aegra exercises
 the process boundary; the LiteLLM example exercises an optional model path.
-Langfuse follows in Slice 0.5; the catalog, viewer, and CLI lifecycle arrive in Slice 1.
+Slice 0.5 adds the verified Langfuse export and comparison; the catalog, custom
+viewer, and CLI lifecycle remain planned for Slice 1.
 
 Issue #4 establishes the graph contract and corrects the escalation examples.
 Issue #5 verifies redaction release availability and the archive gate with a
