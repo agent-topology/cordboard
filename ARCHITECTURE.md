@@ -7,8 +7,11 @@ in-memory execution records (#4), plus a separate archive integration (#5):
 `cord-runtime`, OTel instrumentation, redaction, and Collector persistence.
 [Archive setup and evidence](docs/archive.md) describe the runnable archive
 fixture. The [archive escalation query](docs/archive-query.md) now validates
-complete Run trees and returns deterministic Graph/Node counts (#6). Wiring the graph to this exporter, model/proxy hosting, and the
-remaining platform and `cord` lifecycle commands are still planned.
+complete Run trees and returns deterministic Graph/Node counts (#6). The
+[LiteLLM integration](docs/model-proxy.md) connects the graph to the archive
+through explicit Attempts and a DB-free proxy (#8). Controlled endpoint tests
+pass; real-provider compatibility remains unverified without operator credentials.
+The remaining platform and `cord` lifecycle commands are still planned.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.

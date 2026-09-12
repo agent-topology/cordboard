@@ -174,3 +174,14 @@ Collector·아카이브 관문을 완료한 것이 아니다.
 - **0008:** Graph/Node 복합 집계로 예제 정정, 잘못된 Attempt 부모의 오류 검증 완료.
 
 [명령과 증거](../archive-query.md). #4 그래프와 #5 exporter의 직접 연결은 여전히 후속이다.
+
+
+## LiteLLM 실행 연결 (2026-09-11, #8)
+
+- **0004:** DB 없는 `fast`/`deep` 프록시 및 별도 설정 검사 명령 구현.
+- **0006:** 공개 CustomLogger에서 metadata만 계측, 기존 redacting exporter 재사용.
+  실제 Collector에서 credential 치환·block 억제와 직접 Attempt 부모를 검증.
+- **0008:** 그래프의 생성·검증을 열린 Attempt에 연결. 저장된 승격 1회 및 같은
+  별칭의 모델 매핑 교체 시 승격 0회 확인. 원자적 전환 헬퍼는 미구현.
+
+[실행 증거](../model-proxy.md). 실제 프로바이더 smoke는 자격증명이 없어 미실행이다.

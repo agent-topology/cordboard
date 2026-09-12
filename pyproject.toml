@@ -10,6 +10,9 @@ dependencies = [
   "opentelemetry-exporter-otlp-proto-http==1.39.1",
   "protobuf==6.33.6",
   "requests==2.34.2",
+  "litellm[proxy]==1.87.0",
+  "pyyaml==6.0.3",
+  "langchain-core==1.6.3",
 ]
 
 [dependency-groups]

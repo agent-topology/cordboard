@@ -19,7 +19,9 @@ The initial sync downloads Python if necessary and installs dependencies.
 After synchronization, the graph and tests need no service, provider credential,
 or network connection. The supported `run()` entrypoint disables LangSmith
 tracing within the invocation, including inherited tracing settings. Do not
-attach exporters or invoke the compiled graph directly with tracing enabled.
+attach additional exporters or invoke the compiled graph directly with tracing enabled.
+The optional `tracer` argument uses the redacting archive path described in
+[Model proxy integration](model-proxy.md).
 
 Verified locally on 2026-09-11 with uv 0.12.10 and CPython 3.12.14:
 
@@ -41,8 +43,9 @@ release metadata is published on [PyPI](https://pypi.org/project/langgraph/1.2.1
 
 The outer LangGraph executes `fetch → draft → verify` exactly once each.
 `fetch` takes the supplied source in memory; it performs no external fetch.
-The draft Step owns an internal LangGraph with `generate → assess` and a
-conditional edge back to `generate` or to completion. Internal transitions are
+The draft Step owns an internal LangGraph with one `attempt` node and a
+conditional edge back to `attempt` or to completion. Generation and assessment
+share that node so one live span encloses both operations. Internal transitions are
 Attempts within that one draft Step, not repeated executions of the outer draft
 Node. The graph owns the bounded policy `fast → fast → deep`; the injected
 model receives only `(source, tier, attempt_number)` and returns a string.
@@ -81,10 +84,12 @@ responses across executions. Injected model implementations are responsible
 for their own state; the supplied callable is stateless.
 
 Records are in memory and the entrypoint prints synthetic fixture results as
-JSON. They are not spans or persisted OTLP. Collector, archive, LiteLLM, Aegra,
-the `cord` CLI, UI, triggers, topology derivation, and redaction integration
-remain outside this example. The separate [archive fixture](archive.md) verifies the masking gate; the graph
-is not yet wired to that exporter.
+JSON. The default entrypoint remains service-free. With an explicit tracer,
+`run()` also emits Run/Step/Attempt spans; execution objects are per-invocation
+configuration, never checkpoint state or mutable shared closures. The
+[proxy entrypoint](model-proxy.md) supplies the redacting exporter and sends
+W3C trace context to LiteLLM. Aegra, the `cord` CLI, UI, triggers and topology
+derivation remain planned.
 
 ## Verification evidence
 

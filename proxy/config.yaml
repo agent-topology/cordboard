@@ -1,0 +1,19 @@
+# Provider identifiers and credentials belong here, never in graph logic.
+model_list:
+  - model_name: fast
+    litellm_params:
+      model: os.environ/CORD_FAST_MODEL
+      api_base: os.environ/CORD_PROVIDER_BASE
+      api_key: os.environ/CORD_PROVIDER_KEY
+  - model_name: deep
+    litellm_params:
+      model: os.environ/CORD_DEEP_MODEL
+      api_base: os.environ/CORD_PROVIDER_BASE
+      api_key: os.environ/CORD_PROVIDER_KEY
+router_settings:
+  num_retries: 0
+  routing_strategy: simple-shuffle
+litellm_settings:
+  callbacks: [callback.handler]
+  turn_off_message_logging: true
+  telemetry: false

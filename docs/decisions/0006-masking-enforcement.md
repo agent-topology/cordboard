@@ -215,7 +215,7 @@ Collector가 **버리기만 하기 때문에** ①이 필수로 유지된다. �
 
 4. [x] `cord-runtime`의 exporter가 공개 `scan_and_redact` 호출 + 성공 후 스탬프 (아래 정정)
 5. [ ] 같은 로직의 DeepAgents 미들웨어 판 (`--template deep`용)
-6. [ ] LiteLLM 프록시 쪽 스캔 경로 설정
+6. [x] #8 LiteLLM 공개 callback → 기존 redacting exporter → Collector 검증
 7. [x] 별도 정책 구현 폐기 — upstream 기본값 사용, block은 span 전체 억제
 8. [x] Collector 필터 — boolean true 이외 drop. payload 로그 없이 음성 시험으로 검증
 9. [ ] `cord up` 설정 린트에 `success_callback: ["langfuse"]` 금지 추가 (ADR-0004 Action 1과 같은 자리)
@@ -244,3 +244,19 @@ Collector는 인증 장치가 아니라 협력하는 로컬 생산자의 처리 
 상세 payload 디버그 로그는 켜지 않는다. 이유를 기록하려고 원문을 유출하지 않는다.
 그래프(#4)는 구현됐으나 아카이브 exporter 연결, DeepAgents 및 LiteLLM 실제 연결은 아직 구현되지 않았다.
 명령·검증 결과는 [아카이브 실행 문서](../archive.md)에 기록한다.
+
+
+## 구현 확인 — LiteLLM (2026-09-11, #8)
+
+공개 `CustomLogger`의 async 성공/실패 callback에서 요청의 W3C `traceparent`를
+추출하고 해당 Attempt의 자식 model span을 만든다. provider model과 토큰 수만
+기록하며 prompt·응답 전문·provider 예외 문자열은 싣지 않는다. 같은 공개 OTel
+exporter와 upstream 기본 정책이 프록시 프로세스 안에서 처리한다. 합성 credential
+치환과 개인키 span 억제를 실제 Collector 파일에서 검증했다.
+
+기본 OTel callback의 부모 반환 동작은 직접 부모 계약을 만족하지 않아 채택하지
+않았다. 내부 메서드 수정이나 저장 후 reparenting 없이 공개 custom callback을 쓴다.
+LiteLLM의 payload 가능 콘솔 출력은 배출 전에 버리고, 기동 전 설정 오류만 고정된
+설명으로 출력한다. 운영자가 승인한 모델 요청은 provider로 전송된다. 여기의
+redaction 경계는 관측 데이터에 적용하며 모델 입력을 변조하지 않는다.
+[재현과 한계](../model-proxy.md).

@@ -5,7 +5,8 @@ also contains the LangGraph example from prerequisite #4, which remains separate
 from the archive fixture. The reusable
 instrumentation accepts graph-owned outcomes; the fixture explicitly declares
 `fast/failed → fast/escalated → deep/passed` without implementing graph routing.
-LiteLLM, Aegra, DeepAgents, Langfuse, lifecycle commands, and CI remain future work.
+The [LiteLLM integration](model-proxy.md) now connects the graph to this path.
+Aegra, DeepAgents, Langfuse, lifecycle commands, and CI remain future work.
 
 ## Setup
 
