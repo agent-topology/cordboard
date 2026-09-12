@@ -38,11 +38,8 @@ planned interfaces until they exist in this repository.
 <!-- graft:start -->
 ## Graft — repo context graph
 
-Graft is configured for this repo. Its generated `graft/` directory is ignored
-by Git and currently has no indexed source files. Once source exists, its small
-linked markdown nodes explain systems and carry exact file:line spans. If the
-graph is empty or the relevant files are unindexed, read those files directly
-with RTK; documentation is still valid context.
+This repo is indexed in `graft/`: small linked markdown nodes that explain each
+system and carry exact file:line spans, kept in sync with the code through git.
 
 For ANY task here — understanding how something works, finding where code lives,
 or scoping a change — get context from the graph before grepping or opening

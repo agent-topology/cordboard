@@ -2,9 +2,11 @@
 
 ## Status and source of truth
 
-Cordboard is currently a design-only repository. This document summarizes the
-intended architecture reviewed against `docs/` on 2026-09-11; components and
-commands below have not been implemented here.
+Cordboard has a minimal archive integration as of 2026-09-11: `cord-runtime`,
+OTel instrumentation, redaction, Collector configuration, and integration tests.
+[Archive setup and evidence](docs/archive.md) distinguish this runnable slice
+from the intended architecture below. Graph execution (#4), model/proxy hosting,
+and the remaining platform are not implemented here.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
@@ -169,11 +171,14 @@ it is a gate, not another secret detector. Direct Langfuse callbacks would bypas
 that gate and are prohibited. Full prompts, diffs, and model outputs are not
 span attributes.
 
-The intended redactor is the public PyO3 binding of `redact-secret`, pinned in
-`cord-runtime`, using the upstream default policy. A `block` finding means the
-span must not be exported; the exact caller integration is tracked as RS-2.
+The redactor is the public PyO3 binding `redact-secret==0.1.0b1`, pinned in
+`cord-runtime`, using the upstream default policy. The exporter encodes with the
+public OTel encoder, scans the complete span envelope, and stamps only success.
+A `block` finding suppresses the whole span even when sanitized text is returned;
+RS-1/RS-2 record the verified integration.
 Custom detectors and `redaction.extra_patterns` were abandoned (RS-4).
-The proposed `cord scan-archive` wraps the upstream CLI for archive verification.
+The implemented `archive-check` entrypoint wraps the pinned upstream CLI for
+raw and decoded archive verification; `cord scan-archive` remains planned.
 
 [ADR-0005](docs/decisions/0005-record-of-origin.md) makes date-partitioned,
 append-only raw OTLP JSONL the record of origin. “Raw” describes the OTLP format,
@@ -216,16 +221,14 @@ as executable specifications.
 
 | Finding | Sources and required follow-up |
 | --- | --- |
-| Masking prerequisite conflicts | ADR-0006 and the decision index block Slice 0 on redaction availability; upstream RS-5 says to start without masking. Resolve the sequencing explicitly. This summary does not authorize bypassing the archive gate. |
 | Same-tier retries are labeled `escalated` | ADR-0004 and ADR-0008 show `fast → fast → deep` with both early Attempts escalated, despite defining escalation as choosing a higher Tier next. Reconcile the fixture, outcome semantics, and expected query count. |
 | Wire examples span multiple topology revisions | ADR-0007/0011 retain literal `derived` references; ADR-0009/0012 use `structure` and `x-cord`. ADR-0011 also mixes old source-hash/`derive.xray` text with structure-hash/`derive.depth` corrections. Validate against a pinned upstream schema before implementing. |
 | R3 index summary is stale | The decision index's 2026-09-10 summary calls R3 LangGraph-only; ADR-0007 explicitly retracts that on 2026-09-11. AT-3 still asks for confirmation of parallel semantics. |
-| Redaction leftovers contradict corrections | ADR-0006 still lists a custom policy and graph-specific detectors in older prose/action items. Its updated default-policy decision and upstream RS-3/RS-4 reject those plans. |
 | Vocabulary artifacts predate ADR-0002 | Both HTML artifacts retain banned-word rules or old Graph/Manifest definitions; ADR-0003 also retains a banned-word reference. Use context-sensitive mappings, contract-based Graph identity, and `cord.cascade.depth`. |
 | ADR-0010 is unwritten | The index labels the DeepAgents template decision Accepted but explicitly says no ADR file exists. The design direction is recorded, but its formal ADR remains pending. |
 
 The upstream log additionally tracks expanded-subgraph identity (AT-1), sentinel
 semantics (AT-2), joins (AT-4), graph-name ownership (AT-5), version support
-(AT-6), and SpanProcessor integration (RS-1). It also records a beta.2 test
+(AT-6), and the resolved exporter integration (RS-1). It also records a beta.2 test
 environment while ADR-0011 still proposes a beta.1 dependency pin. These are
-integration inputs to verify, not installed dependencies in this repository.
+topology integration inputs to verify, not installed topology dependencies.

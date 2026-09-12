@@ -9,10 +9,11 @@ The planned command is `cord`.
 
 ## Status
 
-This repository currently contains design documents and architecture decisions.
-There is no application implementation, installable CLI, dependency manifest,
-or build/test setup yet. Commands such as `cord up` in the design are proposed
-interfaces, not commands available from this checkout.
+The first archive integration is runnable: Python 3.12/uv, Run/Step/Attempt
+instrumentation, in-process redaction, a pinned Collector gate, and raw OTLP
+JSONL persistence. See [Archive setup and verification](docs/archive.md).
+The graph in issue #4 and the remaining platform are not implemented here.
+Commands such as `cord up` remain proposed interfaces.
 
 The project is intended for a single operator on a local laptop. Its design
 aims to make the platform usable without a hosted platform account or paid
@@ -61,6 +62,6 @@ OTel Collector, an archive, and a query with a known answer. LiteLLM and Aegra
 then exercise the model and process boundaries. Langfuse follows in Slice 0.5;
 the catalog, viewer, and CLI lifecycle arrive with the second graph in Slice 1.
 
-Before implementing Slice 0, reconcile the masking prerequisite and escalation
-examples called out in [Architecture](ARCHITECTURE.md#open-documentation-issues).
+Redaction release availability and the archive gate are verified. Before wiring
+the graph, reconcile the escalation examples called out in [Architecture](ARCHITECTURE.md#open-documentation-issues).
 The existing slice descriptions are plans, not evidence that work has shipped.

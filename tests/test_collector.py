@@ -1,0 +1,224 @@
+from contextlib import contextmanager
+from datetime import datetime, timezone
+import gzip
+import json
+import os
+from pathlib import Path
+import socket
+import subprocess
+import time
+
+from google.protobuf.json_format import MessageToJson
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+import pytest
+import requests
+
+from cord_runtime.archive_check import check
+from cord_runtime.execution import AttemptOutcome, StepOutcome, run
+from cord_runtime.telemetry import RedactingOTLPExporter, redact_request
+from conftest import CREDENTIAL, PRIVATE_KEY, ROOT
+from test_telemetry import request, spans
+
+pytestmark = pytest.mark.collector
+
+
+@contextmanager
+def collector(directory, config=None):
+    binary = Path(os.environ.get("OTELCOL", ROOT / ".tools/otelcol-contrib"))
+    assert binary.is_file(), "pinned Collector required; see docs/archive.md"
+    version = subprocess.run([str(binary), "--version"], capture_output=True, text=True, check=True)
+    assert "0.148.0" in version.stdout
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    directory.mkdir(parents=True, exist_ok=True)
+    env = {**os.environ, "CORD_ARCHIVE_DIR": str(directory),
+           "CORD_OTLP_ENDPOINT": f"127.0.0.1:{port}", "TZ": "UTC"}
+    process = subprocess.Popen(
+        [str(binary), "--config", str(config or ROOT / "collector/config.yaml")],
+        env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    try:
+        deadline = time.monotonic() + 15
+        while True:
+            if process.poll() is not None:
+                raise AssertionError(process.stdout.read().decode())
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=.1):
+                    break
+            except OSError:
+                assert time.monotonic() < deadline, "Collector did not become ready"
+                time.sleep(.05)
+        yield f"http://127.0.0.1:{port}/v1/traces"
+    finally:
+        process.terminate()
+        try:
+            output = process.communicate(timeout=10)[0]
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            raise
+        assert process.returncode == 0
+        assert CREDENTIAL.encode() not in output
+        assert PRIVATE_KEY.encode() not in output
+
+
+def send(endpoint, req):
+    with requests.Session() as session:
+        session.trust_env = False
+        response = session.post(endpoint, data=req.SerializeToString(),
+                                headers={"Content-Type": "application/x-protobuf"}, timeout=5)
+        assert response.status_code == 200
+
+
+def archive_records(directory):
+    return [json.loads(line) for path in directory.glob("*.otlp.jsonl")
+            for line in path.read_text().splitlines()]
+
+
+def archived_spans(directory):
+    return [s for record in archive_records(directory) for r in record["resourceSpans"]
+            for scope in r["scopeSpans"] for s in scope["spans"]]
+
+
+def attributes(span):
+    return {a["key"]: next(iter(a["value"].values())) for a in span.get("attributes", [])}
+
+
+def test_actual_sdk_export_and_whole_archive(tmp_path, cli):
+    directory = tmp_path / "accepted"
+    with collector(directory) as endpoint:
+        provider = TracerProvider(resource=Resource({"service.name": "fixture", "detail": CREDENTIAL}))
+        provider.add_span_processor(SimpleSpanProcessor(RedactingOTLPExporter(endpoint)))
+        tracer = provider.get_tracer("fixture")
+        with run(tracer, "urn:test:5", "fixture") as execution:
+            with execution.step("draft", StepOutcome.PASSED) as step:
+                for n, tier, outcome in [(1,"fast",AttemptOutcome.FAILED),(2,"fast",AttemptOutcome.ESCALATED),(3,"deep",AttemptOutcome.PASSED)]:
+                    with step.attempt(n, tier, outcome) as attempt:
+                        attempt.set_attribute("nested", ["ordinary", CREDENTIAL])
+                        attempt.add_event("fixture", {"detail": CREDENTIAL})
+        with tracer.start_as_current_span("blocked", attributes={"detail": PRIVATE_KEY}):
+            pass
+        provider.shutdown()
+        nested = request()
+        spans(nested)[0].attributes.add(key="map").value.kvlist_value.values.add(key="bytes").value.bytes_value = CREDENTIAL.encode()
+        send(endpoint, redact_request(nested))
+    archived = archived_spans(directory)
+    assert len(archived) == 6
+    assert all(attributes(s)["cord.redacted"] is True for s in archived)
+    root = next(s for s in archived if s["name"] == "run")
+    step = next(s for s in archived if s["name"] == "step:draft")
+    attempts = sorted((s for s in archived if s["name"] == "attempt"), key=lambda s: attributes(s)["cord.step.attempt"])
+    assert not root.get("parentSpanId")
+    assert step["parentSpanId"] == root["spanId"]
+    assert all(s["parentSpanId"] == step["spanId"] for s in attempts)
+    assert len({s["traceId"] for s in [root, step, *attempts]}) == 1
+    assert attributes(root)["cord.semconv.version"] == "0.1.0"
+    assert [(attributes(s)["cord.tier"],attributes(s)["cord.outcome"]) for s in attempts] == [("fast","failed"),("fast","escalated"),("deep","passed")]
+    assert all(attributes(s)["cord.run.id"] == attributes(root)["cord.run.id"] for s in [step, *attempts])
+    assert all(attributes(s)["cord.subject.id"] == "urn:test:5" for s in [root, step, *attempts])
+    complete = b"".join(p.read_bytes() for p in directory.glob("*.otlp.jsonl"))
+    assert CREDENTIAL.encode() not in complete and PRIVATE_KEY.encode() not in complete
+    assert check([directory], cli) == 0
+
+
+@pytest.mark.parametrize("stamp", [None, False, "true", 1])
+def test_gate_rejects_unprocessed_stamps_in_fresh_archive(tmp_path, stamp):
+    directory = tmp_path / "negative"
+    req = request(CREDENTIAL)
+    if stamp is not None:
+        value = spans(req)[0].attributes.add(key="cord.redacted").value
+        if type(stamp) is bool:
+            value.bool_value = stamp
+        elif type(stamp) is int:
+            value.int_value = stamp
+        else:
+            value.string_value = stamp
+    with collector(directory) as endpoint:
+        send(endpoint, req)
+    assert archived_spans(directory) == []
+    assert all(not p.read_bytes() for p in directory.glob("*.otlp.jsonl"))
+
+
+def test_removed_redactor_with_real_sdk_exporter(tmp_path):
+    directory = tmp_path / "removed"
+    with collector(directory) as endpoint:
+        provider = TracerProvider(resource=Resource({"service.name": "fixture"}))
+        provider.add_span_processor(SimpleSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
+        with provider.get_tracer("fixture").start_as_current_span("unprocessed", attributes={"detail": CREDENTIAL}):
+            pass
+        provider.shutdown()
+    assert archived_spans(directory) == []
+
+
+def test_processing_failure_cannot_reach_archive(tmp_path, monkeypatch):
+    import redact_secret
+    directory = tmp_path / "processing-failure"
+    def fail(_):
+        raise RuntimeError(CREDENTIAL)
+    monkeypatch.setattr(redact_secret, "scan_and_redact", fail)
+    with collector(directory) as endpoint:
+        provider = TracerProvider(resource=Resource({}))
+        provider.add_span_processor(SimpleSpanProcessor(RedactingOTLPExporter(endpoint)))
+        with provider.get_tracer("test").start_as_current_span("unprocessed", attributes={"cord.redacted": True}):
+            pass
+        provider.shutdown()
+    assert archived_spans(directory) == []
+
+
+def test_block_cannot_reach_fresh_archive(tmp_path):
+    directory = tmp_path / "blocked"
+    with collector(directory) as endpoint:
+        provider = TracerProvider(resource=Resource({}))
+        provider.add_span_processor(SimpleSpanProcessor(RedactingOTLPExporter(endpoint)))
+        with provider.get_tracer("test").start_as_current_span("blocked") as span:
+            span.add_event("nested", {"detail": PRIVATE_KEY})
+        provider.shutdown()
+    assert archived_spans(directory) == []
+
+
+def test_append_restart_utc_partition_and_compression(tmp_path, cli):
+    directory = tmp_path / "append"
+    req = redact_request(request())
+    # A producer-controlled partition is always overwritten by the Collector.
+    req.resource_spans[0].resource.attributes.add(key="cord.archive.date").value.string_value = "1900-01-01"
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    with collector(directory) as endpoint:
+        send(endpoint, req)
+    path = directory / f"archive-{today}.otlp.jsonl"
+    before = path.read_bytes()
+    assert before and len(archived_spans(directory)) == 1
+    with collector(directory) as endpoint:
+        send(endpoint, req)
+    assert path.read_bytes().startswith(before)
+    assert len(archived_spans(directory)) == 2
+    assert len(list(directory.glob("*.otlp.jsonl"))) == 1
+    # Exercise two partition values without a 24-hour wait. Only the clock
+    # expression changes in a temporary config; gate and exporter stay intact.
+    next_config = tmp_path / "next-day.yaml"
+    next_config.write_text((ROOT / "collector/config.yaml").read_text().replace(
+        'FormatTime(Now(), "%Y-%m-%d")', '"2099-01-02"'))
+    with collector(directory, next_config) as endpoint:
+        send(endpoint, req)
+    assert (directory / "archive-2099-01-02.otlp.jsonl").exists()
+    assert len(archived_spans(directory)) == 3
+    compressed = path.with_suffix(path.suffix + ".gz")
+    with gzip.open(compressed, "wb") as output:
+        output.write(path.read_bytes())
+    assert gzip.decompress(compressed.read_bytes()) == path.read_bytes()
+    assert check([compressed], cli) == 0
+
+
+def test_archive_check_decodes_nested_payload_and_failure_precedence(tmp_path, cli):
+    contaminated = request()
+    spans(contaminated)[0].attributes.add(key="bytes").value.bytes_value = PRIVATE_KEY.encode()
+    path = tmp_path / "unsafe.otlp.jsonl"
+    path.write_text(MessageToJson(contaminated, indent=None) + "\n")
+    assert check([path], cli) == 1
+    invalid = tmp_path / "invalid.otlp.jsonl"
+    invalid.write_bytes(b"\xff")
+    assert check([path, invalid], cli) == 2
+    assert check([tmp_path / "missing"], cli) == 2

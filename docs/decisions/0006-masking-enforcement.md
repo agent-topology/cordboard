@@ -4,11 +4,11 @@
 **Date:** 2026-09-10
 **Deciders:** 단독 (로컬 도구, 저자 = 운영자)
 **관련:** ADR-0001 (격리 수준), ADR-0004 (모델 게이트웨이), ADR-0005 (기록의 원본)
-**전제:** `redact-secret/redact-secret`의 PyO3 바인딩이 cordboard 슬라이스 0보다 **먼저** 쓸 수 있게 된다
+**전제 충족 (2026-09-11):** `redact-secret==0.1.0b1` 레지스트리 설치와 공개 Python API를 검증했다.
 
 > **갱신 2026-09-10.** 프로젝트가 `redact-secret`에서 **`redact-secret`**으로 이름과 조직이 바뀌었고,
 > Rust 코어 마이그레이션이 완료됐다. 실제 구현을 확인해 **세 가지가 이 ADR과 달라졌다** — Decision 항목에 반영한다.
-> 레지스트리 설치는 승인된 릴리스 이후에만 가능하고, 그전에는 소스 설치를 쓴다.
+> 당시의 릴리스 대기 상태는 아래 2026-09-11 정정으로 대체한다.
 
 > **정정 기록.** 이 ADR의 첫 판은 "패턴 목록을 직접 관리한다"를 전제로 썼다. 같은 저자가 이미 `redact-secret`을 만들어 두었고, 그것이 이 문서가 손으로 논증하던 구조를 이미 갖추고 있다는 사실을 반영해 전면 재작성한다. 첫 판의 세 겹 구조는 유지되지만 **각 겹이 무엇을 하는지가 달라진다.**
 
@@ -36,11 +36,11 @@
 - **커버리지가 넓다** — PEM 블록, AWS 키, GitHub/GitLab/Stripe/Slack/Vault/Anthropic/OpenAI 토큰, JWT, 자격증명 포함 DB URL, 문맥적 할당(`AWS_SECRET_ACCESS_KEY=`)
 - README 상단의 원칙이 우리 결론과 같다 — 클라이언트 측 스캐닝은 예방적 UX이고, 서버 측 스캐닝이 권위 있는 집행 경계다
 
-**그리고 언어 문제가 해소되고 있다.** 원래 TS 전용이라 우리 Python 경로에 못 들어갔는데, Rust 코어 마이그레이션이 진행 중이고 PyO3 바인딩이 나온다. 그러면 그래프 프로세스와 LiteLLM 프록시가 **정식 탐지기를 직접 쓴다.**
+**그리고 언어 문제가 해소됐다.** Rust 코어와 PyO3 바인딩이 릴리스되어 Python에서 설치된다. 그러면 그래프 프로세스와 LiteLLM 프록시가 **정식 탐지기를 직접 쓴다.**
 
 ### 그래서 순서를 정했다
 
-cordboard 슬라이스 0을 먼저 걷게 하고 임시 리댁터를 쓰는 선택지가 있었지만, **redact-secret 릴리스를 먼저** 하기로 했다. 임시 코드가 영구가 되는 걸 피하고, 이 ADR을 한 번만 쓰기 위해서다. 대가는 cordboard가 그 릴리스에 막힌다는 것이다.
+cordboard 슬라이스 0을 먼저 걷게 하고 임시 리댁터를 쓰는 선택지가 있었지만, **redact-secret 릴리스를 먼저** 하기로 했다. 임시 코드가 영구가 되는 걸 피하고, 이 ADR을 한 번만 쓰기 위해서다. 이 순서는 유지하며, 릴리스 가용성은 이제 충족됐다.
 
 ---
 
@@ -50,12 +50,12 @@ cordboard 슬라이스 0을 먼저 걷게 하고 임시 리댁터를 쓰는 선�
 
 ```
 ① 그래프 프로세스 (Python)      redact-secret PyO3 바인딩
-                                scanAndRedact → cord.redacted=true 스탬프
+                                scan_and_redact → 성공 후 cord.redacted=true 스탬프
                                 권위 있는 집행. 임시가 아니다
 
 ② LiteLLM 프록시 (Python)       같은 패키지, 같은 정책
 
-③ OTel Collector (Go)           cord.redacted 없는 Span을 버린다
+③ OTel Collector (Go)           cord.redacted가 boolean true가 아닌 Span을 버린다
                                 ← 강제 지점. 탐지는 안 한다
 
 ④ cord scan-archive              redact-secret CLI 래퍼 (Rust 바이너리)
@@ -133,7 +133,7 @@ Collector가 **버리기만 하기 때문에** ①이 필수로 유지된다. �
 ### Option E: redact-secret PyO3를 ①·②에, Collector는 관문만 ← **채택**
 
 **Pros:** "프로세스를 떠나기 전"(C의 장점)과 "우회 불가"(B의 장점)를 동시에 얻는다. 탐지 로직이 한 곳에 있고 세 언어가 같은 코퍼스로 검증된다. Collector는 Go 그대로.
-**Cons:** cordboard가 pre-1.0 패키지에 의존한다. 릴리스가 cordboard를 막는다(→ Consequences).
+**Cons:** cordboard가 pre-1.0 패키지에 의존한다. 공개 버전의 호환성을 계속 검증해야 한다.
 
 ---
 
@@ -162,7 +162,7 @@ Collector가 **버리기만 하기 때문에** ①이 필수로 유지된다. �
 
 완화는 셋이고, 세 번째가 가장 강하다.
 
-- 커스텀 탐지기를 그래프별로 추가 (`cord.yaml`)
+- 새 탐지 요구는 upstream detector로 제안 (로컬 확장 없음)
 - `cord scan-archive`가 아카이브를 사후 검증
 - **큰 내용물을 애초에 안 싣는다**
 
@@ -181,10 +181,10 @@ Collector가 **버리기만 하기 때문에** ①이 필수로 유지된다. �
 
 ### 어려워지는 것
 
-- **cordboard 슬라이스 0이 redact-secret 릴리스에 막힌다.** 이건 우리가 고른 순서이고, 대가는 시작이 늦어지는 것이다
+- **릴리스 선행 조건은 충족됐다.** 이후 업그레이드도 공개 API와 관문을 다시 검증한다
 - **pre-1.0 의존.** API가 바뀌면 cordboard가 따라가야 한다. 버전 고정으로 완화하되 업그레이드마다 비용이 든다
 - **두 프로젝트의 릴리스 주기가 얽힌다.** 같은 사람이 하는 이상 우선순위 충돌이 실제로 생긴다
-- **개발 중 성가심.** 새 그래프에서 리댁터를 안 붙이면 화면이 빈다 → Collector가 버릴 때 로그에 이유를 남긴다
+- **개발 중 성가심.** 새 그래프에서 리댁터를 안 붙이면 화면이 빈다 → 관문 차단은 별도 음성 시험으로 확인하고 payload 로그는 켜지 않는다
 - **"잠깐만 끄자"의 유혹.** 그리고 그게 영구가 되기 쉽다. 이 문서가 그때를 위한 것이다
 - **Collector가 단일 실패 지점.** 죽으면 관측이 멈춘다. 다만 실행은 계속된다 — 관측이 실행을 막지는 않는다
 
@@ -194,7 +194,7 @@ Collector가 **버리기만 하기 때문에** ①이 필수로 유지된다. �
 
 ### 다시 볼 조건
 
-- **redact-secret이 정식 릴리스되면** → 소스 설치에서 레지스트리 설치로 전환
+- **redact-secret 새 릴리스가 나오면** → 고정 버전 업그레이드 여부와 관문 회귀를 검증
 - **redact-secret의 API가 1.0에서 크게 바뀌면** → 고정 버전 유지 여부를 판단
 - **우리 도메인 패턴이 실제로 새면** → upstream detector 제안. 로컬 우회를 만들지 않는다
 - **Collector 관문 때문에 개발이 실제로 막히면** → 로컬 개발 모드에서 관문을 경고로 낮추되, **아카이브 exporter는 그 모드에서 비활성화**한다. 원본을 오염시키지 않는다
@@ -209,18 +209,38 @@ Collector가 **버리기만 하기 때문에** ①이 필수로 유지된다. �
 
 1. [ ] **#72에서 TS 코어를 제거하기 전에** 적합성 픽스처를 `conformance/fixtures/`로 독립시키고, TS 구현이 그걸로 전부 통과하는지 확인한다. 그게 Rust와 두 바인딩의 정답지가 된다
 2. [ ] 세 바인딩이 **같은 코퍼스를 돌리는 CI 잡**. #33(플랫폼 매트릭스)과 다른 축이다 — "설치가 되나"가 아니라 "탐지가 같나"
-3. [ ] PyO3 휠이 cordboard가 쓸 플랫폼을 덮는지 확인
+3. [x] macOS arm64 / Python 3.12.14에서 0.1.0b1 휠 설치 확인 (다른 플랫폼은 미검증)
 
 ### cordboard 쪽 (릴리스 이후)
 
-4. [ ] `cord-runtime`의 SpanProcessor가 `scanAndRedact` 호출 + `cord.redacted=true` 스탬프
+4. [x] `cord-runtime`의 exporter가 공개 `scan_and_redact` 호출 + 성공 후 스탬프 (아래 정정)
 5. [ ] 같은 로직의 DeepAgents 미들웨어 판 (`--template deep`용)
 6. [ ] LiteLLM 프록시 쪽 스캔 경로 설정
-7. [ ] cordboard 정책 구현 — 개인키는 `block`, 나머지는 위 표대로
-8. [ ] Collector 필터 프로세서 — `cord.redacted` 부재 시 drop, **이유를 로그에 남길 것**
+7. [x] 별도 정책 구현 폐기 — upstream 기본값 사용, block은 span 전체 억제
+8. [x] Collector 필터 — boolean true 이외 drop. payload 로그 없이 음성 시험으로 검증
 9. [ ] `cord up` 설정 린트에 `success_callback: ["langfuse"]` 금지 추가 (ADR-0004 Action 1과 같은 자리)
-10. [ ] `cord scan-archive` — redact-secret CLI 래퍼
-11. [ ] 슬라이스 0 종료 판정 ②·③ — 리댁터를 끄면 아카이브가 비는지, `cord scan-archive`가 깨끗한지
-12. [ ] `cord.yaml`에 커스텀 탐지기 확장 스키마 정의
+10. [x] `archive-check` — 고정 upstream CLI 래퍼. 제품 `cord scan-archive`는 후속
+11. [x] #5 픽스처에서 리댁터 제거/false/누락/처리 실패별 새 아카이브와 전체 내용 검증
+12. [x] `redaction.extra_patterns` 폐기 — RS-4와 일치
 13. [ ] 템플릿에 "프롬프트 전문·diff를 span attribute에 싣지 말 것" 규칙 명시
 14. [ ] **cordboard는 redact-secret의 공개 API만 쓴다**를 규칙으로 명시. 내부 경로 참조 금지
+
+
+## 정정 — 공개 릴리스와 실제 경계 (2026-09-11, #5)
+
+`v0.1.0-beta.1` / Python `0.1.0b1`은 설치 가능하며 릴리스 대기는 해소됐다.
+마스킹 없이 아카이브를 시작한다는 RS-5의 이전 문장은 폐기한다.
+
+`ReadableSpan`을 `on_end()`에서 수정하는 대신 공개 `encode_spans()`로 만든
+OTLP 복사본을 exporter에서 처리한다. span 값뿐 아니라 resource/scope, 이름,
+event, link, status, 중첩 AnyValue와 UTF-8 bytes를 처리한다. 처리 오류나 block은
+전체 span을 버리고, 기존 스탬프는 지운 뒤 성공한 경우에만 새로 찍는다.
+upstream은 block 범위도 치환하지만 **치환된 텍스트가 있다는 것은 내보낼 권한이 아니다.**
+공유 resource/scope에 block이 있으면 그 영향을 받는 모든 span을 버린다.
+부모가 차단되어 자식만 남을 수 있으며, 이 경우 계층을 조작해 복구하지 않는다.
+
+Collector는 인증 장치가 아니라 협력하는 로컬 생산자의 처리 누락을 잡는 관문이다.
+생산자가 true를 위조하는 공격은 이 스탬프로 막지 못한다. 수신은 loopback에 한정한다.
+상세 payload 디버그 로그는 켜지 않는다. 이유를 기록하려고 원문을 유출하지 않는다.
+그래프(#4), DeepAgents 및 LiteLLM 실제 연결은 아직 구현되지 않았다.
+명령·검증 결과는 [아카이브 실행 문서](../archive.md)에 기록한다.

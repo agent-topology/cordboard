@@ -119,26 +119,26 @@ cordboard는 "그래프마다 자기 의존성"을 원칙으로 두는데(ADR-00
 
 ## redact-secret
 
-### RS-1 · OTel SpanProcessor 통합 경로 🟡
+### RS-1 · OTel 공개 exporter 통합 검증 ✅
 
-cordboard의 배치 지점은 OpenTelemetry `SpanProcessor.on_end()`이고, 대상은 **span attribute 맵의
-문자열 값들**이다 — 하나의 긴 텍스트가 아니라 짧은 문자열 다수.
+2026-09-11, Python 3.12.14 / macOS arm64에서 `redact-secret==0.1.0b1`,
+OTel SDK 및 OTLP 패키지 `1.39.1`을 설치해 검증했다.
+`SimpleSpanProcessor`가 호출하는 exporter 안에서 공개 `encode_spans()`로
+OTLP 복사본을 만들고 문자열마다 공개 `scan_and_redact()`를 호출한다.
+`ReadableSpan`의 내부 필드를 수정하지 않는다. 공유 resource/scope까지 처리한 후
+네트워크로 보내므로 배출 이전 경계를 유지한다. 성능 매트릭스는 측정하지 않았다.
 
-지금 API로는 값마다 `scanAndRedact`를 부르면 된다. 다만 값이 수십 개인 span이 배치로
-수백 개 들어오므로, **호출 단위가 적절한지 확인이 필요하다.**
-
-**필요한 것:** 짧은 문자열 다수를 처리하는 권장 패턴. 또는 값 목록을 받는 API가 의미 있는지 판단.
-incremental은 이 모양에 안 맞는다 — 값들이 서로 이어진 스트림이 아니다.
+이 경로는 #5 픽스처에서 검증됐으며 LiteLLM/DeepAgents 연결까지 완료했다는 뜻은 아니다.
+[구현 및 재현 명령](../archive.md), [회귀 테스트](../../tests/test_telemetry.py).
 
 ---
 
-### RS-2 · `block` 처리의 호출자 계약 🟢
+### RS-2 · `block` 호출자 계약 검증 ✅
 
-cordboard는 `block`을 **그 span 자체를 내보내지 않음**으로 해석한다. README의 서버 예제가
-`findings.some(f => f.action === "block")`로 판단하므로 같은 방식이면 된다.
-
-**확인만 필요:** `scanAndRedact`의 결과에서 `block` 범위도 치환된 텍스트로 돌아오는가,
-아니면 호출자가 텍스트를 버려야 하는가. 후자라면 문서에 명시가 있으면 좋다.
+공개 `scan_and_redact()`는 block 범위도 치환한 `result.text`를 반환한다.
+`result.findings` 중 하나라도 `action == "block"`이면 Cordboard는 그 span 전체를
+버린다. 치환 여부만으로 export를 허용하지 않는다. 합성 PEM 하나로 이 계약을
+재현했고, resource/event/bytes 경로와 실제 Collector 아카이브에서도 억제를 검증했다.
 
 ---
 
@@ -159,11 +159,16 @@ cordboard는 `cord.yaml`의 `redaction.extra_patterns` 계획을 폐기했다.
 
 ---
 
-### RS-5 · 릴리스 가용성 🟡
+### RS-5 · 릴리스 가용성 확인 ✅
 
-레지스트리 설치는 승인된 릴리스 이후에만 가능하다. cordboard 슬라이스 0은
-**마스킹 없이 시작**하기로 했으므로 블로커는 아니지만, 0.1.0-beta.1이 올라오면
-그 시점에 ①계층을 붙인다.
+2026-09-11 정정: [v0.1.0-beta.1](https://github.com/redact-secret/redact-secret/releases/tag/v0.1.0-beta.1)
+릴리스의 Python 배포판 `redact-secret==0.1.0b1`을 레지스트리에서 설치했다.
+`uv sync --locked` 및 최소 credential/private-key/ordinary-text 회귀가 통과했다.
+Rust CLI도 같은 릴리스 바이너리와 SHA256SUMS로 확인했다.
+
+이전의 **마스킹 없이 시작**한다는 문장은 폐기한다. 미처리/차단 span은 아카이브에
+들어갈 수 없다. 릴리스 대기는 더 이상 블로커가 아니다.
+실제 명령, 고정 버전, 한계는 [아카이브 문서](../archive.md)에 기록한다.
 
 ---
 

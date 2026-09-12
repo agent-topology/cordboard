@@ -281,6 +281,6 @@ OTel이 traces·metrics·logs를 "signals"라 부르는 것을 첫 판에서 놓
 2. [ ] `cord.chain.depth` → `cord.cascade.depth` 개명. 명사도 Cascade Depth
 3. [ ] 설계 문서(HTML 아티팩트)의 금지어 섹션을 글로서리 링크로 교체
 4. [ ] Outcome 두 목록을 `cord-runtime`에 enum으로 정의. 서로 섞이면 타입 오류 (ADR-0008 Action 1과 동일)
-5. [ ] `cord.semconv.version`을 Run 루트 Span에 기록하는 것을 헬퍼에 넣는다 — 잊을 수 없게
+5. [x] #5의 `cord_runtime.execution.run`이 Run 루트에 `cord.semconv.version=0.1.0` 기록 (2026-09-11)
 6. [ ] `OTEL_SEMCONV_STABILITY_OPT_IN` 설정을 고정하고 값을 문서화
 7. [ ] 새 의존성 도입 시 글로서리 대조를 도입 필터의 항목으로 추가

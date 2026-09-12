@@ -37,7 +37,7 @@
 |---|---|---|
 | **0008** | span 트리 모양 — Attempt가 자식 span이고 `escalated`가 선언된다 | 작업 3 (관문) |
 | **0005** | 아카이브 포맷 — raw OTLP JSONL, 이것이 기록의 원본 | 작업 2 · 3 |
-| **0006** | 마스킹 지점 — 프로세스 안에서 지우고 Collector가 검문. **redact-secret 릴리스 선행** | 작업 2 · 종료 판정 ②③ |
+| **0006** | 마스킹 지점 — 프로세스 안에서 지우고 Collector가 검문. **0.1.0b1 설치·관문 검증 완료 (#5)** | 작업 2 · 종료 판정 ②③ |
 | **0004** | Tier↔Model 분리, 승격은 그래프 소유 | 작업 4 |
 
 셋이 append-only 아카이브에 구조로 남기 때문에, **데이터가 다섯 줄일 때 확정해야 하고 그 뒤로는 마이그레이션이 된다.**
@@ -61,16 +61,12 @@ ADR을 쓰는 값이 결정을 기록하는 데만 있는 게 아니라는 증�
 
 ---
 
-## 외부 의존 — 순서가 정해졌다
+## 외부 의존 — 릴리스 선행 조건 충족 (2026-09-11)
 
-ADR-0006이 `omiologic/redact-secret`의 **Rust 코어 마이그레이션과 PyO3 바인딩 릴리스**를 전제한다.
-그리고 그쪽을 먼저 하기로 정했다. cordboard 슬라이스 0은 그때까지 막힌다.
-
-임시 리댁터로 cordboard를 먼저 걷게 하는 선택지가 있었지만, 임시 코드가 영구가 되는 걸 피하고
-ADR-0006을 한 번만 쓰기 위해 순서를 이렇게 잡았다.
-
-**redact-secret 쪽에서 시간 순서상 가장 급한 것** — TS 코어를 제거하는 이슈(#72)보다
-적합성 픽스처를 독립 데이터로 빼내는 일이 먼저다. 묶여 있으면 Rust 구현의 정답지가 같이 사라진다.
+ADR-0006의 Rust 코어/PyO3 릴리스 선행 조건은 `redact-secret==0.1.0b1` 설치로
+충족됐다. 공개 API의 redact/block/unchanged와 실제 Collector 관문을 검증했다.
+마스킹 없이 시작한다는 RS-5의 이전 문장을 폐기했으며 임시 탐지기나 정책 우회는 없다.
+[실제 명령과 증거](../archive.md)를 기준으로 삼는다. 그래프 #4 연결은 후속이다.
 
 ---
 
@@ -81,7 +77,8 @@ ADR-0006을 한 번만 쓰기 위해 순서를 이렇게 잡았다.
 
 **현재 열린 항목** — AT-1(depth≥1에서 부모 노드 소실, 🔴), AT-2(sentinel 판별이 코어에 없음),
 AT-3(`direct` 팬아웃의 병렬 의미), AT-4(`joins` 정의), AT-5(그래프 이름 소유권),
-AT-6(LangGraph 지원 범위), RS-1(SpanProcessor 통합 패턴), RS-2(`block` 호출자 계약).
+AT-6(LangGraph 지원 범위). RS-1(공개 exporter 통합), RS-2(`block` 호출자 계약),
+RS-5(릴리스 가용성)는 #5에서 검증됐다.
 
 **실측된 좋은 신호** — `agent-topology` beta.1 → beta.2에서 같은 그래프의 `structureHash`가
 동일했다(`d0b436…`). 포맷이 두 릴리스를 건너 안정적이었다는 증거다.
@@ -93,7 +90,7 @@ AT-6(LangGraph 지원 범위), RS-1(SpanProcessor 통합 패턴), RS-2(`block` �
 | | 상태 | cordboard에 미치는 영향 |
 |---|---|---|
 | [`agent-topology`](https://github.com/agent-topology/agent-topology) | **0.1 public preview.** PyPI 2 + npm 2 패키지, Python·TypeScript 생산자, 정본 JSON Schema | ADR-0009 · 0011 · 0012 갱신 |
-| [`redact-secret`](https://github.com/redact-secret/redact-secret) | Rust 코어 완료, PyO3·N-API·WASM 바인딩. 릴리스 승인 대기 | ADR-0006 갱신 |
+| [`redact-secret`](https://github.com/redact-secret/redact-secret) | Rust 코어·바인딩 릴리스. 2026-09-11 Python 0.1.0b1 설치 검증 | ADR-0006 갱신 |
 
 **셋이 결정을 실제로 바꿨다.**
 
@@ -144,3 +141,14 @@ R3은 "병렬 분기 안의 인터럽트"를 찾는 규칙이라 코어 문서�
 | **0011** | 파생 vs 선언의 경계. 표류 시 거부 |
 | **0002** | Graph의 정체성이 계약에서 온다는 것 |
 | **0007** | 거부와 경고의 경계. 거부 규칙을 추가하는 조건 |
+
+
+## 아카이브 구현 정정 (2026-09-11, #5)
+
+- **0006:** 공개 exporter 경계에서 전체 OTLP span envelope를 처리하고 성공 후 스탬프.
+  block은 치환 결과가 있어도 전체 span 억제. 별도 정책·커스텀 detector 계획 폐기.
+- **0005:** Collector 0.148.0의 append 모드 제약을 반영해 UTC 수신 날짜별 JSONL,
+  Collector 종료 후 닫힌 날짜 파일의 외부 gzip 압축으로 구체화했다.
+- **0002:** Run 루트에 `cord.semconv.version=0.1.0`을 기록하는 헬퍼가 생겼다.
+
+전체 플랫폼이 구현됐다는 뜻은 아니다. [범위·검증](../archive.md)을 참조한다.

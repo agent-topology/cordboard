@@ -2,13 +2,15 @@
 
 ## Current development surface
 
-This repository currently contains design documents, ADRs, HTML artifacts, and
-agent tooling configuration. There is no application package layout, dependency
-manifest, formatter, CI workflow, or test suite yet. Do not present a proposed
-directory, command, dependency version, or completed upstream task as implemented
-Cordboard functionality.
+The archive slice lives in `src/cord_runtime`, `collector`, `examples`, and
+`tests`. Use Python 3.12 and `uv sync --locked`; run unit tests with
+`uv run pytest -q -m "not collector"`, and the complete suite with
+`uv run pytest -q` after installing the pinned binaries in
+[Archive setup](docs/archive.md). `uv.lock` pins transitive dependencies.
+There is no npm build, Rust crate, or CI workflow in this checkout. Remaining
+platform components and `cord` lifecycle commands are still planned.
 
-When adding the first code, choose tooling for the smallest authorized slice and
+When extending the code, choose tooling for the smallest authorized slice and
 document its actual commands here. Examples in the design artifacts do not
 establish a working build system.
 
