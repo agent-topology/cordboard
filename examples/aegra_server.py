@@ -9,13 +9,13 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def environment():
+def environment(config=None):
     # Aegra's optional OpenInference/LangSmith exporters bypass our redactor.
     # Pass only this deployment's settings to a fresh interpreter.
     names = ("PATH", "HOME", "TMPDIR", "SYSTEMROOT", "POSTGRES_USER",
              "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DB")
     env = {key: os.environ[key] for key in names if key in os.environ}
-    env.update(AEGRA_CONFIG=str(ROOT / "aegra/aegra.json"), AUTH_TYPE="noop",
+    env.update(AEGRA_CONFIG=str(Path(config).resolve() if config else ROOT / "aegra/aegra.json"), AUTH_TYPE="noop",
                LANGSMITH_TRACING="false", LANGCHAIN_TRACING_V2="false",
                OTEL_TARGETS="", OTEL_CONSOLE_EXPORT="false",
                REDIS_BROKER_ENABLED="false", DB_ECHO_LOG="false")
@@ -25,11 +25,14 @@ def environment():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=2026)
-    parser.add_argument("--proxy", default="http://127.0.0.1:4000")
+    parser.add_argument("--config", help="Aegra deployment file owned by the graph operator")
+    parser.add_argument("--proxy", help="Optional model gateway for the minimal-graph example")
     parser.add_argument("--collector", default="http://127.0.0.1:4318/v1/traces")
     args = parser.parse_args()
-    env = environment()
-    env.update(CORD_PROXY=args.proxy, CORD_COLLECTOR=args.collector)
+    env = environment(args.config)
+    env.update(CORD_COLLECTOR=args.collector)
+    if args.proxy:
+        env["EXAMPLE_PROXY"] = args.proxy
     process = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "aegra_api.main:app", "--host", "127.0.0.1",
          "--port", str(args.port), "--no-access-log"], cwd=ROOT, env=env,

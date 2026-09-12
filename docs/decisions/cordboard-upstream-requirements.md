@@ -218,3 +218,10 @@ LiteLLM 1.87.0은 Uvicorn 0.33.0 고정, Aegra는 >=0.36.0 요구로 한 환경�
 사용한다. 요청별 instrumentation은 closure에 두고 직렬화되는 config에는 넣지 않는다.
 동기 Attempt subgraph는 checkpoint를 상속하지 않고 Step 단위 상태를 호스트가
 저장한다. [실제 OTLP·DB 검증과 한계](../aegra.md).
+
+
+## 교환원 경계 정정 (2026-09-11, #7)
+
+[ADR-0013](0013-switchboard-boundary.md)에 따라 위 LiteLLM 검증은 선택적 그래프 예제의
+통합 기록이다. 공용 게이트웨이·모델 설정·공급자 키는 Cordboard 요구사항이 아니다.
+모델 없는 그래프에도 동일한 실행 API와 redaction/Collector 계약을 적용한다.

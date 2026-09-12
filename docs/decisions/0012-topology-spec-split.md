@@ -84,7 +84,7 @@ cordboard는 생산자를 의존성으로 걸고, 스펙 패키지는 따라온�
     "structure": {},
     "completeness": {},
     "provenance": {},
-    "x-cord": { "subject": {}, "tiers": {}, "approval": {}, "triggers": [] }
+    "x-cord": { "subject": {}, "approval": {}, "triggers": [] }
   }]
 }
 ```
@@ -178,7 +178,7 @@ Option A였다면 cordboard 안에 묻힌 코드를 들어내야 했을 것이�
 
 ### 조율 비용은 실제로 얼마인가
 
-레포가 둘이면 변경이 두 번이다. 그런데 이 경계는 **자연 경계**다 — 구조 파생과 업무 정책은 같이 바뀌지 않는다. 새 Tier 정책을 추가할 때 파생 로직은 안 건드리고, LangGraph API가 바뀌어도 cordboard는 안 건드린다.
+레포가 둘이면 변경이 두 번이다. 그런데 이 경계는 **자연 경계**다 — 구조 파생과 업무 정책은 같이 바뀌지 않는다. 새 승인 정책을 추가할 때 파생 로직은 안 건드리고, LangGraph API가 바뀌어도 cordboard는 안 건드린다.
 
 같이 바뀌는 것을 나눴다면 비용이 컸겠지만, 이건 그렇지 않다.
 
@@ -221,3 +221,10 @@ Option A였다면 cordboard 안에 묻힌 코드를 들어내야 했을 것이�
 6. [ ] cordboard 쪽: `agent-topology`를 의존성으로 고정, 버전 명시
 7. [ ] cordboard 쪽: `x-cord` 확장 스키마 정의 (ADR-0009 Action 1b)
 8. [ ] **cordboard는 `agent-topology`의 공개 API만 쓴다**를 규칙으로 명시. 내부 경로 참조 금지
+
+
+## 정정 — 교환원 경계 (2026-09-11, #7)
+
+[ADR-0013](0013-switchboard-boundary.md)이 모델 소유권의 현재 결정이다.
+`x-cord.tiers` 예제를 제거했다. Cordboard 확장은 연결·기록 정책을 담고,
+모델 매핑이나 Tier 정책을 담지 않는다. upstream topology 형식은 변경하지 않는다.

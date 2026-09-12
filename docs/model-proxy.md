@@ -1,10 +1,20 @@
-# LiteLLM model integration (#8)
+# Optional graph-owned LiteLLM example (#8)
+
+[ADR-0013](decisions/0013-switchboard-boundary.md) supersedes the platform-wide
+gateway requirement. Everything on this page configures the example graph's
+optional model dependency. Cordboard does not ask operators for provider keys,
+model names, alias lists or a proxy URL to connect a graph. Graphs may use their
+own SDK, gateway, one model, many models, or no model.
+
+The `fast`/`deep` checks belong to this example's escalation scenario. They do not
+validate other graphs. Provider compatibility tests remain useful to this
+example's owner, but do not gate Cordboard or Slice 0 completion.
 
 The existing example graph now sends model calls through a DB-free LiteLLM
 1.87.0 proxy with exactly two aliases, `fast` and `deep`. The graph owns its
 validation and `fast → fast → deep` policy. Each live Attempt encloses generation
 and assessment, and records its disposition before ending. Provider mapping is
-entirely in [proxy/config.yaml](../proxy/config.yaml).
+entirely in [examples/model_proxy/config.yaml](../examples/model_proxy/config.yaml).
 
 ## Setup and deterministic verification
 
@@ -15,10 +25,10 @@ LiteLLM's proxy extra includes optional integrations; this slice enables no DB,
 virtual keys, budgets, Redis, Langfuse, or enterprise functionality.
 
 ```sh
-uv sync --locked --python 3.12
-uv run --locked python -m cord_runtime.proxy_config --validate
-uv run --locked pytest -q tests/test_proxy.py
-uv run --locked pytest -q
+uv sync --locked --group proxy --python 3.12
+uv run --locked --group proxy python -m examples.model_proxy.config --validate
+uv run --locked --group proxy pytest -q tests/test_proxy.py
+uv run --locked --group proxy pytest -q
 ```
 
 `tests/test_proxy.py` starts a controlled OpenAI-compatible HTTP endpoint, the
@@ -32,17 +42,19 @@ Nothing in this suite needs real credentials.
 
 ## Real-provider setup
 
-The operator supplies `CORD_PROVIDER_BASE`, `CORD_PROVIDER_KEY`,
-`CORD_FAST_MODEL`, and `CORD_DEEP_MODEL` in the process environment. Use a
+The operator supplies `EXAMPLE_PROVIDER_BASE`, `EXAMPLE_PROVIDER_KEY`,
+`EXAMPLE_FAST_MODEL`, and `EXAMPLE_DEEP_MODEL` in the process environment. Use a
 secret manager or a hidden terminal input for the key; do not put credentials
 in YAML, command arguments, shell history, issue text, or captured output.
-Model values use LiteLLM's provider-prefixed identifiers. The same chat request
-contract applies to Sonnet and GPT 5.5 mappings; neither is claimed verified
-until its real-provider smoke succeeds. [Aegra integration and the Slice 0
-evidence checklist](aegra.md) preserve this outstanding check.
+Model values use LiteLLM's provider-prefixed identifiers. The graph operator
+chooses the actual provider and models. Sonnet and GPT 5.5
+in the issue-authoring instructions identify implementation agents, not a required
+pair of runtime providers. No specific provider compatibility is claimed until
+its smoke succeeds. [Boundary acceptance](switchboard-boundary.md) separates
+this optional check from Cordboard completion.
 
 For separate providers, edit each alias's `api_base` and `api_key` references to
-distinct `os.environ/CORD_PROVIDER_*` variables. Keep `callback.py` alongside
+distinct `os.environ/EXAMPLE_PROVIDER_*` variables. Keep `callback.py` alongside
 the config: LiteLLM loads custom callbacks relative to the YAML file.
 Multiple deployments may share the same alias, with optional integer `order`.
 The graph code contains neither provider identifiers nor keys.
@@ -51,8 +63,8 @@ Start a fresh Collector archive as described in [Archive setup](archive.md),
 then start the validated proxy in another terminal:
 
 ```sh
-uv run --locked python -m cord_runtime.proxy_config \
-  --config proxy/config.yaml --port 4000 \
+uv run --locked --group proxy python -m examples.model_proxy.config \
+  --config examples/model_proxy/config.yaml --port 4000 \
   --collector http://127.0.0.1:4318/v1/traces
 ```
 
@@ -74,11 +86,11 @@ request. This small launcher is not a product `cord up` command.
 Against the running proxy and a fresh archive:
 
 ```sh
-uv run --locked python -m examples.provider_smoke \
+uv run --locked --group proxy python -m examples.provider_smoke \
   --archive archive \
   --cli .tools/redact-secret-0.1.0-beta.1-aarch64-apple-darwin
-uv run --locked python -m examples.proxy_graph
-uv run --locked archive-check archive \
+uv run --locked --group proxy python -m examples.proxy_graph
+uv run --locked --group proxy archive-check archive \
   --cli .tools/redact-secret-0.1.0-beta.1-aarch64-apple-darwin
 ```
 
@@ -102,7 +114,7 @@ availability retries inside the same alias; the default is zero.
 
 ## Telemetry and configuration contracts
 
-[ProxyTelemetry](../src/cord_runtime/proxy_telemetry.py) implements LiteLLM's
+[ProxyTelemetry](../examples/model_proxy/telemetry.py) implements LiteLLM's
 public async `CustomLogger` success/failure callbacks. It extracts the incoming
 W3C `traceparent` with the public OTel propagator and creates a `chat` span whose
 direct parent is the matching Attempt. Missing/invalid context suppresses the
@@ -128,7 +140,7 @@ custom callback meets the direct-parent contract without overriding private
 methods or changing upstream code. The regression test checks the archived
 parent IDs, not a diagram or an HTTP success alone.
 
-[Configuration validation](../src/cord_runtime/proxy_config.py) allows only
+[Configuration validation](../examples/model_proxy/config.py) allows only
 the settings used by this slice. It rejects cross-alias/general/context-window/
 content-policy fallback lists and direct Langfuse or other callbacks, with
 instructions to use same-alias deployments and `callback.handler`. It also
@@ -138,16 +150,17 @@ configuration contract, not a validator for every possible LiteLLM feature.
 
 ## Evidence and limits
 
-Verified on macOS arm64 with CPython 3.12.14, LiteLLM 1.87.0, Collector 0.148.0,
+Historical #8 evidence (commands below use the current example paths and explicit
+optional dependency group). Verified on macOS arm64 with CPython 3.12.14, LiteLLM 1.87.0, Collector 0.148.0,
 OTel 1.39.1 and redact-secret 0.1.0b1. This measures routing ownership, propagation, redaction and archive compatibility,
 not throughput or provider quality.
 
 | Command | Observed result |
 | --- | --- |
-| `uv sync --locked --python 3.12` | 135 resolved packages, 131 installed packages checked |
-| `python -m cord_runtime.proxy_config --validate` (through locked uv) | configuration valid |
-| `uv run --locked pytest -q` | **99 passed in 28.97s**, including 24 proxy tests |
-| `uv run --locked python -m examples.minimal_graph` | hello; exactly one escalation |
+| `uv sync --locked --group proxy --python 3.12` | 135 resolved packages, 131 installed packages checked |
+| `python -m examples.model_proxy.config --validate` (through locked uv) | configuration valid |
+| `uv run --locked --group proxy pytest -q` | **99 passed in 28.97s**, including 24 proxy tests |
+| `uv run --locked --group proxy python -m examples.minimal_graph` | hello; exactly one escalation |
 | Local Markdown references and `git diff --check` | passed |
 
 The lock resolution changes existing `orjson` from 3.12.0 to 3.11.6 and
@@ -156,8 +169,8 @@ suite covers the pre-existing graph/archive behavior under this resolution.
 
 **Real-provider smoke: not run.** No operator provider mapping/credentials were
 present. The controlled smoke-harness test verifies the command's behavior but
-is not evidence of Sonnet or GPT 5.5 compatibility. This is the outstanding
-acceptance check for #8; do not mark it passed based on deterministic tests.
+is not evidence of any actual provider compatibility. The original #8 checklist
+keeps that historical unrun check; ADR-0013 scopes it to this optional example.
 
 Streaming, tool calls, multimodal input, provider-native features, durable
 telemetry delivery during Collector downtime, and availability failover under

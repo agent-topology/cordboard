@@ -234,3 +234,12 @@ Graph/Run/Subject/Node 일치를 검증한 뒤 명시적 Attempt 승격만 센�
 Run별 config로 계측 객체를 전달해 병렬 실행의 부모와 상태를 분리한다.
 기본 고정 응답 실행은 그대로 서비스 없이 동작한다.
 [검증 명령](../model-proxy.md).
+
+
+## 정정 — 교환원 경계 (2026-09-11, #7)
+
+[ADR-0013](0013-switchboard-boundary.md)이 모델 소유권의 현재 결정이다.
+Attempt는 모델 호출 여부와 관계없는 실행 시도다. `cord.tier`는 선택적이며
+모델 없는 Attempt와 Tier를 공개하지 않은 승격 선언도 유효하다. 집계는 여전히
+명시된 Outcome만 세며, 모델 수·이름·Tier 사다리를 해석하지 않는다.
+프록시 자식 span은 예제의 계측 선택이며 모든 Attempt의 필수 자식이 아니다.

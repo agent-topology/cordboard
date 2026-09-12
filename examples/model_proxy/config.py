@@ -1,4 +1,4 @@
-"""Validate and launch the intentionally small DB-free LiteLLM slice."""
+"""Validate and launch the optional example graph's DB-free LiteLLM gateway."""
 
 import argparse
 import os
@@ -66,7 +66,7 @@ def load(path):
     except Exception:
         raise ValueError("cannot read proxy YAML; check file and syntax") from None
     require((Path(path).parent / "callback.py").is_file(),
-            "missing callback.py next to config; copy proxy/callback.py alongside YAML")
+            "missing callback.py next to config; copy examples/model_proxy/callback.py alongside YAML")
     return validate(config)
 
 
@@ -82,11 +82,12 @@ def environment(config, collector):
         for value in model["litellm_params"].values():
             if isinstance(value, str) and value.startswith("os.environ/"):
                 name = value.removeprefix("os.environ/")
-                require(name.startswith("CORD_PROVIDER_") or name in {"CORD_FAST_MODEL", "CORD_DEEP_MODEL"},
-                        "provider environment references must use CORD_PROVIDER_* or CORD_FAST_MODEL/CORD_DEEP_MODEL")
+                require(name.startswith("EXAMPLE_PROVIDER_") or name in {"EXAMPLE_FAST_MODEL", "EXAMPLE_DEEP_MODEL"},
+                        "provider environment references must use EXAMPLE_PROVIDER_* or EXAMPLE_FAST_MODEL/EXAMPLE_DEEP_MODEL")
                 require(bool(os.environ.get(name)), "missing provider environment reference; set variables named in config")
                 env[name] = os.environ[name]
-    env.update(CORD_COLLECTOR_URL=collector, LITELLM_LOCAL_MODEL_COST_MAP="True",
+    env.update(PYTHONPATH=str(Path(__file__).resolve().parents[2]),
+               CORD_COLLECTOR_URL=collector, LITELLM_LOCAL_MODEL_COST_MAP="True",
                LITELLM_MODE="PRODUCTION", LANGCHAIN_TRACING_V2="false",
                LANGSMITH_TRACING="false")
     return env
@@ -94,7 +95,7 @@ def environment(config, collector):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default="proxy/config.yaml")
+    parser.add_argument("--config", default="examples/model_proxy/config.yaml")
     parser.add_argument("--port", type=int, default=4000)
     parser.add_argument("--collector", default="http://127.0.0.1:4318/v1/traces")
     parser.add_argument("--validate", action="store_true")

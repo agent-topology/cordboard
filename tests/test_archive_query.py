@@ -113,3 +113,34 @@ def test_checked_in_collector_capture_and_legacy_rejection():
                  reference=reference_ns(expected['reference_time'])) == expected['rows']
     with pytest.raises(ArchiveError, match='explicit Graph'):
         query([root/'examples/archive.sample.otlp.jsonl'], reference=REFERENCE)
+
+
+@pytest.mark.parametrize('version', ['0.2.0', '0.3.0'])
+def test_optional_tier_respects_archive_version(tmp_path, version):
+    def mutate(spans):
+        for span in spans:
+            if span['name'] == 'run':
+                change_attr(span, 'cord.semconv.version', version)
+            change_attr(span, 'cord.tier', None)
+            change_attr(span, 'gen_ai.request.model', None)
+    path = write_mutation(tmp_path, mutate)
+    if version == '0.2.0':
+        with pytest.raises(ArchiveError, match='Attempt Tier'):
+            query([path], reference=REFERENCE)
+    else:
+        # The exact same declared outcomes count without model or Tier data.
+        original = json.loads((FIXTURES / 'window.otlp.jsonl').read_text().splitlines()[0])
+        baseline = tmp_path / 'baseline.otlp.jsonl'
+        baseline.write_text(json.dumps(original) + '\n')
+        assert query([path], reference=REFERENCE) == query([baseline], reference=REFERENCE)
+
+
+@pytest.mark.parametrize('tier', ['', '   '])
+def test_optional_tier_still_validated_when_present(tmp_path, tier):
+    def mutate(spans):
+        for span in spans:
+            if span['name'] == 'run':
+                change_attr(span, 'cord.semconv.version', '0.3.0')
+        change_attr(spans[0], 'cord.tier', tier)
+    with pytest.raises(ArchiveError, match='Attempt Tier'):
+        query([write_mutation(tmp_path, mutate)], reference=REFERENCE)

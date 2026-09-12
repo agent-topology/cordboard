@@ -13,7 +13,9 @@ through explicit Attempts and a DB-free proxy (#8). Controlled endpoint tests
 pass; real-provider compatibility remains unverified without operator credentials.
 The [Aegra integration](docs/aegra.md) executes that graph through the public
 API with Postgres checkpoints and verifies the complete archive path (#9).
-Slice 0 remains open until the separate real-provider evidence is available.
+The [switchboard boundary](docs/decisions/0013-switchboard-boundary.md) makes
+LiteLLM optional and removes provider credentials from platform acceptance.
+The separate real-provider example remains unverified; this is not a passed check.
 The remaining platform and `cord` lifecycle commands are still planned.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
@@ -28,8 +30,12 @@ are dated observations, not a verified current compatibility matrix.
 
 The platform knows a graph through its manifest, execution API, and spans. It
 does not import graph business logic or understand graph-specific state fields,
-prompts, tools, or validation rules. The graph's own process may import its code
+prompts, tools, validation rules, model choices, or provider credentials. The graph's own process may import its code
 to derive topology. This contract boundary is independent of process isolation.
+The caller or an explicitly configured Rule selects the Graph/Assistant. Cordboard
+connects that target and carries its API payload without interpreting the content
+to select models or substitute another graph. A graph may use zero, one, or many
+models without changing Cordboard configuration.
 
 Two failure modes define the scope: a second monolith that must change for each
 new graph, and a layer that adds nothing over using the underlying tools directly.
@@ -37,9 +43,9 @@ new graph, and a layer that adds nothing over using the underlying tools directl
 | Owner | Responsibility |
 | --- | --- |
 | Cordboard | Catalog, common execution vocabulary, topology/trace viewer, declarative Signal routing, graph lifecycle, approval inbox and expiry, archive integration |
-| Graph | Business logic, state, deterministic validation, Tier choices and escalation decisions, interrupt placement, side-effect behavior |
+| Graph | Business logic, state, deterministic validation, model selection, credentials, SDK/gateway configuration, retry and escalation decisions, interrupt placement, side-effect behavior |
 | Aegra / LangGraph | Run execution, checkpointing, resume, cancellation, streaming, runtime recovery |
-| LiteLLM Proxy | Resolve model aliases and handle availability within an alias |
+| Optional graph-owned gateway (e.g. LiteLLM) | Resolve the graph operator's model configuration; not a Cordboard prerequisite |
 | OTel Collector | Enforce the redaction stamp and export accepted telemetry |
 | Langfuse | Explore recorded execution through its Public API and UI |
 | uv | Resolve and synchronize graph dependencies |
@@ -56,20 +62,19 @@ flowchart LR
     S[Signal] --> R[Rule router and deduplication]
     R --> G[Graph hosted by Aegra]
     A[Approval inbox and expiry] --> G
-    G --> L[LiteLLM Proxy]
-    L --> M[Model provider]
     G --> T[Generated topology and Agent Card]
     T --> C[Catalog]
     C --> V[Viewer]
     G -->|Redacted OTLP| O[OTel Collector gate]
-    L -->|Redacted OTLP| O
     O --> F[Append-only OTLP archive]
     O --> LF[Langfuse]
     LF -->|Public API| V
     G -->|Live SSE, later slice| V
 ```
 
-This shows the target system, not the minimum Slice 0 stack. The archive branch
+The Graph is opaque here: model providers, tools and optional gateways are its
+internal dependencies. Any additional telemetry producer follows the same redaction
+contract. This shows the target system, not the minimum Slice 0 stack. The archive branch
 comes first; Langfuse and the UI are introduced later.
 
 ## Identity and execution records
@@ -88,7 +93,7 @@ The definitions come from [ADR-0002](docs/decisions/0002-vocabulary.md),
 | Node | Static position in a Graph's topology |
 | Step | One execution of a Node within a Run |
 | Attempt | One try within a Step, recorded as a child span |
-| Tier | Model capability alias; distinct from the provider's model identifier |
+| Tier | Optional opaque graph-supplied annotation; no platform model mapping or ordering |
 | Verdict | Graph-owned deterministic validation result, accompanied by violated rules |
 | Outcome | Disposition of a Step or Attempt, using separate closed vocabularies |
 
@@ -106,7 +111,7 @@ Run (trace)
 └── Step (Node execution)
     ├── Attempt 1
     └── Attempt 2
-        └── Model-call span from the proxy
+        └── Optional graph-internal operation span
 ```
 
 Step Outcomes are `passed`, `repaired`, `failed`, `awaiting_approval`, and
@@ -131,8 +136,9 @@ and its violated rules.
 The topology document always has a `graphs` array, including for one Graph.
 This array convention does not redefine the A2A Agent Card format.
 
-`cord.yaml` supplies human declarations such as Subject extraction, Tier policy,
-approval, concurrency, and triggers. The graph process calls `agent-topology`
+`cord.yaml` supplies connection declarations such as Subject extraction,
+approval, concurrency, and triggers. Model/Tier policies and provider keys are
+excluded from `cord.yaml` and `x-cord`. The graph process calls `agent-topology`
 to derive structure from its compiled graph. Cordboard consumes the resulting
 JSON and composes its extension; it does not implement topology introspection.
 The upstream schema is authoritative for the precise wire format: older
@@ -174,13 +180,19 @@ irreversible harm if allowed.
 
 ## Model and telemetry paths
 
-[ADR-0004](docs/decisions/0004-model-gateway.md) makes LiteLLM the shared model
-gateway. Graphs request aliases rather than provider identifiers. Same-alias
-availability routing is allowed; cross-alias fallback must not conceal graph-owned
-escalation. Fixed capability aliases such as `embed` do not imply a Tier ladder.
+[ADR-0013](docs/decisions/0013-switchboard-boundary.md) supersedes the shared
+model-gateway requirement in ADR-0004. Graphs own model selection and all related
+configuration. Cordboard neither requires a model list nor inspects gateway
+routing rules. The optional LiteLLM example lives in `examples/model_proxy`;
+its `fast`/`deep` policy is not a platform contract.
+
+Run semconv `0.3.0` allows Attempts without `cord.tier` or any `gen_ai.*` data.
+The archive query also reads existing `0.2.0` records under their original Tier
+requirement. It counts graph-declared escalations without knowing model identity,
+Tier ordering, or the number of models the graph uses.
 
 [ADR-0006](docs/decisions/0006-masking-enforcement.md) places secret processing
-inside both graph and proxy processes, before telemetry leaves them. Successful
+inside each telemetry-producing process, before telemetry leaves it. Successful
 processing stamps `cord.redacted=true`. The Collector drops unstamped spans;
 it is a gate, not another secret detector. Direct Langfuse callbacks would bypass
 that gate and are prohibited. Full prompts, diffs, and model outputs are not
@@ -203,7 +215,7 @@ Archive queries deduplicate retransmitted spans by `span_id`.
 The escalation success criterion is answered directly from the archive. Slice
 0 implements `archive-escalations`, a small Python query with fixed-time
 fixtures and a verified Collector capture, without selecting a database engine.
-It requires explicit `cord.graph.id` (Run semconv `0.2.0`), groups by Graph/Node,
+It requires explicit `cord.graph.id` (Run semconv `0.2.0` or `0.3.0`), groups by Graph/Node,
 and counts completed escalated Attempts in `(reference − 56 days, reference]`.
 Old records without Graph identity fail with a re-emission diagnostic.
 Langfuse is a second export destination in Slice 0.5, with its Public API used
@@ -242,6 +254,7 @@ as executable specifications.
 | --- | --- |
 | Wire examples span multiple topology revisions | ADR-0007/0011 retain literal `derived` references; ADR-0009/0012 use `structure` and `x-cord`. ADR-0011 also mixes old source-hash/`derive.xray` text with structure-hash/`derive.depth` corrections. Validate against a pinned upstream schema before implementing. |
 | R3 index summary is stale | The decision index's 2026-09-10 summary calls R3 LangGraph-only; ADR-0007 explicitly retracts that on 2026-09-11. AT-3 still asks for confirmation of parallel semantics. |
+| Model configuration in historical HTML | ADR-0013 supersedes shared LiteLLM, platform Tier policy, and provider credentials as a completion gate. Both HTML artifacts carry a notice; their diagrams and embedded examples are historical. |
 | Vocabulary artifacts predate ADR-0002 | Both HTML artifacts retain banned-word rules or old Graph/Manifest definitions; ADR-0003 also retains a banned-word reference. Use context-sensitive mappings, contract-based Graph identity, and `cord.cascade.depth`. |
 | ADR-0010 is unwritten | The index labels the DeepAgents template decision Accepted but explicitly says no ADR file exists. The design direction is recorded, but its formal ADR remains pending. |
 

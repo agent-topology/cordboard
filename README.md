@@ -4,7 +4,9 @@
 
 Cordboard is a planned local tool for connecting independently developed agent
 graphs and keeping a common record of their execution. Like the operators at a
-manual cord board, it connects and records; each graph owns its business logic.
+manual cord board, it connects and records. The caller chooses the graph; each
+graph owns its business logic, models, credentials and tools. Cordboard does not
+need to know which models a graph uses, or whether it uses a model at all.
 The planned command is `cord`.
 
 ## Status
@@ -12,10 +14,10 @@ The planned command is `cord`.
 This repository contains a deterministic `fetch → draft → verify` LangGraph
 example and a separate archive fixture with Run/Step/Attempt instrumentation,
 in-process redaction, a Collector gate, and raw OTLP JSONL persistence.
-The [LiteLLM integration](docs/model-proxy.md) now connects the graph and archive,
+An optional [LiteLLM example](docs/model-proxy.md) connects one graph and archive,
 with deterministic proxy tests requiring no provider credentials. Real-provider
-compatibility needs a separate smoke check. The remaining platform, including
-`cord up`, is still planned.
+compatibility remains an unrun example check, not a platform prerequisite.
+The remaining platform, including `cord up`, is still planned.
 
 ```sh
 uv sync --locked --python 3.12
@@ -37,7 +39,7 @@ platform tier. Model-provider access is a separate integration concern.
 - Discover graphs through generated manifests and show their topology before
   any execution has occurred.
 - Route external signals to configured graphs and coordinate human approvals.
-- Record Runs, Steps, Attempts, and model-tier escalation in a common vocabulary.
+- Record Runs, Steps, Attempts, and graph-declared outcomes in a common vocabulary.
 - Keep an append-only OTLP archive as the record of origin, with Langfuse as an
   additional interface for exploration.
 - Manage graph scaffolding, registration, dependencies, and local startup.
@@ -48,7 +50,9 @@ answer: “Across all graphs in the last eight weeks, which ten Nodes escalated
 model Tier most often?” The archive query now verifies the latter with fixed-time
 fixtures and a real Collector capture. Registration remains planned.
 
-Cordboard builds around Aegra, LangGraph, LiteLLM, OpenTelemetry, and uv. It
+Cordboard builds around execution APIs, OpenTelemetry, and uv, with Aegra and
+LangGraph as the current execution integration. LiteLLM is an optional graph
+dependency. Cordboard
 consumes topology from the independent `agent-topology` project and delegates
 secret detection to `redact-secret`. DeepAgents is an optional graph-template
 choice. Production deployment, multitenancy, billing, a marketplace, and a
@@ -71,16 +75,19 @@ the architecture document identifies the material differences.
 
 ## First implementation milestone
 
-Slice 0 is a small end-to-end experiment: one graph, Run/Step/Attempt spans, an
-OTel Collector, an archive, and a query with a known answer. LiteLLM and Aegra
-then exercise the model and process boundaries. Langfuse follows in Slice 0.5;
-the catalog, viewer, and CLI lifecycle arrive with the second graph in Slice 1.
+Slice 0 is a small end-to-end experiment: graphs, Run/Step/Attempt spans, an
+OTel Collector, an archive, and a query with a known answer. Aegra exercises
+the process boundary; the LiteLLM example exercises an optional model path.
+Langfuse follows in Slice 0.5; the catalog, viewer, and CLI lifecycle arrive in Slice 1.
 
 Issue #4 establishes the graph contract and corrects the escalation examples.
 Issue #5 verifies redaction release availability and the archive gate with a
 separate fixture. Issue #8 connects the two through LiteLLM with graph-owned
 escalation and in-process proxy redaction. [Issue #9's Aegra integration](docs/aegra.md)
 adds Postgres execution and verifies all emitted span parents, fresh state,
-archive counts and redaction. Separate real-provider evidence remains missing,
-so Slice 0 is not yet complete.
+archive counts and redaction. [ADR-0013](docs/decisions/0013-switchboard-boundary.md)
+removes model configuration from the platform contract. A separate graph executes
+without models or a proxy through the same client and archive.
+[Boundary verification and acceptance changes](docs/switchboard-boundary.md)
+record the current scope; real-provider compatibility is still unverified.
 The existing slice descriptions are plans, not evidence that work has shipped.
