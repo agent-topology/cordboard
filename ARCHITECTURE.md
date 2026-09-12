@@ -16,6 +16,9 @@ API with Postgres checkpoints and verifies the complete archive path (#9).
 The [switchboard boundary](docs/decisions/0013-switchboard-boundary.md) makes
 LiteLLM optional and removes provider credentials from platform acceptance.
 The separate real-provider example remains unverified; this is not a passed check.
+The [Langfuse comparison](docs/langfuse.md) exports through the Collector gate to
+a pinned self-hosted instance and verifies the same archive cohort through its
+Public API (#10), including model-free execution.
 The remaining platform and `cord` lifecycle commands are still planned.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
@@ -218,8 +221,12 @@ fixtures and a verified Collector capture, without selecting a database engine.
 It requires explicit `cord.graph.id` (Run semconv `0.2.0` or `0.3.0`), groups by Graph/Node,
 and counts completed escalated Attempts in `(reference − 56 days, reference]`.
 Old records without Graph identity fail with a re-emission diagnostic.
-Langfuse is a second export destination in Slice 0.5, with its Public API used
-for exploration and comparison. Direct ClickHouse queries are temporary
+Langfuse is a second export destination in Slice 0.5. `langfuse-compare` reads
+complete archived trace cohorts through the public v1 API of self-hosted 3.225.7,
+waits for all observations with a deadline, and compares exact end-time counts.
+Typed metadata and nanosecond strings are added only on the Langfuse branch;
+the archive remains unchanged. Missing ingestion is distinct from an empty count.
+Direct ClickHouse queries are temporary
 investigation tools, not durable integration contracts.
 
 ## Isolation, routing, and approval

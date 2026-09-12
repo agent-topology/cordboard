@@ -7,7 +7,8 @@ instrumentation accepts graph-owned outcomes; the fixture explicitly declares
 `fast/failed → fast/escalated → deep/passed` without implementing graph routing.
 The [LiteLLM integration](model-proxy.md) now connects the graph to this path.
 [Aegra execution](aegra.md) now verifies this path with Postgres checkpoints.
-DeepAgents, Langfuse, lifecycle commands, and CI remain future work.
+[Langfuse comparison](langfuse.md) adds the second gated export and public read path.
+DeepAgents, lifecycle commands, and CI remain future work.
 
 ## Setup
 

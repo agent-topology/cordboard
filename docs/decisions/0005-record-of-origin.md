@@ -161,7 +161,7 @@ Langfuse가 쓰는 ClickHouse에 우리 테이블을 따로 만든다.
 1. [x] Collector file exporter + UTC 날짜 파티션/append 검증. gzip은 종료 후 외부 압축 (아래 정정)
 2. [x] #6의 `archive-escalations` — 아카이브만 읽는 Python 질의와 고정 정답 검증
 3. [x] #6 질의에서 `span_id` 기준 dedupe, 충돌하는 중복은 오류
-4. [ ] 슬라이스 0.5 — 같은 질의를 Langfuse Public API로 한 번 더 던지고 **답이 같은지 확인.** 다르면 그 자체가 발견
+4. [x] #10 — self-hosted Langfuse 3.225.7 공개 API와 같은 아카이브 cohort의 Graph/Node 집계 일치 검증 (아래 구현 기록)
 5. [ ] 아카이브 TTL 정책을 정한다 (기본: 무제한. 로컬 디스크가 한계일 때 재검토)
 
 
@@ -197,3 +197,22 @@ Collector를 종료해 파일을 닫은 뒤 지난 날짜 파일만 외부 gzip�
 [ADR-0013](0013-switchboard-boundary.md)이 모델 소유권의 현재 결정이다.
 아카이브와 Collector 계약은 모델 게이트웨이 선택과 무관하다.
 LiteLLM은 선택적 생산자 예제이며, 모델 없는 그래프도 같은 아카이브를 사용한다.
+
+
+## 구현 확인 — Langfuse 공개 질의 비교 (2026-09-11, #10)
+
+`langfuse-compare`는 닫힌 아카이브의 전체 trace ID를 기준으로 공개 v1 observations를
+모든 페이지에서 읽는다. 모든 span과 종료 기록, Subject가 확인되기 전에는 빈 집계로
+성공하지 않는다. 대기에는 기한이 있으며 지연·접속 실패·응답 계약 오류·불일치를 구분한다.
+모든 Graph/Node 집계를 비교한 뒤 top-N을 적용한다. 아카이브가 여전히 정답의 기준이다.
+
+Langfuse 전용 Collector 분기는 같은 redaction gate를 거친 후 관측 메타데이터를
+매핑한다. v3 catch-all 경로의 숫자·boolean 문자열화는 공개 JSON metadata 필드로
+해결했고, 원래 span 속성을 `metadata.cordboard`에 보존한다. 나노초 시각은 별도
+문자열 metadata로 보존하여 native 밀리초 반올림이 56일 경계 판단을 바꾸지 않게 한다.
+아카이브 분기와 기존 파일, `cord.*` 계약은 수정하지 않는다.
+
+31개 고유 span의 작은 정답 입력과 재전송, 0.2/0.3 혼합, Tier 없는 승격,
+모델 없는 Aegra 실행, gate 거부와 Langfuse 전송 실패 후 아카이브 가용성을 검증했다.
+[고정 버전·명령·범위·결과](../langfuse.md). 이는 해당 cohort의 일치이며 미전송 실행이나
+전체 프로젝트의 전역 ingestion 완료를 보장하지 않는다. 직접 ClickHouse 질의는 없다.

@@ -1,0 +1,36 @@
+# Merge after config.yaml. The archive pipeline stays unchanged.
+# Collector contrib 0.148.0 -> self-hosted Langfuse 3.225.7 OTLP/HTTP.
+processors:
+  transform/langfuse:
+    error_mode: propagate
+    trace_statements:
+      - context: span
+        statements:
+          - 'set(cache["cordboard"], attributes)'
+          - 'set(attributes["langfuse.session.id"], attributes["cord.subject.id"]) where attributes["cord.subject.id"] != nil'
+          - 'set(attributes["langfuse.observation.type"], "span")'
+          # Explicit metadata retains types; the v3 catch-all stringifies them.
+          - 'set(attributes["langfuse.observation.metadata"], String(cache))'
+          # Preserve exact integer nanoseconds: the native read timestamps round.
+          - 'set(attributes["langfuse.observation.metadata.cord_start_ns"], String(start_time_unix_nano))'
+          - 'set(attributes["langfuse.observation.metadata.cord_end_ns"], String(end_time_unix_nano))'
+exporters:
+  otlphttp/langfuse:
+    endpoint: ${env:CORD_LANGFUSE_URL:-http://127.0.0.1:3300}/api/public/otel
+    headers:
+      Authorization: Basic ${env:CORD_LANGFUSE_AUTH}
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: true
+      queue_size: 1000
+service:
+  pipelines:
+    traces/langfuse:
+      receivers: [otlp]
+      processors: [filter/redacted, transform/langfuse]
+      exporters: [otlphttp/langfuse]

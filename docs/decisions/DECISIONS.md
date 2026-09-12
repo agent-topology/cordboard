@@ -210,3 +210,14 @@ Tier 없는 Attempt를 허용하며 질의는 기존 0.2.0도 읽는다.
 위의 이전 구현 기록에 나온 실제 공급자 미검증은 그대로이나,
 이를 Cordboard 공통 완료 조건으로 삼았던 판단은 철회한다.
 [현재 검증과 이슈 범위 정정](../switchboard-boundary.md)을 따른다.
+
+
+## Langfuse 공개 읽기 검증 (2026-09-11, #10)
+
+- **0003:** Collector 분기의 Subject 매핑과 공개 trace `sessionId` 일치 확인.
+- **0005:** self-hosted 3.225.7 공개 v1 API에서 전체 아카이브 cohort의 종료 기록을
+  기한 내 확인한 뒤 동일한 56일·dedupe·Graph/Node 집계 비교 구현.
+- 기존 아카이브와 0.2/0.3 계약 유지. typed JSON metadata와 정확한 나노초 문자열은
+  Langfuse 분기에만 추가한다. 모델·Tier 없는 실행, 명시적 승격, 전송 실패를 검증했다.
+
+[실제 명령과 범위](../langfuse.md). v4 업그레이드나 전역 ingestion 완료의 증거는 아니다.
