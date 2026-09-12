@@ -284,3 +284,18 @@ OTel이 traces·metrics·logs를 "signals"라 부르는 것을 첫 판에서 놓
 5. [x] #5의 `cord_runtime.execution.run`이 Run 루트에 `cord.semconv.version=0.1.0` 기록 (2026-09-11)
 6. [ ] `OTEL_SEMCONV_STABILITY_OPT_IN` 설정을 고정하고 값을 문서화
 7. [ ] 새 의존성 도입 시 글로서리 대조를 도입 필터의 항목으로 추가
+
+
+## 정정 — 질의에 필요한 Graph 정체성 (2026-09-11, #6)
+
+`cord.graph.id`를 Run·Step·Attempt의 필수 문자열 속성으로 추가하고 Run 루트의
+`cord.semconv.version`을 `0.2.0`으로 올린다. 호출자가 그래프 실행 계약의 안정적인
+정체성을 `run(..., graph_id=...)`에 명시한다. Node 이름, 레포, Deployment,
+`service.name`이나 모델명에서 유추하지 않는다. 헬퍼는 자식에 같은 값을 전파한다.
+이 키는 Cordboard 실행 기록의 계약이며 upstream Manifest 이름 소유권(AT-5)을
+새로 정의하지 않는다. 같은 Node 이름도 Graph가 다르면 별도 집계한다.
+
+이전 `0.1.0` 아카이브에는 Graph 정체성이 없으므로 질의는 명확한 오류로 거부한다.
+기존 append-only 파일을 고치거나 기본 Graph를 지어내지 않고, 새 헬퍼로 재실행한다.
+#5의 원본 샘플을 보존하며 새 Collector 캡처와 정답을 별도 파일로 남겼다.
+[질의 계약과 검증](../archive-query.md)을 참조한다.

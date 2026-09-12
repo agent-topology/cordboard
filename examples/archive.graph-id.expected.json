@@ -1,0 +1,10 @@
+{
+  "reference_time": "2026-09-12T00:21:07.642241+00:00",
+  "rows": [
+    {
+      "graph": "archive-fixture",
+      "node": "draft",
+      "count": 1
+    }
+  ]
+}

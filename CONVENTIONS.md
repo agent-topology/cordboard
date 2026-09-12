@@ -3,7 +3,8 @@
 ## Current development surface
 
 The runnable slices are `examples/minimal_graph.py` and the archive integration
-in `src/cord_runtime`, `collector`, and `examples/archive_fixture.py`. Both use
+in `src/cord_runtime`, `collector`, and `examples/archive_fixture.py`, plus the
+[archive query](docs/archive-query.md). These use
 Python 3.12, exact direct dependencies in `pyproject.toml`, and transitive pins
 in `uv.lock`.
 
@@ -55,7 +56,7 @@ when context is ambiguous; preserve protocol fields such as `trace_id`,
 
 Use precise names where they persist in data:
 
-- `cord.run.id`, `cord.subject.id`, `cord.subject.type`
+- `cord.graph.id`, `cord.run.id`, `cord.subject.id`, `cord.subject.type`
 - `cord.node.name`, `cord.step.attempt`, `cord.tier`, `cord.outcome`
 - `cord.signal.id`, `cord.cascade.depth`, `cord.caused_by.run_id`
 - `cord.redacted`, `cord.semconv.version`

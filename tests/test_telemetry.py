@@ -105,7 +105,7 @@ def test_sdk_parentage_outcomes_and_fresh_runs():
     provider.add_span_processor(SimpleSpanProcessor(captured))
     tracer = provider.get_tracer("test")
     for _ in range(2):
-        with run(tracer, "urn:test:5", "fixture") as execution:
+        with run(tracer, "urn:test:5", "fixture", graph_id="archive-fixture") as execution:
             with execution.step("draft", StepOutcome.PASSED) as step:
                 for n, tier, outcome in [(1,"fast",AttemptOutcome.FAILED),(2,"fast",AttemptOutcome.ESCALATED),(3,"deep",AttemptOutcome.PASSED)]:
                     with step.attempt(n, tier, outcome):
@@ -120,12 +120,13 @@ def test_sdk_parentage_outcomes_and_fresh_runs():
     assert len(roots) == 2 and roots[0].context.trace_id != roots[1].context.trace_id
     assert roots[0].attributes["cord.run.id"] != roots[1].attributes["cord.run.id"]
     for root in roots:
-        assert root.parent is None and root.attributes["cord.semconv.version"] == "0.1.0"
+        assert root.parent is None and root.attributes["cord.semconv.version"] == "0.2.0"
         children = [s for s in captured.spans if s.parent and s.parent.span_id == root.context.span_id]
         assert len(children) == 1
         attempts = [s for s in captured.spans if s.parent and s.parent.span_id == children[0].context.span_id]
         assert [(s.attributes["cord.tier"],s.attributes["cord.outcome"]) for s in attempts] == [("fast","failed"),("fast","escalated"),("deep","passed")]
         assert all(s.attributes["cord.subject.id"] == "urn:test:5" for s in attempts)
+        assert all(s.attributes["cord.graph.id"] == "archive-fixture" for s in [root, *children, *attempts])
     provider.shutdown()
 
 
@@ -141,3 +142,15 @@ def test_export_failure_is_value_free(caplog):
     assert CREDENTIAL not in caplog.text
     provider.shutdown()
     exporter.shutdown()
+
+
+
+@pytest.mark.parametrize("graph_id", [None, "", "   "])
+def test_run_requires_explicit_graph_identity(graph_id):
+    provider = TracerProvider(resource=Resource({}))
+    try:
+        with pytest.raises(ValueError, match="Graph identity"):
+            with run(provider.get_tracer("test"), "urn:test:6", "fixture", graph_id=graph_id):
+                pass
+    finally:
+        provider.shutdown()

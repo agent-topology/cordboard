@@ -14,7 +14,7 @@ def emit(endpoint="http://127.0.0.1:4318/v1/traces"):
     provider = TracerProvider(resource=Resource({"service.name": "cordboard-fixture"}))
     provider.add_span_processor(SimpleSpanProcessor(RedactingOTLPExporter(endpoint)))
     tracer = provider.get_tracer("cordboard.fixture", "0.1.0")
-    with run(tracer, "urn:cordboard:fixture:5", "fixture") as execution:
+    with run(tracer, "urn:cordboard:fixture:5", "fixture", graph_id="archive-fixture") as execution:
         with execution.step("draft", StepOutcome.PASSED) as step:
             for number, tier, outcome in (
                 (1, "fast", AttemptOutcome.FAILED),

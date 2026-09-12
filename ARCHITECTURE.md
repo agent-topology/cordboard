@@ -6,7 +6,8 @@ Cordboard has a [minimal executable graph](docs/minimal-graph.md) with
 in-memory execution records (#4), plus a separate archive integration (#5):
 `cord-runtime`, OTel instrumentation, redaction, and Collector persistence.
 [Archive setup and evidence](docs/archive.md) describe the runnable archive
-fixture. Wiring the graph to this exporter, model/proxy hosting, and the
+fixture. The [archive escalation query](docs/archive-query.md) now validates
+complete Run trees and returns deterministic Graph/Node counts (#6). Wiring the graph to this exporter, model/proxy hosting, and the
 remaining platform and `cord` lifecycle commands are still planned.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
@@ -190,7 +191,11 @@ not unredacted content. The archive receives only telemetry accepted by the gate
 Archive queries deduplicate retransmitted spans by `span_id`.
 
 The escalation success criterion is answered directly from the archive. Slice
-0 starts with a small Python query, without selecting a database engine.
+0 implements `archive-escalations`, a small Python query with fixed-time
+fixtures and a verified Collector capture, without selecting a database engine.
+It requires explicit `cord.graph.id` (Run semconv `0.2.0`), groups by Graph/Node,
+and counts completed escalated Attempts in `(reference − 56 days, reference]`.
+Old records without Graph identity fail with a re-emission diagnostic.
 Langfuse is a second export destination in Slice 0.5, with its Public API used
 for exploration and comparison. Direct ClickHouse queries are temporary
 investigation tools, not durable integration contracts.

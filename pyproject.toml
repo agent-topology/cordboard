@@ -23,6 +23,7 @@ build-backend = "hatchling.build"
 packages = ["src/cord_runtime"]
 
 [project.scripts]
+archive-escalations = "cord_runtime.archive_query:main"
 archive-check = "cord_runtime.archive_check:main"
 
 [tool.pytest.ini_options]

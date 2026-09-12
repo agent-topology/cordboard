@@ -159,8 +159,8 @@ Langfuse가 쓰는 ClickHouse에 우리 테이블을 따로 만든다.
 ## Action Items
 
 1. [x] Collector file exporter + UTC 날짜 파티션/append 검증. gzip은 종료 후 외부 압축 (아래 정정)
-2. [ ] 슬라이스 0 작업 3 — 아카이브만 읽는 `query_c.py`. **이게 정답의 기준이 된다**
-3. [ ] `span_id` 기준 dedupe를 질의 스크립트에 처음부터 넣는다
+2. [x] #6의 `archive-escalations` — 아카이브만 읽는 Python 질의와 고정 정답 검증
+3. [x] #6 질의에서 `span_id` 기준 dedupe, 충돌하는 중복은 오류
 4. [ ] 슬라이스 0.5 — 같은 질의를 Langfuse Public API로 한 번 더 던지고 **답이 같은지 확인.** 다르면 그 자체가 발견
 5. [ ] 아카이브 TTL 정책을 정한다 (기본: 무제한. 로컬 디스크가 한계일 때 재검토)
 
@@ -178,3 +178,15 @@ Collector를 종료해 파일을 닫은 뒤 지난 날짜 파일만 외부 gzip�
 자동 삭제/크기 회전은 없고 TTL은 무제한이다. 현재 날짜 파일은 압축하지 않는다.
 압축된 날짜로 Collector 시계를 되돌려 다시 쓰는 운영은 지원하지 않는다.
 운영 명령과 재현 시험은 [아카이브 문서](../archive.md)에 둔다.
+
+
+## 정정 — 실행 가능한 8주 질의 (2026-09-11, #6)
+
+계획 이름 `query_c.py`는 `cord_runtime.archive_query` 및 `archive-escalations`로
+구현했다. Attempt 종료 시각을 정수 나노초로 비교하며 범위는
+`(기준 시각 − 56일, 기준 시각]`이다. `escalated`만 Graph ID와 Node 이름으로 묶고,
+횟수 내림차순·Graph/Node 오름차순으로 정렬한 뒤 top-N을 적용한다.
+부모 검증은 시간 필터보다 먼저 수행한다. 재전송은 span_id로 제거하고 같은 ID의
+서로 다른 span 내용은 오류로 처리한다. 수신 날짜 resource 메타데이터는 무시한다.
+전체 Run 트리를 입력해야 하며 누락된 부모를 만들어 내지 않는다.
+[명령·고정 정답·실제 #5 캡처 검증](../archive-query.md)을 기록했다.

@@ -1,0 +1,12 @@
+[
+  {
+    "graph": "alpha",
+    "node": "draft",
+    "count": 2
+  },
+  {
+    "graph": "alpha",
+    "node": "verify",
+    "count": 1
+  }
+]

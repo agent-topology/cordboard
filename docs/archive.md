@@ -89,9 +89,12 @@ of the five spans is checked in as
 
 ## Contracts and ownership
 
-`execution.run()` creates a fresh trace and UUID Run ID, requires a Subject URI
-and type, and stamps the Run root with `cord.semconv.version=0.1.0`. Its Step and
-Attempt helpers inherit Run/Subject identity. Steps carry `cord.node.name` and
+`execution.run(..., graph_id=...)` creates a fresh trace and UUID Run ID, requires
+an explicit Graph identity and a Subject URI and type, and stamps the Run root
+with `cord.semconv.version=0.2.0` (#6). Its Step and Attempt helpers inherit
+Graph/Run/Subject identity. The earlier sample and #5 evidence below retain
+their original `0.1.0` format; see the [query migration contract](archive-query.md)
+for the separate fresh capture and known result. Steps carry `cord.node.name` and
 a Step Outcome; Attempts additionally carry a positive `cord.step.attempt`, Tier,
 and an Attempt Outcome. Explicit parents keep Attempts siblings. Optional Signal
 and cascade attributes are absent from this manually invoked fixture. Full

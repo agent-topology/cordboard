@@ -72,9 +72,10 @@ Attempt는 시간이 걸리고 모델 호출을 자식으로 갖는다. 순간�
 
 ```sql
 -- 성공 기준 C
-SELECT node, count() FROM attempts
-WHERE outcome = 'escalated' AND ts > now() - INTERVAL 8 WEEK
-GROUP BY node ORDER BY 2 DESC LIMIT 10
+SELECT graph_id, node, count() FROM attempts
+WHERE outcome = 'escalated'
+  AND end_ts > :reference - INTERVAL 8 WEEK AND end_ts <= :reference
+GROUP BY graph_id, node ORDER BY 3 DESC, graph_id, node LIMIT 10
 ```
 
 술어 하나, GROUP BY 하나.
@@ -206,7 +207,7 @@ ADR-0004에서 "승격은 그래프가 소유한다"고 정한 것의 데이터 
 
 1. [x] 두 Outcome 목록을 `cord-runtime`에 enum으로 정의하고 헬퍼에서 혼용 거부 (#5)
 2. [ ] 승격 헬퍼 — Attempt span 종료 + `escalated` 마킹 + 다음 Attempt 시작을 한 호출로
-3. [ ] 슬라이스 0 작업 3: Attempt 계층을 의도적으로 잘못 만들어 질의가 깨지는 것을 확인
+3. [x] #6: Attempt의 부모를 형제 Attempt로 바꾼 픽스처가 오류로 거부됨
 4. [x] 최소 예제 규칙표에 R5(마침표 제거)를 항상 켜 둔다 — `repaired` 경로 검증 (#4)
 5. [x] 최소 예제의 시도 정책을 `fast → fast → deep`으로. 승격 1회 및 같은 Tier 재시도 검증 (#4)
 6. [ ] 뷰어에 명시적 승격 결정과 Attempt 기록의 불일치 경고 (슬라이스 1). 같은 Tier 재시도는 경고하지 않는다
@@ -215,3 +216,11 @@ ADR-0004에서 "승격은 그래프가 소유한다"고 정한 것의 데이터 
 최소 예제는 두 enum과 런타임 혼용 거부를 구현했다 (#4). 별도 `cord-runtime`의
 span 헬퍼와 enum은 #5에서 구현했다. 두 실행 경로의 연결과 Action 2의 원자적
 승격 헬퍼는 아직 후속 작업이다.
+
+
+## 정정 — Graph별 집계와 계층 검증 (2026-09-11, #6)
+
+위 SQL은 설명용이며 실제 명령은 `archive-escalations`다. Node만 묶던 예제를
+Graph ID와 Node의 복합 정체성으로 정정했다. 부모 Step 및 Run 루트, trace와
+Graph/Run/Subject/Node 일치를 검증한 뒤 명시적 Attempt 승격만 센다.
+[고정 시각 경계 및 실제 아카이브 검증](../archive-query.md)이 이 계약을 확인한다.
