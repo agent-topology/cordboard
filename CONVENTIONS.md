@@ -2,17 +2,22 @@
 
 ## Current development surface
 
-The first executable slice is `examples/minimal_graph.py`, with tests under
-`tests/`, Python 3.12 selected by `.python-version`, exact direct dependencies
-in `pyproject.toml`, and transitive pins in `uv.lock`. It is an isolated graph
-example; there is no platform package, lifecycle CLI, formatter, or CI workflow.
+The runnable slices are `examples/minimal_graph.py` and the archive integration
+in `src/cord_runtime`, `collector`, and `examples/archive_fixture.py`. Both use
+Python 3.12, exact direct dependencies in `pyproject.toml`, and transitive pins
+in `uv.lock`.
 
-From the repository root, run `uv sync --locked --python 3.12`,
-`uv run --locked python -m examples.minimal_graph`, and
-`uv run --locked pytest -q`. See [the execution contract](docs/minimal-graph.md)
-for versions, fixture semantics, and local verification evidence. Keep example
-logic under `examples/`; do not promote it into generic platform infrastructure.
-Commands in the design artifacts remain planned unless documented as executable.
+Run `uv sync --locked --python 3.12` and
+`uv run --locked python -m examples.minimal_graph` from the repository root.
+Service-free tests use `uv run --locked pytest -q -m "not collector"`.
+The complete suite uses `uv run --locked pytest -q` after installing the pinned
+binaries in [Archive setup](docs/archive.md). See also the
+[graph execution contract](docs/minimal-graph.md).
+
+Keep graph-specific logic under `examples/`; do not promote it into generic
+platform infrastructure. There is no npm build, Rust crate, formatter, or CI
+workflow here. Remaining platform components and `cord` lifecycle commands
+are planned unless explicitly documented as executable.
 
 ## Documentation and decisions
 

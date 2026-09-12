@@ -1,13 +1,31 @@
 [project]
-name = "cordboard-example"
-version = "0.1.0"
-description = "Deterministic, service-free Cordboard execution contract example"
+name = "cord-runtime"
+version = "0.0.1"
 requires-python = ">=3.12,<3.13"
-dependencies = ["langgraph==1.2.11", "langsmith==0.12.4"]
+dependencies = [
+  "langgraph==1.2.11",
+  "langsmith==0.12.4",
+  "redact-secret==0.1.0b1",
+  "opentelemetry-sdk==1.39.1",
+  "opentelemetry-exporter-otlp-proto-http==1.39.1",
+  "protobuf==6.33.6",
+  "requests==2.34.2",
+]
 
 [dependency-groups]
 dev = ["pytest==9.1.1"]
 
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cord_runtime"]
+
+[project.scripts]
+archive-check = "cord_runtime.archive_check:main"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["collector: requires the pinned Collector and redact-secret CLI binaries"]

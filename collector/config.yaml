@@ -1,0 +1,37 @@
+# Start with TZ=UTC: Now() uses the Collector process timezone.
+# Pinned: otelcol-contrib 0.148.0. No debug exporter: it could log raw inputs.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: ${env:CORD_OTLP_ENDPOINT:-127.0.0.1:4318}
+processors:
+  filter/redacted:
+    error_mode: propagate
+    trace_conditions:
+      - 'span.attributes["cord.redacted"] != true'
+  transform/archive_date:
+    error_mode: propagate
+    trace_statements:
+      - context: resource
+        statements:
+          - 'set(attributes["cord.archive.date"], FormatTime(Now(), "%Y-%m-%d"))'
+exporters:
+  file/archive:
+    path: ${env:CORD_ARCHIVE_DIR}/archive-*.otlp.jsonl
+    format: json
+    append: true
+    flush_interval: 100ms
+    group_by:
+      enabled: true
+      resource_attribute: cord.archive.date
+      max_open_files: 2
+service:
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [filter/redacted, transform/archive_date]
+      exporters: [file/archive]

@@ -12,7 +12,7 @@ From the repository root, with uv installed:
 ```sh
 uv sync --locked --python 3.12
 uv run --locked python -m examples.minimal_graph
-uv run --locked pytest -q
+uv run --locked pytest -q tests/test_minimal_graph.py
 ```
 
 The initial sync downloads Python if necessary and installs dependencies.
@@ -83,8 +83,8 @@ for their own state; the supplied callable is stateless.
 Records are in memory and the entrypoint prints synthetic fixture results as
 JSON. They are not spans or persisted OTLP. Collector, archive, LiteLLM, Aegra,
 the `cord` CLI, UI, triggers, topology derivation, and redaction integration
-remain outside this example. This does not resolve the separate masking
-prerequisite for telemetry work.
+remain outside this example. The separate [archive fixture](archive.md) verifies the masking gate; the graph
+is not yet wired to that exporter.
 
 ## Verification evidence
 

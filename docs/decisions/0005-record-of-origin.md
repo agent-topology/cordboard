@@ -158,8 +158,23 @@ Langfuse가 쓰는 ClickHouse에 우리 테이블을 따로 만든다.
 
 ## Action Items
 
-1. [ ] Collector 설정: `file` exporter 추가, 날짜별 로테이션, gzip
+1. [x] Collector file exporter + UTC 날짜 파티션/append 검증. gzip은 종료 후 외부 압축 (아래 정정)
 2. [ ] 슬라이스 0 작업 3 — 아카이브만 읽는 `query_c.py`. **이게 정답의 기준이 된다**
 3. [ ] `span_id` 기준 dedupe를 질의 스크립트에 처음부터 넣는다
 4. [ ] 슬라이스 0.5 — 같은 질의를 Langfuse Public API로 한 번 더 던지고 **답이 같은지 확인.** 다르면 그 자체가 발견
 5. [ ] 아카이브 TTL 정책을 정한다 (기본: 무제한. 로컬 디스크가 한계일 때 재검토)
+
+
+## 정정 — append와 회전의 실제 계약 (2026-09-11, #5)
+
+Collector contrib `0.148.0`의 file exporter는 `append: true`와 내장 rotation/compression을
+동시에 지원하지 않는다. 내장 압축도 gzip이 아니라 zstd다. 따라서 실행 중에는
+`archive-YYYY-MM-DD.otlp.jsonl`에 append하고, 수신 날짜를 Collector가 계산해
+`cord.archive.date` resource 속성으로 덧붙인다. `TZ=UTC` 실행이 필수다.
+span의 과거 실행 시각이나 생산자가 보낸 파티션 값은 파일 날짜를 정하지 않는다.
+프로세스 재시작도 같은 날짜 파일을 자르지 않으며 다음 날짜는 별도 파일이다.
+
+Collector를 종료해 파일을 닫은 뒤 지난 날짜 파일만 외부 gzip으로 압축한다.
+자동 삭제/크기 회전은 없고 TTL은 무제한이다. 현재 날짜 파일은 압축하지 않는다.
+압축된 날짜로 Collector 시계를 되돌려 다시 쓰는 운영은 지원하지 않는다.
+운영 명령과 재현 시험은 [아카이브 문서](../archive.md)에 둔다.
