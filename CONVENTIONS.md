@@ -4,7 +4,7 @@
 
 The runnable slices are `examples/minimal_graph.py` and the archive integration
 in `src/cord_runtime`, `collector`, and `examples/archive_fixture.py`, plus the
-[archive query](docs/archive-query.md). These use
+[archive query](docs/archive-query.md) and [LiteLLM integration](docs/model-proxy.md). These use
 Python 3.12, exact direct dependencies in `pyproject.toml`, and transitive pins
 in `uv.lock`.
 

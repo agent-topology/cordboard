@@ -214,7 +214,7 @@ ADR-0004에서 "승격은 그래프가 소유한다"고 정한 것의 데이터 
 7. [ ] 설계 문서 어휘표에 Outcome이 두 층임을 명시
 
 최소 예제는 두 enum과 런타임 혼용 거부를 구현했다 (#4). 별도 `cord-runtime`의
-span 헬퍼와 enum은 #5에서 구현했다. 두 실행 경로의 연결과 Action 2의 원자적
+span 헬퍼와 enum은 #5에서 구현했다. 두 실행 경로는 #8에서 연결했다. Action 2의 원자적
 승격 헬퍼는 아직 후속 작업이다.
 
 
@@ -224,3 +224,13 @@ span 헬퍼와 enum은 #5에서 구현했다. 두 실행 경로의 연결과 Act
 Graph ID와 Node의 복합 정체성으로 정정했다. 부모 Step 및 Run 루트, trace와
 Graph/Run/Subject/Node 일치를 검증한 뒤 명시적 Attempt 승격만 센다.
 [고정 시각 경계 및 실제 아카이브 검증](../archive-query.md)이 이 계약을 확인한다.
+
+
+## 구현 확인 — 실제 모델 경계 (2026-09-11, #8)
+
+최소 그래프는 모델 호출부터 검증까지 하나의 열린 Attempt span으로 감싼다.
+`fast/failed → fast/escalated → deep/passed`가 실제 LiteLLM과 Collector를 거쳐
+저장되며 질의 결과는 승격 1회다. 모델 문자열 교체는 Outcome 판단에 쓰지 않는다.
+Run별 config로 계측 객체를 전달해 병렬 실행의 부모와 상태를 분리한다.
+기본 고정 응답 실행은 그대로 서비스 없이 동작한다.
+[검증 명령](../model-proxy.md).

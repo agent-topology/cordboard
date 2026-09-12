@@ -215,8 +215,23 @@ C를 전부 버리는 게 아니다. LiteLLM의 폴백/우선순위 기능은 **
 ## Action Items
 
 1. [ ] `cord up`에 **설정 린트**를 넣는다 — 프록시 설정에 `router_settings.fallbacks` 또는 `success_callback: ["langfuse"]`가 있으면 **기동을 거부**한다. 금지를 문서가 아니라 코드로 만든다
-2. [ ] 슬라이스 0 프록시 설정: `fast` / `deep` 두 별칭, DB 없이, OTLP → Collector만
+2. [x] #8 슬라이스 0 프록시 설정: `fast` / `deep` 두 별칭, DB 없이, OTLP → Collector만
 3. [ ] `cord.yaml` 노드 스키마에 `model:`(고정)과 `tier:`(사다리) 둘 중 하나를 받도록 정의. 둘 다 있으면 검증 오류
 4. [ ] `cord-runtime`에 승격 헬퍼 — Attempt span 생성 + `outcome=escalated` 마킹
 5. [ ] 슬라이스 0 캘리브레이션에서 다운컨버전 이슈 확인 (실제 프로바이더 응답 검사)
 6. [ ] 슬라이스 1: 그래프별 가상 키 도입 시 예산 상한 기능이 무료 범위인지 확인
+
+
+## 구현 확인 (2026-09-11, #8)
+
+`python -m cord_runtime.proxy_config`가 `fast`/`deep` 설정을 검사하고 DB 없는
+LiteLLM 1.87.0을 기동한다. 별칭 간 fallback, 직접 Langfuse 및 다른 callback,
+DB·메시지 로깅 설정을 거부한다. 동일 `model_name`의 여러 deployment는 허용한다.
+Action 1의 제품 `cord up`은 여전히 계획이며 이 명령이 그 구현을 주장하지 않는다.
+
+최소 그래프의 생성과 검증을 하나의 Attempt 구간으로 묶었다. 기존 헬퍼로 구간을
+열고 그래프가 결정한 Outcome을 종료 전에 기록한다. 원자적 다음 Attempt 전환
+헬퍼(Action 4)는 별도 미구현이다. 실제 프록시·Collector 테스트가 승격 1회,
+모델 매핑 교체 시 승격 0회, 직접 Attempt 부모와 redaction을 확인한다.
+실제 프로바이더 검사는 자격증명이 없어 미실행이며 Action 5를 완료하지 않는다.
+[설정·검사·smoke 명령과 증거](../model-proxy.md)를 기준으로 삼는다.

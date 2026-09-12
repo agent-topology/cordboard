@@ -1,5 +1,6 @@
 """A fetch → draft → verify graph with a bounded draft Attempt subgraph."""
 
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 from enum import Enum
 import json
@@ -7,6 +8,9 @@ from typing import Literal, Protocol, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
+from langchain_core.runnables import RunnableConfig
+
+from cord_runtime import execution
 
 
 class StepOutcome(Enum):
@@ -127,10 +131,6 @@ TIERS = (Tier.FAST, Tier.FAST, Tier.DEEP)
 def build_graph(model: Model):
     """Compile reusable graphs with no checkpointer or mutable execution closure."""
 
-    def generate(state: DraftState) -> dict:
-        index = len(state["attempts"])
-        return {"candidate": model(state["source"], TIERS[index], index + 1)}
-
     def assess(state: DraftState) -> dict:
         candidate = state["candidate"]
         verdict = validate(candidate, state["source"])
@@ -163,15 +163,26 @@ def build_graph(model: Model):
             "next_attempt": retry,
         }
 
-    def route(state: DraftState) -> Literal["generate", "done"]:
-        return "generate" if state["next_attempt"] else "done"
+    def attempt(state: DraftState, config: RunnableConfig) -> dict:
+        index = len(state["attempts"])
+        step = config.get("configurable", {}).get("cord_step")
+        scope = (step.attempt(index + 1, TIERS[index].value, execution.AttemptOutcome.FAILED)
+                 if step else nullcontext())
+        with scope as span:
+            candidate = model(state["source"], TIERS[index], index + 1)
+            result = assess({**state, "candidate": candidate})
+            if span:
+                record = result["attempts"][-1]
+                span.set_attribute("cord.outcome", record.outcome.value)
+            return result
+
+    def route(state: DraftState) -> Literal["attempt", "done"]:
+        return "attempt" if state["next_attempt"] else "done"
 
     attempts = StateGraph(DraftState)
-    attempts.add_node("generate", generate)
-    attempts.add_node("assess", assess)
-    attempts.add_edge(START, "generate")
-    attempts.add_edge("generate", "assess")
-    attempts.add_conditional_edges("assess", route, {"generate": "generate", "done": END})
+    attempts.add_node("attempt", attempt)
+    attempts.add_edge(START, "attempt")
+    attempts.add_conditional_edges("attempt", route, {"attempt": "attempt", "done": END})
     attempt_graph = attempts.compile()
 
     def fetch(state: GraphInput) -> dict:
@@ -182,8 +193,8 @@ def build_graph(model: Model):
             raise ValueError("Source must be non-empty and have no trailing period")
         return {"steps": (Step("fetch", StepOutcome.PASSED),), "output": None}
 
-    def draft(state: GraphState) -> dict:
-        result = attempt_graph.invoke({"source": state["source"], "attempts": ()})
+    def draft(state: GraphState, config: RunnableConfig) -> dict:
+        result = attempt_graph.invoke({"source": state["source"], "attempts": ()}, config)
         return {
             "steps": state["steps"] + (
                 Step("draft", result["outcome"], result["attempts"]),
@@ -197,10 +208,22 @@ def build_graph(model: Model):
         outcome = StepOutcome.PASSED if passed else StepOutcome.FAILED
         return {"steps": state["steps"] + (Step("verify", outcome),)}
 
+    def instrument(node, function):
+        def invoke(state, config: RunnableConfig):
+            active = config.get("configurable", {}).get("cord_run")
+            if active is None:
+                return function(state, config) if node == "draft" else function(state)
+            with active.step(node, execution.StepOutcome.FAILED) as step:
+                scoped = {**config, "configurable": {**config.get("configurable", {}), "cord_step": step}}
+                result = function(state, scoped) if node == "draft" else function(state)
+                step.span.set_attribute("cord.outcome", result["steps"][-1].outcome.value)
+                return result
+        return invoke
+
     graph = StateGraph(GraphState, input_schema=GraphInput)
-    graph.add_node("fetch", fetch)
-    graph.add_node("draft", draft)
-    graph.add_node("verify", verify)
+    graph.add_node("fetch", instrument("fetch", fetch))
+    graph.add_node("draft", instrument("draft", draft))
+    graph.add_node("verify", instrument("verify", verify))
     graph.add_edge(START, "fetch")
     graph.add_edge("fetch", "draft")
     graph.add_edge("draft", "verify")
@@ -208,10 +231,13 @@ def build_graph(model: Model):
     return graph.compile()
 
 
-def run(graph, *, subject: str, source: str = "hello") -> RunResult:
+def run(graph, *, subject: str, source: str = "hello", tracer=None) -> RunResult:
     # Even an inherited LangSmith tracing setting must not export this example.
-    with tracing_context(enabled=False):
-        state = graph.invoke({"subject": subject, "source": source})
+    scope = (execution.run(tracer, subject, "fixture", graph_id="minimal-graph")
+             if tracer else nullcontext())
+    with tracing_context(enabled=False), scope as active:
+        state = graph.invoke({"subject": subject, "source": source},
+                             {"configurable": {"cord_run": active}})
     return RunResult(state["subject"], state["output"], state["steps"])
 
 

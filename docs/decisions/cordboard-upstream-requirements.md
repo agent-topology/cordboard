@@ -179,3 +179,21 @@ Rust CLI도 같은 릴리스 바이너리와 SHA256SUMS로 확인했다.
 
 그래서 **cordboard가 우회를 만들면 두 번 손해다** — 우회 코드가 남고, 스펙은 그 요구를 못 듣는다.
 첫 고객의 역할은 문제를 안고 가는 게 아니라 **문제를 보고하는 것**이다.
+
+
+## LiteLLM — 공개 callback 통합 (2026-09-11, #8)
+
+LiteLLM 1.87.0의 기본 OTel handler에서 `_get_span_context`는 metadata 부모를
+context에 넣지만 두 번째 반환값을 `None`으로 준다. 따라서 성공 handler가
+별도 `litellm_request`를 만들며 직접 Attempt 자식은 proxy request span뿐이다.
+`USE_OTEL_LITELLM_REQUEST_SPAN=false`만으로 직접 model 부모 계약을 만들 수 없다.
+
+공개 `CustomLogger.async_log_success_event`/`async_log_failure_event`로 충분히
+구현할 수 있어 통합 블로커는 아니다. callback kwargs의 원래 HTTP `traceparent`를
+공개 OTel propagator로 추출하고 metadata만 담은 자식 span을 만든다. SDK 내부나
+기존 span을 수정하지 않는다. 같은 `RedactingOTLPExporter`가 proxy 안에서 실행된다.
+
+[최소 실제 프록시 재현 테스트](../../tests/test_proxy.py)는 직접 부모 ID,
+승격 1회, 같은 별칭의 모델 매핑 교체, credential 치환과 PEM block을 검증한다.
+[설정과 검증 기록](../model-proxy.md). 실제 provider 자격증명은 없어 smoke 미실행이다.
+이 기록은 RS-1의 #5 범위를 확장하며 DeepAgents 연결을 완료했다는 뜻은 아니다.

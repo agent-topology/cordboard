@@ -12,8 +12,10 @@ The planned command is `cord`.
 This repository contains a deterministic `fetch → draft → verify` LangGraph
 example and a separate archive fixture with Run/Step/Attempt instrumentation,
 in-process redaction, a Collector gate, and raw OTLP JSONL persistence.
-Neither example requires model credentials. Graph-to-archive wiring and the
-remaining platform, including `cord up`, are still planned.
+The [LiteLLM integration](docs/model-proxy.md) now connects the graph and archive,
+with deterministic proxy tests requiring no provider credentials. Real-provider
+compatibility needs a separate smoke check. The remaining platform, including
+`cord up`, is still planned.
 
 ```sh
 uv sync --locked --python 3.12
@@ -76,5 +78,6 @@ the catalog, viewer, and CLI lifecycle arrive with the second graph in Slice 1.
 
 Issue #4 establishes the graph contract and corrects the escalation examples.
 Issue #5 verifies redaction release availability and the archive gate with a
-separate fixture. Connecting the two execution paths remains follow-up work.
+separate fixture. Issue #8 connects the two through LiteLLM with graph-owned
+escalation and in-process proxy redaction.
 The existing slice descriptions are plans, not evidence that work has shipped.
