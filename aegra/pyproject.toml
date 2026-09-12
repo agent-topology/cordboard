@@ -1,0 +1,8 @@
+[project]
+name = "cordboard-aegra"
+version = "0.0.1"
+requires-python = ">=3.12,<3.13"
+dependencies = ["aegra-api==0.10.4", "cord-runtime"]
+
+[tool.uv.sources]
+cord-runtime = { path = ".." }

@@ -128,8 +128,8 @@ class GraphState(GraphInput):
 TIERS = (Tier.FAST, Tier.FAST, Tier.DEEP)
 
 
-def build_graph(model: Model):
-    """Compile reusable graphs with no checkpointer or mutable execution closure."""
+def build_graph(model: Model, *, active_run=None):
+    """Compile the graph, optionally binding instrumentation to one host Run."""
 
     def assess(state: DraftState) -> dict:
         candidate = state["candidate"]
@@ -183,12 +183,16 @@ def build_graph(model: Model):
     attempts.add_node("attempt", attempt)
     attempts.add_edge(START, "attempt")
     attempts.add_conditional_edges("attempt", route, {"attempt": "attempt", "done": END})
-    attempt_graph = attempts.compile()
+    # Attempts are atomic within the draft node; the host checkpoints Steps.
+    # Do not inherit Aegra's async checkpointer into this synchronous subgraph.
+    attempt_graph = attempts.compile(checkpointer=False)
 
     def fetch(state: GraphInput) -> dict:
         # Subject is opaque: require presence, but do not parse or normalize it.
         if not isinstance(state["subject"], str) or not state["subject"].strip():
             raise ValueError("Subject must be a non-empty string")
+        if active_run and state["subject"] != active_run.attributes["cord.subject.id"]:
+            raise ValueError("input Subject must match execution Subject")
         if not isinstance(state["source"], str) or not state["source"] or state["source"].endswith("."):
             raise ValueError("Source must be non-empty and have no trailing period")
         return {"steps": (Step("fetch", StepOutcome.PASSED),), "output": None}
@@ -210,7 +214,7 @@ def build_graph(model: Model):
 
     def instrument(node, function):
         def invoke(state, config: RunnableConfig):
-            active = config.get("configurable", {}).get("cord_run")
+            active = active_run or config.get("configurable", {}).get("cord_run")
             if active is None:
                 return function(state, config) if node == "draft" else function(state)
             with active.step(node, execution.StepOutcome.FAILED) as step:

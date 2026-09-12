@@ -79,5 +79,8 @@ the catalog, viewer, and CLI lifecycle arrive with the second graph in Slice 1.
 Issue #4 establishes the graph contract and corrects the escalation examples.
 Issue #5 verifies redaction release availability and the archive gate with a
 separate fixture. Issue #8 connects the two through LiteLLM with graph-owned
-escalation and in-process proxy redaction.
+escalation and in-process proxy redaction. [Issue #9's Aegra integration](docs/aegra.md)
+adds Postgres execution and verifies all emitted span parents, fresh state,
+archive counts and redaction. Separate real-provider evidence remains missing,
+so Slice 0 is not yet complete.
 The existing slice descriptions are plans, not evidence that work has shipped.
