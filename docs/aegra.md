@@ -5,12 +5,12 @@ The existing minimal graph executes through Aegra 0.10.4 and one Postgres
 execution and checkpoint persistence. The graph owns validation and escalation.
 The Collector's append-only OTLP archive remains the execution record of origin.
 
-**Slice 0 is not complete:** the separate real-provider check from #8 has not
-run because operator mappings and credentials are absent. Controlled endpoint
-tests do not establish Sonnet or GPT 5.5 compatibility. This document is the
-local evidence handoff for [Feature #7](https://github.com/omiologic/cordboard-proto/issues/7)
-and [milestone 1](https://github.com/omiologic/cordboard-proto/milestone/1).
-Neither tracker is marked complete by this work.
+[ADR-0013](decisions/0013-switchboard-boundary.md) makes model dependencies
+private to each graph. The LiteLLM path below is one optional example. Its
+real-provider smoke has not run and is no longer a Cordboard completion gate.
+[Current boundary evidence](switchboard-boundary.md) also runs a different graph
+with no model, Tier or gateway using the same public Aegra client and archive.
+This local scope correction does not modify GitHub tracker state.
 
 ## Setup and reproduction
 
@@ -20,11 +20,11 @@ provider key. The Docker image is pinned by its multi-platform digest in
 [compose.yaml](../aegra/compose.yaml) and the test fixture.
 
 ```sh
-uv sync --locked --python 3.12
+uv sync --locked --group proxy --python 3.12
 uv sync --locked --project aegra --python 3.12
 docker pull postgres:16.10-alpine@sha256:029660641a0cfc575b14f336ba448fb8a75fd595d42e1fa316b9fb4378742297
-uv run --locked pytest -q tests/test_aegra.py
-uv run --locked pytest -q --basetemp .tools/slice0-evidence
+uv run --locked --group proxy pytest -q tests/test_aegra.py
+uv run --locked --group proxy pytest -q --basetemp .tools/slice0-evidence
 ```
 
 `--basetemp` replaces that test-output directory on each run; use a new path if
@@ -90,7 +90,8 @@ For these independent executions, `cord.run.id` equals Aegra's returned
 `run_id`. `execution.run` accepts that external identity or generates a fresh
 UUID for standalone execution. Subject remains required but is not parsed or
 normalized. This fixes the older runtime's unnecessary colon requirement and
-preserves semantic convention 0.2.0: the keys and their meanings are unchanged.
+preserved semantic convention 0.2.0 at implementation time. ADR-0013 now emits
+0.3.0 with optional Tier; the query continues to accept those 0.2.0 archives.
 
 **Resume is a different contract.** Aegra 0.10.4 creates a new API Run ID for
 every Run submission, including `command.resume` on an existing Thread. It
@@ -110,8 +111,8 @@ closure, outside serialized API config and checkpoint metadata.
 ## Process and telemetry boundaries
 
 Two locked Python environments are necessary. LiteLLM 1.87.0 pins Uvicorn
-0.33.0; Aegra 0.10.4 requires Uvicorn >=0.36.0. Root `uv sync` installs the
-default `dev` and `proxy` groups. The separate
+0.33.0; Aegra 0.10.4 requires Uvicorn >=0.36.0. Root `uv sync` installs only the
+default `dev` group; this optional proxy example explicitly adds `--group proxy`. The separate
 [Aegra project](../aegra/pyproject.toml) depends on the shared runtime wheel and
 has its own lockfile, without the proxy group. No dependency constraint is
 overridden. The resolved Aegra server uses Uvicorn 0.52.4 and
@@ -170,13 +171,12 @@ label. The server accepts `--port`, `--proxy` and `--collector` overrides.
 Stop the server with Ctrl-C. `docker compose -f aegra/compose.yaml down` stops
 the manual database while preserving its checkpoint volume.
 
-Run #8's separate `examples.provider_smoke` command once each against the
-operator's Sonnet and GPT 5.5 mappings, each with a fresh archive. Record the
-actual compatibility/count summary and clean scan; a controlled endpoint is
-not a substitute. See [the exact command and criteria](model-proxy.md#smoke-check-and-graph-execution).
-No provider mapping or key was available during this implementation.
+The optional #8 `examples.provider_smoke` command checks the graph operator's
+chosen provider configuration against a fresh archive. No operator mapping or
+key was available during that implementation. It is not a prerequisite for
+running other graphs or completing the platform boundary checks.
 
-## Evidence status
+## Historical #9 evidence status
 
 Verified on macOS arm64, CPython 3.12.14, Aegra 0.10.4, Postgres 16.10,
 LiteLLM 1.87.0, Collector 0.148.0 and redact-secret 0.1.0b1.
@@ -189,22 +189,24 @@ LiteLLM 1.87.0, Collector 0.148.0 and redact-secret 0.1.0b1.
 | Known archive counts and duplicate delivery | Count 2, still 2 with duplicate OTLP input; #6 window/error tests | Passed |
 | Secret absence and whole-span block | Graph and proxy injection; five spans after model block; CLI scans | Passed |
 | Missing/false/unprocessed spans rejected | Fresh wire archives for both producers; #5 removal/error cases | Passed |
-| Separate actual-provider compatibility | #8 harness exists; operator mappings/credentials absent | **Not run — blocks Slice 0 completion** |
+| Separate actual-provider compatibility | #8 harness exists; operator mappings/credentials absent | **Not run — optional example under ADR-0013** |
 
-Actual results on 2026-09-11 (America/New_York; archive timestamps use UTC):
+Historical results on 2026-09-11 (America/New_York; archive timestamps use UTC).
+The command table uses current paths and the now-explicit optional proxy group:
 
 | Command | Observed result |
 | --- | --- |
-| `uv sync --locked --python 3.12` | Root resolution: 135 packages; 131 installed |
+| `uv sync --locked --group proxy --python 3.12` | Root resolution: 135 packages; 131 installed |
 | `uv sync --locked --project aegra --python 3.12` | Aegra resolution: 89 packages; 86 installed |
-| `uv run --locked pytest -q tests/test_aegra.py` | **9 passed in 23.14s** |
-| `uv run --locked pytest -q --basetemp .tools/slice0-evidence` | **108 passed in 51.65s** |
+| `uv run --locked --group proxy pytest -q tests/test_aegra.py` | **9 passed in 23.14s** |
+| `uv run --locked --group proxy pytest -q --basetemp .tools/slice0-evidence` | **108 passed in 51.65s** |
 | Integrated archive `archive-check` command above | `records=40 findings=False failure=False`, exit 0 |
 | Integrated `archive-escalations`, reference `2026-09-12T01:31:48.357625+00:00` | `minimal-graph / draft / 2`, exit 0 |
-| Separate actual-provider smoke | **Not run**; all four `CORD_PROVIDER_BASE`, `CORD_PROVIDER_KEY`, `CORD_FAST_MODEL`, `CORD_DEEP_MODEL` variables absent |
+| Separate actual-provider smoke | **Not run**; the then-named `CORD_PROVIDER_BASE`, `CORD_PROVIDER_KEY`, `CORD_FAST_MODEL`, `CORD_DEEP_MODEL` variables were absent |
 
-The checked commands cover all deterministic exit criteria. They do not justify
-closing #9, Feature #7 or the milestone while actual-provider evidence is missing.
+These historical commands cover deterministic exit criteria. ADR-0013 supersedes
+the former provider-credential completion gate. See the current boundary evidence
+for the revised acceptance and new commands; the provider check has not passed.
 
 ## Upstream references
 

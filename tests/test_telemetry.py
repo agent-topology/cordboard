@@ -120,7 +120,7 @@ def test_sdk_parentage_outcomes_and_fresh_runs():
     assert len(roots) == 2 and roots[0].context.trace_id != roots[1].context.trace_id
     assert roots[0].attributes["cord.run.id"] != roots[1].attributes["cord.run.id"]
     for root in roots:
-        assert root.parent is None and root.attributes["cord.semconv.version"] == "0.2.0"
+        assert root.parent is None and root.attributes["cord.semconv.version"] == "0.3.0"
         children = [s for s in captured.spans if s.parent and s.parent.span_id == root.context.span_id]
         assert len(children) == 1
         attempts = [s for s in captured.spans if s.parent and s.parent.span_id == children[0].context.span_id]

@@ -19,7 +19,7 @@ dev = ["pytest==9.1.1"]
 proxy = ["litellm[proxy]==1.87.0"]
 
 [tool.uv]
-default-groups = ["dev", "proxy"]
+default-groups = ["dev"]
 
 [build-system]
 requires = ["hatchling==1.27.0"]

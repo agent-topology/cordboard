@@ -20,6 +20,9 @@ planned interfaces until they exist in this repository.
 
 - The platform consumes manifests, execution APIs, and spans; graph business
   logic and graph-specific state stay inside the graph.
+- The caller selects the Graph/Assistant. Models, provider keys, SDKs, gateways,
+  and Tier policies belong to that graph. Do not require model configuration to
+  connect it. ADR-0013 supersedes ADR-0004; optional LiteLLM code is an example.
 - Use public `agent-topology` and `redact-secret` APIs. Their formats and
   detectors belong upstream; Cordboard policy belongs in `x-cord`.
 - Explicit ADR corrections supersede older examples and HTML artifacts. Check

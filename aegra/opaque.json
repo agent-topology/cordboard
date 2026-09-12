@@ -1,0 +1,6 @@
+{
+  "dependencies": [".."],
+  "graphs": {
+    "opaque-graph": "../examples/opaque_graph.py:graph"
+  }
+}

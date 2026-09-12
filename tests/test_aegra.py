@@ -63,16 +63,21 @@ def postgres():
 
 
 @contextmanager
-def aegra(postgres, proxy_url, collector_url):
+def aegra(postgres, proxy_url, collector_url, config=None):
     python = ROOT / "aegra/.venv/bin/python"
     assert python.is_file(), "run uv sync --locked --project aegra first"
     target = port()
     env = {**os.environ, "POSTGRES_HOST": "127.0.0.1", "POSTGRES_PORT": str(postgres),
            "POSTGRES_USER": "postgres", "POSTGRES_PASSWORD": "fixture-only",
            "POSTGRES_DB": "cordboard"}
+    command = [str(python), "-m", "examples.aegra_server", "--port", str(target),
+               "--collector", collector_url]
+    if proxy_url:
+        command.extend(["--proxy", proxy_url])
+    if config:
+        command.extend(["--config", str(config)])
     process = subprocess.Popen(
-        [str(python), "-m", "examples.aegra_server", "--port", str(target),
-         "--proxy", proxy_url, "--collector", collector_url],
+        command,
         cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         start_new_session=True,
     )
@@ -221,3 +226,43 @@ def test_deployment_gate_in_fresh_archive(tmp_path, service, stamp):
         send(target, req)
     assert archived_spans(directory) == []
     assert all(not p.read_bytes() for p in directory.glob("*.otlp.jsonl"))
+
+
+@pytest.mark.aegra
+@pytest.mark.collector
+def test_graph_execution_without_model_configuration(tmp_path, cli, postgres):
+    # The caller knows this graph's payload; the shared client/runtime do not.
+    # No provider fixture, LiteLLM process, model mapping or API key is involved.
+    directory = tmp_path / "archive"
+    with collector(directory) as target:
+        with aegra(postgres, None, target, ROOT / "aegra/opaque.json") as endpoint:
+            first = execute(endpoint, "opaque-graph", "opaque grouping label",
+                            {"items": [CREDENTIAL]})
+            second = execute(endpoint, "opaque-graph", "opaque grouping label",
+                             {"items": []})
+    assert first["values"]["size"] == 1 and second["values"]["size"] == 0
+    assert first["run_id"] != second["run_id"]
+    assert first["thread_id"] != second["thread_id"]
+    saved = archived_spans(directory)
+    assert len(saved) == 6
+    indexed = {s["spanId"]: s for s in saved}
+    roots = [s for s in saved if s["name"] == "run"]
+    assert {attributes(s)["cord.run.id"] for s in roots} == {first["run_id"], second["run_id"]}
+    assert len({s["traceId"] for s in roots}) == 2
+    for span in saved:
+        attrs = attributes(span)
+        assert attrs["cord.redacted"] is True
+        assert attrs["cord.graph.id"] == "opaque-graph"
+        assert "cord.tier" not in attrs
+        assert not any(k.startswith("gen_ai.") for k in attrs)
+        if span["name"] == "run":
+            assert not span.get("parentSpanId")
+        else:
+            parent = indexed[span["parentSpanId"]]
+            assert parent["traceId"] == span["traceId"]
+            assert parent["name"] == ("step:count" if span["name"] == "attempt" else "run")
+            assert int(parent["startTimeUnixNano"]) <= int(span["startTimeUnixNano"])
+            assert int(span["endTimeUnixNano"]) <= int(parent["endTimeUnixNano"])
+    assert query([directory], reference=time.time_ns()) == []
+    assert CREDENTIAL.encode() not in b"".join(p.read_bytes() for p in directory.glob("*.otlp.jsonl"))
+    assert check([directory], cli) == 0

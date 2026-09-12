@@ -8,7 +8,7 @@
 >
 > 2026-09-11에 `agent-workflow-framework`에서 개명했다. 코드가 없는 시점이라 비용이 0이었다.
 
-설계 세션(2026-09-08)에서 나온 결정들.
+설계 세션(2026-09-08)에서 출발해 후속 구현과 사용자 정정으로 갱신한 결정들.
 번호는 결정한 순서이고, 파일이 있는 것만 정식 ADR이다.
 
 | # | 제목 | 상태 | 문서 |
@@ -16,7 +16,7 @@
 | **0001** | **격리 수준은 그래프별 설정, 기본값은 프로세스 분리** | **Accepted** | **[0001-isolation-level.md](0001-isolation-level.md)** |
 | **0002** | **이름은 빌려 쓰고, 겹치는 곳은 매핑을 문서화한다** | **Accepted** | **[0002-vocabulary.md](0002-vocabulary.md)** |
 | **0003** | **Run을 묶는 것은 Subject, Thread는 해석하지 않는다** | **Accepted** | **[0003-subject-not-thread.md](0003-subject-not-thread.md)** |
-| **0004** | **모델 게이트웨이는 LiteLLM, 승격은 그래프가 소유** | **Accepted** | **[0004-model-gateway.md](0004-model-gateway.md)** |
+| **0004** | **모델 게이트웨이는 LiteLLM, 승격은 그래프가 소유** | **Superseded by 0013** | **[0004-model-gateway.md](0004-model-gateway.md)** |
 | **0005** | **Langfuse는 읽는 화면이지 기록의 원본이 아니다** | **Accepted** | **[0005-record-of-origin.md](0005-record-of-origin.md)** |
 | **0006** | **비밀값 처리는 redact-secret에 위임, Collector가 강제 지점** | **Accepted** | **[0006-masking-enforcement.md](0006-masking-enforcement.md)** |
 | **0007** | **카탈로그는 세 경우에만 거부하고, 나머지는 경고한다** | **Accepted** | **[0007-catalog-rejection.md](0007-catalog-rejection.md)** |
@@ -25,6 +25,7 @@
 | 0010 | DeepAgents는 플랫폼 구성요소가 아니라 템플릿 선택지 | Accepted | 미작성 |
 | **0011** | **Manifest의 그래프 모양은 파생, 표류하면 기동 거부** | **Accepted** | **[0011-manifest-derivation.md](0011-manifest-derivation.md)** |
 | **0012** | **그래프 구조 포맷을 독립 프로젝트로 분리한다** | **Accepted** | **[0012-topology-spec-split.md](0012-topology-spec-split.md)** |
+| **0013** | **Cordboard는 요청한 그래프를 연결하고, 모델 선택은 모른다** | **Accepted** | **[0013-switchboard-boundary.md](0013-switchboard-boundary.md)** |
 
 ---
 
@@ -198,3 +199,14 @@ Collector·아카이브 관문을 완료한 것이 아니다.
 
 [전체 재현과 종료 체크리스트](../aegra.md). #8의 실제 프로바이더 증거는 여전히
 자격증명이 없어 미실행이며 Slice 0·#7·#9의 전체 완료를 주장하지 않는다.
+
+
+## 교환원 경계 정정 (2026-09-11, #7)
+
+[ADR-0013](0013-switchboard-boundary.md)이 ADR-0004의 공용 게이트웨이 강제를 대체한다.
+모델 구성·키·SDK·Tier 정책은 그래프 소유이며 `cord.yaml`/`x-cord`에는 넣지 않는다.
+LiteLLM 코드는 선택적 예제로 이동했고 기본 설치에서 빠졌다. Run semconv 0.3.0은
+Tier 없는 Attempt를 허용하며 질의는 기존 0.2.0도 읽는다.
+위의 이전 구현 기록에 나온 실제 공급자 미검증은 그대로이나,
+이를 Cordboard 공통 완료 조건으로 삼았던 판단은 철회한다.
+[현재 검증과 이슈 범위 정정](../switchboard-boundary.md)을 따른다.

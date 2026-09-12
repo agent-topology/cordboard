@@ -8,7 +8,7 @@ from uuid import uuid4
 from opentelemetry import trace
 from opentelemetry.context import Context
 
-SEMCONV_VERSION = "0.2.0"
+SEMCONV_VERSION = "0.3.0"
 
 
 class StepOutcome(Enum):
@@ -32,13 +32,23 @@ class Step:
     attributes: dict
 
     @contextmanager
-    def attempt(self, number: int, tier: str, outcome: AttemptOutcome):
+    def attempt(self, number: int, tier: str | None = None,
+                outcome: AttemptOutcome = AttemptOutcome.FAILED):
+        """Record a try; optional Tier is an opaque graph-supplied annotation.
+
+        Default to failed until the graph explicitly records success. Existing
+        positional (number, tier, outcome) calls remain supported.
+        """
         if type(outcome) is not AttemptOutcome:
             raise TypeError("expected AttemptOutcome")
-        if type(number) is not int or number < 1 or not tier:
-            raise ValueError("attempt needs a positive number and a tier")
+        if type(number) is not int or number < 1:
+            raise ValueError("attempt needs a positive number")
+        if tier is not None and (not isinstance(tier, str) or not tier.strip()):
+            raise ValueError("optional tier must be a non-empty string")
         attributes = {**self.attributes, "cord.step.attempt": number,
-                      "cord.tier": tier, "cord.outcome": outcome.value}
+                      "cord.outcome": outcome.value}
+        if tier is not None:
+            attributes["cord.tier"] = tier
         # Explicit Step parent keeps Attempts siblings even in nested contexts.
         with self.tracer.start_as_current_span(
             "attempt", context=trace.set_span_in_context(self.span, Context()),

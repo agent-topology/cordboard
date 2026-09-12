@@ -16,7 +16,7 @@ from examples.proxy_graph import ProxyModel
 
 @asynccontextmanager
 async def graph(config: dict):
-    model = ProxyModel(os.environ.get("CORD_PROXY", "http://127.0.0.1:4000"))
+    model = ProxyModel(os.environ.get("EXAMPLE_PROXY", "http://127.0.0.1:4000"))
     values = config.get("configurable", {})
     # Aegra also calls factories for schema/state inspection, without a Run.
     if "run_id" not in values:

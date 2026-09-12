@@ -36,7 +36,7 @@ Expected output (also [checked in](../tests/fixtures/escalations/top2.expected.j
   execution contract. `run(..., graph_id=...)` requires it and propagates it to
   Steps and Attempts. It is independent of Node name, repository, deployment,
   provider, and `service.name`. This does not settle upstream manifest name
-  ownership. The Run semantic convention is now `0.2.0` (ADR-0002 correction).
+  ownership. New Runs use `0.3.0` (ADR-0013); existing `0.2.0` archives remain readable.
 - The old #5 [capture](../examples/archive.sample.otlp.jsonl) remains unchanged.
   It has no Graph identity and the query rejects it with a re-emission diagnostic.
   There is no inference or automatic rewrite of historical archives. Re-emit
@@ -44,7 +44,10 @@ Expected output (also [checked in](../tests/fixtures/escalations/top2.expected.j
 - Each Attempt must have a direct Step parent in the same trace, and each Step
   a Run root. Graph/Run/Subject identities must match parents; Node must match
   between Step and Attempt. Closed Outcome vocabularies, positive Attempt number,
-  Tier, and timestamps are validated, including outside the query window.
+  and timestamps are validated, including outside the query window. Tier is
+  optional in 0.3.0, required in historical 0.2.0, and a non-empty string when
+  present. Neither version requires provider model metadata. The query never
+  resolves Tier labels to models or compares their ordering.
   Ordinary model spans are ignored; provider model changes are never counted.
 - Deduplicate by `span_id` across all inputs before aggregation. Identical span
   retransmissions count once even if resource receipt metadata differs; conflicting

@@ -218,7 +218,7 @@ Collector가 **버리기만 하기 때문에** ①이 필수로 유지된다. �
 6. [x] #8 LiteLLM 공개 callback → 기존 redacting exporter → Collector 검증
 7. [x] 별도 정책 구현 폐기 — upstream 기본값 사용, block은 span 전체 억제
 8. [x] Collector 필터 — boolean true 이외 drop. payload 로그 없이 음성 시험으로 검증
-9. [ ] `cord up` 설정 린트에 `success_callback: ["langfuse"]` 금지 추가 (ADR-0004 Action 1과 같은 자리)
+9. ~~`cord up`의 프록시 설정 lint~~ — ADR-0013에서 철회; 관측 gate 계약은 유지
 10. [x] `archive-check` — 고정 upstream CLI 래퍼. 제품 `cord scan-archive`는 후속
 11. [x] #5 픽스처에서 리댁터 제거/false/누락/처리 실패별 새 아카이브와 전체 내용 검증
 12. [x] `redaction.extra_patterns` 폐기 — RS-4와 일치
@@ -260,3 +260,12 @@ LiteLLM의 payload 가능 콘솔 출력은 배출 전에 버리고, 기동 전 �
 설명으로 출력한다. 운영자가 승인한 모델 요청은 provider로 전송된다. 여기의
 redaction 경계는 관측 데이터에 적용하며 모델 입력을 변조하지 않는다.
 [재현과 한계](../model-proxy.md).
+
+
+## 정정 — 교환원 경계 (2026-09-11, #7)
+
+[ADR-0013](0013-switchboard-boundary.md)이 모델 소유권의 현재 결정이다.
+모든 관측 생산자의 in-process redaction과 Collector gate는 유지한다.
+LiteLLM은 선택적인 그래프 의존성이므로 필수 생산자 목록이 아니다.
+Cordboard가 외부 프록시의 설정을 검사하는 계획(Action 9)은 철회한다.
+이 예제의 callback 검사는 그래프 예제 안에 둔다. 마스킹 계약은 모델 설정을 요구하지 않는다.

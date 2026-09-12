@@ -299,3 +299,11 @@ OTel이 traces·metrics·logs를 "signals"라 부르는 것을 첫 판에서 놓
 기존 append-only 파일을 고치거나 기본 Graph를 지어내지 않고, 새 헬퍼로 재실행한다.
 #5의 원본 샘플을 보존하며 새 Collector 캡처와 정답을 별도 파일로 남겼다.
 [질의 계약과 검증](../archive-query.md)을 참조한다.
+
+
+## 정정 — 교환원 경계 (2026-09-11, #7)
+
+[ADR-0013](0013-switchboard-boundary.md)이 모델 소유권의 현재 결정이다.
+모델 구성은 그래프 내부다. `cord.tier`는 선택적인 불투명한 관측 라벨이며,
+Run semconv 0.3.0에서는 Tier 없는 Attempt를 허용한다. 질의는 기존 0.2.0의
+Tier 필수 계약도 계속 검증한다. 모델명과 Tier를 알지 않아도 실행을 연결하고 기록한다.

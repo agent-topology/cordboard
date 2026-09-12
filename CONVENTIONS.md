@@ -12,10 +12,11 @@ in `uv.lock`.
 Run `uv sync --locked --python 3.12` and
 `uv run --locked python -m examples.minimal_graph` from the repository root.
 Service-free tests use `uv run --locked pytest -q -m "not collector"`.
-The complete suite uses `uv run --locked pytest -q` after installing the pinned
+The complete suite uses `uv run --locked --group proxy pytest -q` after installing the pinned
 binaries in [Archive setup](docs/archive.md), synchronizing the separate
 `aegra` project and preparing Docker/Postgres per [Aegra setup](docs/aegra.md).
-Root defaults include the `dev` and `proxy` dependency groups. Aegra has a
+Root defaults include only the `dev` dependency group. Add `--group proxy` to
+`uv sync` and `uv run` when running the optional LiteLLM example or its full suite. Aegra has a
 separate lockfile because the two servers require incompatible Uvicorn versions.
 See also the
 [graph execution contract](docs/minimal-graph.md).
@@ -96,8 +97,13 @@ registration constraint. A Deployment may host multiple Graphs.
 - Pin integration dependencies when code is introduced and verify their
   supported versions. Design-session version numbers are not a substitute for
   compatibility evidence.
-- Keep model escalation decisions in the graph and make them observable as
-  Attempts. Do not hide them in proxy fallbacks or infer them from model strings.
+- The caller selects the Graph/Assistant. Cordboard connects it through its API
+  without interpreting graph payloads, prompts or model configuration. Models,
+  provider keys, SDKs, gateway settings and retry/escalation policies belong to
+  the graph. Do not add model/Tier settings to `cord.yaml` or `x-cord`.
+- Record graph-declared outcomes. Tier and model metadata are optional; never
+  infer escalation from model strings or Tier order. Keep optional gateway
+  launchers and provider-specific tests in examples, outside `cord-runtime`.
 - Preserve in-process redaction and the Collector gate. Do not add direct
   telemetry paths that bypass it, or put full prompts, diffs, and model output
   into span attributes.

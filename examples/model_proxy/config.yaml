@@ -2,14 +2,14 @@
 model_list:
   - model_name: fast
     litellm_params:
-      model: os.environ/CORD_FAST_MODEL
-      api_base: os.environ/CORD_PROVIDER_BASE
-      api_key: os.environ/CORD_PROVIDER_KEY
+      model: os.environ/EXAMPLE_FAST_MODEL
+      api_base: os.environ/EXAMPLE_PROVIDER_BASE
+      api_key: os.environ/EXAMPLE_PROVIDER_KEY
   - model_name: deep
     litellm_params:
-      model: os.environ/CORD_DEEP_MODEL
-      api_base: os.environ/CORD_PROVIDER_BASE
-      api_key: os.environ/CORD_PROVIDER_KEY
+      model: os.environ/EXAMPLE_DEEP_MODEL
+      api_base: os.environ/EXAMPLE_PROVIDER_BASE
+      api_key: os.environ/EXAMPLE_PROVIDER_KEY
 router_settings:
   num_retries: 0
   routing_strategy: simple-shuffle

@@ -76,13 +76,13 @@ RFC 8615는 새 well-known URI를 만들려면 **반드시 등록해야 한다**
       "provenance":   { "structureHash": "sha256:…", "derivedAt": "…" },
 
       // ── 우리 확장. cord.yaml 에서 온다 ──
-      "x-cord": { "subject": {}, "tiers": {}, "approval": {}, "triggers": [] }
+      "x-cord": { "subject": {}, "approval": {}, "triggers": [] }
     }
   ]
 }
 ```
 
-**`structure` 절에 cordboard의 개념이 하나도 없어야 한다.** Tier가 거기 들어가면 그건 표준이 아니라
+**`structure` 절에 cordboard의 개념이 하나도 없어야 한다.** Cordboard 승인 정책이 거기 들어가면 그건 표준이 아니라
 cordboard 포맷이다. 우리 것은 전부 `x-cord` 아래로 간다.
 
 모드에 따라 모양이 바뀌면 소비자가 두 경우를 다 처리해야 한다. **한 그래프짜리 Deployment도 배열로 답한다.**
@@ -203,10 +203,17 @@ if "graphs" in doc: ... else: ...   # 매번, 모든 소비자에서
 ## Action Items
 
 1. [ ] `structure` 절은 `agent-topology`가 정의한다 — cordboard는 스키마를 소유하지 않는다
-1b. [ ] `x-cord` 확장 스키마 정의 — subject · tiers · approval · triggers
+1b. [ ] `x-cord` 확장 스키마 정의 — subject · approval · triggers
 2. [ ] Agent Card 생성기 — A2A 스펙 필드만. 우리 필드 0개
 3. [ ] Aegra 설정의 `http.app`으로 두 라우트 마운트하는 것을 `cord up`이 자동 처리
 4. [ ] 카탈로그가 두 문서를 긁는 수집기. `agent-topology.manifest.json`이 없거나 `structure` 절이 없으면 등록 거부
 5. [ ] `cord.yaml`의 `name`/`version`/`description`을 A2A 대응 필드와 같은 이름으로 정의
 6. [ ] Agent Card 스펙 준수 검증 — 우리 카드가 표준 파서에 통과하는지 확인
 7. [ ] 슬라이스 1 이후: `agent-topology.manifest.json` 스펙 초안을 쓸지 판단. 쓴다면 IANA provisional 등록 검토
+
+
+## 정정 — 교환원 경계 (2026-09-11, #7)
+
+[ADR-0013](0013-switchboard-boundary.md)이 모델 소유권의 현재 결정이다.
+`x-cord`의 `tiers` 계획을 철회한다. 모델·Tier 정책·공급자 키는
+발견 문서의 Cordboard 계약이 아니다. 본문 예제와 Action 1b에서 이를 제거했다.

@@ -16,7 +16,7 @@ import requests
 
 from cord_runtime.archive_check import check
 from cord_runtime.archive_query import query
-from cord_runtime.proxy_config import environment, load, validate
+from examples.model_proxy.config import environment, load, validate
 from examples.proxy_graph import execute
 from examples.provider_smoke import smoke
 from conftest import CREDENTIAL, PRIVATE_KEY, ROOT
@@ -24,7 +24,7 @@ from test_collector import collector, archived_spans, attributes
 
 
 def config():
-    return load(ROOT / "proxy/config.yaml")
+    return load(ROOT / "examples/model_proxy/config.yaml")
 
 
 @pytest.mark.parametrize("field", ["fallbacks", "context_window_fallbacks", "content_policy_fallbacks", "default_fallbacks"])
@@ -52,7 +52,7 @@ def test_same_alias_deployments_allowed():
 
 
 def test_inherited_configuration_cannot_bypass_gate(monkeypatch):
-    for name in ("CORD_FAST_MODEL", "CORD_DEEP_MODEL", "CORD_PROVIDER_BASE", "CORD_PROVIDER_KEY"):
+    for name in ("EXAMPLE_FAST_MODEL", "EXAMPLE_DEEP_MODEL", "EXAMPLE_PROVIDER_BASE", "EXAMPLE_PROVIDER_KEY"):
         monkeypatch.setenv(name, "fixture")
     for name in ("DATABASE_URL", "DEBUG_OTEL", "LANGFUSE_SECRET_KEY", "OTEL_EXPORTER_OTLP_ENDPOINT"):
         monkeypatch.setenv(name, "unwanted")
@@ -126,10 +126,10 @@ def proxy(tmp_path, upstream, collector_url, fast_model="openai/fixture-fast"):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    env = {**os.environ, "CORD_PROVIDER_BASE": upstream, "CORD_PROVIDER_KEY": "fixture-only",
-           "CORD_FAST_MODEL": fast_model, "CORD_DEEP_MODEL": "openai/fixture-deep"}
+    env = {**os.environ, "EXAMPLE_PROVIDER_BASE": upstream, "EXAMPLE_PROVIDER_KEY": "fixture-only",
+           "EXAMPLE_FAST_MODEL": fast_model, "EXAMPLE_DEEP_MODEL": "openai/fixture-deep"}
     process = subprocess.Popen(
-        [sys.executable, "-m", "cord_runtime.proxy_config", "--config", str(ROOT / "proxy/config.yaml"),
+        [sys.executable, "-m", "examples.model_proxy.config", "--config", str(ROOT / "examples/model_proxy/config.yaml"),
          "--port", str(port), "--collector", collector_url],
         cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
     )

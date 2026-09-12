@@ -93,13 +93,14 @@ of the five spans is checked in as
 
 `execution.run(..., graph_id=...)` creates a fresh trace and UUID Run ID, requires
 an explicit Graph identity and a non-empty opaque Subject and type, and stamps the Run root
-with `cord.semconv.version=0.2.0` (#6). An optional `run_id` accepts the host's
+with `cord.semconv.version=0.3.0` (ADR-0013; #6 introduced 0.2.0). An optional `run_id` accepts the host's
 identity for independent Aegra executions (#9). Its Step and Attempt helpers inherit
 Graph/Run/Subject identity. The earlier sample and #5 evidence below retain
 their original `0.1.0` format; see the [query migration contract](archive-query.md)
 for the separate fresh capture and known result. Steps carry `cord.node.name` and
-a Step Outcome; Attempts additionally carry a positive `cord.step.attempt`, Tier,
-and an Attempt Outcome. Explicit parents keep Attempts siblings. Optional Signal
+a Step Outcome; Attempts additionally carry a positive `cord.step.attempt`
+and an Attempt Outcome. Tier is an optional graph-supplied annotation in 0.3.0.
+The query continues to accept 0.2.0 archives with Tier present. Explicit parents keep Attempts siblings. Optional Signal
 and cascade attributes are absent from this manually invoked fixture. Full
 prompts, diffs, and model outputs are not recorded by these helpers.
 

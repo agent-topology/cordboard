@@ -149,7 +149,7 @@ def query(paths: list[Path], *, reference: int, top: int = 10) -> list[dict]:
                     "missing explicit Graph/Run/Subject identity; legacy archives require re-emission")
             if kind == "run":
                 require(not span.get("parentSpanId"), "Run must be a root span")
-                require(attrs.get("cord.semconv.version") == SEMCONV_VERSION,
+                require(attrs.get("cord.semconv.version") in ("0.2.0", SEMCONV_VERSION),
                         "unsupported semantic convention version; re-emit with current instrumentation")
                 continue
             require(isinstance(attrs.get("cord.node.name"), str) and attrs["cord.node.name"].strip(),
@@ -160,9 +160,14 @@ def query(paths: list[Path], *, reference: int, top: int = 10) -> list[dict]:
                 continue
             require(type(attrs.get("cord.step.attempt")) is int and attrs["cord.step.attempt"] > 0,
                     "Attempt requires a positive attempt number")
-            require(isinstance(attrs.get("cord.tier"), str) and attrs["cord.tier"].strip(), "missing Attempt Tier")
             require(attrs.get("cord.outcome") in tuple(x.value for x in AttemptOutcome), "invalid Attempt outcome")
             step = parent(span, "step")
+            root = parent(step, "run")
+            # Historical 0.2 records required Tier. New graphs need not use or
+            # disclose models; any supplied Tier remains an opaque annotation.
+            if root["attributes"].get("cord.semconv.version") == "0.2.0" or "cord.tier" in attrs:
+                require(isinstance(attrs.get("cord.tier"), str) and attrs["cord.tier"].strip(),
+                        "missing or invalid Attempt Tier")
             require(attrs["cord.node.name"] == step["attributes"].get("cord.node.name"), "parent Node identity mismatch")
             if (attrs["cord.outcome"] == "escalated"
                     and reference - WINDOW_NS < span["endTimeUnixNano"] <= reference):
