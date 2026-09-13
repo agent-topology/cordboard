@@ -90,9 +90,15 @@ registration constraint. A Deployment may host multiple Graphs.
   the catalog, router, or viewer. Domain-specific example graphs and fixtures
   should remain separate from generic platform behavior.
 - Derive topology in the graph's own process through the public `agent-topology`
-  API. Keep Cordboard policy in `x-cord`; do not add it to upstream core structure
-  or the A2A Agent Card. Treat published structure as generated output and use
-  the explicit synchronization path to refresh it.
+  API. Consume the resulting document as published: do not add sections, rewrite
+  names or ids, or put Cordboard fields in it or in the A2A Agent Card. Treat
+  published structure as generated output and use the explicit synchronization
+  path to refresh it.
+- Do not create per-graph Cordboard configuration. Facts about a graph come from
+  the graph: `compile(name=...)`, `describe(graph_id=..., depth=...)`, and its
+  Aegra deployment file. Cordboard settings, when a slice needs them, describe
+  connections — deployments, triggers, Subject extraction, concurrency, expiry
+  (ADR-0014).
 - Use only public `agent-topology` and `redact-secret` APIs. Record missing
   upstream capabilities and reproductions in the
   [upstream requirements](docs/decisions/cordboard-upstream-requirements.md),
@@ -103,7 +109,7 @@ registration constraint. A Deployment may host multiple Graphs.
 - The caller selects the Graph/Assistant. Cordboard connects it through its API
   without interpreting graph payloads, prompts or model configuration. Models,
   provider keys, SDKs, gateway settings and retry/escalation policies belong to
-  the graph. Do not add model/Tier settings to `cord.yaml` or `x-cord`.
+  the graph.
 - Record graph-declared outcomes. Tier and model metadata are optional; never
   infer escalation from model strings or Tier order. Keep optional gateway
   launchers and provider-specific tests in examples, outside `cord-runtime`.

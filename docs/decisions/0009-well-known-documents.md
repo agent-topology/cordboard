@@ -85,6 +85,9 @@ RFC 8615는 새 well-known URI를 만들려면 **반드시 등록해야 한다**
 **`structure` 절에 cordboard의 개념이 하나도 없어야 한다.** Cordboard 승인 정책이 거기 들어가면 그건 표준이 아니라
 cordboard 포맷이다. 우리 것은 전부 `x-cord` 아래로 간다.
 
+> **2026-09-12 정정.** `x-cord` 절은 두지 않는다. cordboard는 이 문서에 아무것도 더하지 않는다
+> ([ADR-0014](0014-no-graph-descriptors.md)). 위 예제의 `x-cord` 줄은 역사적 기록이다.
+
 모드에 따라 모양이 바뀌면 소비자가 두 경우를 다 처리해야 한다. **한 그래프짜리 Deployment도 배열로 답한다.**
 
 ### 4. 이름은 `agent-topology`다. `agent-graph`가 아니다
@@ -106,6 +109,10 @@ cordboard 포맷이다. 우리 것은 전부 `x-cord` 아래로 간다.
 ### 7. 우리가 아닌 Deployment도 등록할 수 있다
 
 남이 만든 컨테이너가 `agent-topology.manifest.json`을 내면 등록된다. 안 내면 등록되지 않는다 — Manifest가 정체성이므로(ADR-0002) 없으면 등록할 게 없다.
+
+> **2026-09-12 정정.** 매니페스트를 내지 않는 Deployment도 연결된다
+> ([ADR-0015](0015-never-block-connection.md)). 매니페스트는 정체성이 아니라 뷰어의 선택적 입력이다.
+> 내지 않으면 그림 없이 연결·기록된다.
 
 ---
 
@@ -203,11 +210,11 @@ if "graphs" in doc: ... else: ...   # 매번, 모든 소비자에서
 ## Action Items
 
 1. [ ] `structure` 절은 `agent-topology`가 정의한다 — cordboard는 스키마를 소유하지 않는다
-1b. [ ] `x-cord` 확장 스키마 정의 — subject · approval · triggers
+1b. [x] ~~`x-cord` 확장 스키마 정의~~ → ADR-0014로 폐기
 2. [ ] Agent Card 생성기 — A2A 스펙 필드만. 우리 필드 0개
 3. [ ] Aegra 설정의 `http.app`으로 두 라우트 마운트하는 것을 `cord up`이 자동 처리
-4. [ ] 카탈로그가 두 문서를 긁는 수집기. `agent-topology.manifest.json`이 없거나 `structure` 절이 없으면 등록 거부
-5. [ ] `cord.yaml`의 `name`/`version`/`description`을 A2A 대응 필드와 같은 이름으로 정의
+4. [ ] 카탈로그가 두 문서를 긁는 수집기. ~~`agent-topology.manifest.json`이 없거나 `structure` 절이 없으면 등록 거부~~ → 없으면 "그림 없음" 상태, 스키마 위반이면 경고 (ADR-0015)
+5. [x] ~~`cord.yaml`의 `name`/`version`/`description`을 A2A 대응 필드와 같은 이름으로 정의~~ → ADR-0014로 폐기. 이름은 그래프의 `compile(name=...)`
 6. [ ] Agent Card 스펙 준수 검증 — 우리 카드가 표준 파서에 통과하는지 확인
 7. [ ] 슬라이스 1 이후: `agent-topology.manifest.json` 스펙 초안을 쓸지 판단. 쓴다면 IANA provisional 등록 검토
 
@@ -217,3 +224,25 @@ if "graphs" in doc: ... else: ...   # 매번, 모든 소비자에서
 [ADR-0013](0013-switchboard-boundary.md)이 모델 소유권의 현재 결정이다.
 `x-cord`의 `tiers` 계획을 철회한다. 모델·Tier 정책·공급자 키는
 발견 문서의 Cordboard 계약이 아니다. 본문 예제와 Action 1b에서 이를 제거했다.
+
+
+## 정정 — cordboard 확장 폐기 (2026-09-12)
+
+[ADR-0014](0014-no-graph-descriptors.md)가 매니페스트 안의 cordboard 확장을 폐기했다.
+`agent-topology.manifest.json`은 그래프의 생산자가 낸 문서 **그대로**다. 결정 3의 "`structure`
+절에 cordboard의 개념이 없어야 한다"는 더 강해진다 — 문서 어디에도 cordboard 절이 없다.
+
+결정 6의 조립 설명 "`x-cord` 절은 `cord.yaml`이, Agent Card는 둘의 교집합이 만든다"도 철회한다.
+Agent Card의 이름은 그래프의 `compile(name=...)`에서 오고, 카드는 등록 필수가 아니다.
+Subject·승인·트리거는 그래프 문서의 절이 아니라 연결 설정이며, 필요한 슬라이스에서 보드 단위로 정한다.
+
+
+## 정정 — 매니페스트는 연결의 전제조건이 아니다 (2026-09-12)
+
+[ADR-0015](0015-never-block-connection.md)가 결정 7의 "Manifest를 안 내면 등록되지 않는다"를
+대체한다. 연결에는 주소가 있는 Deployment와 호출자가 고른 그래프만 필요하고, 기록에는 span만
+필요하다. #7과 #9의 실행이 매니페스트 없이 연결·기록됐다.
+
+두 문서의 모양, 배열 규약, Agent Card에 cordboard 필드를 넣지 않는다는 결정은 그대로다. 바뀌는
+것은 두 문서가 **있을 때 쓰는 것**이 되었다는 점이다. 매니페스트가 없으면 뷰어는 그림 없이 실행
+기록만 보여주고, 스키마를 어기면 그 문서를 쓰지 않고 경고한다.

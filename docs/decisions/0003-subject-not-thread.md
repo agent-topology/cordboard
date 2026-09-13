@@ -214,8 +214,8 @@ Subject를 선택 필드로 두면 값이 없는 Run이 생기고, 그러면 묶
 
 ## Action Items
 
-1. [ ] `cord.yaml`에 `subject: {type, from}` 스키마 정의. `from`은 입력에서 뽑는 식
-2. [ ] 카탈로그 등록 검증에 Subject 추출식 오류 검사 추가 (경고)
+1. [x] ~~`cord.yaml`에 `subject: {type, from}` 스키마 정의~~ → ADR-0014로 폐기. 추출식은 Rule에 속한다 (슬라이스 3)
+2. [x] ~~카탈로그 등록 검증에 Subject 추출식 오류 검사 추가~~ → ADR-0014로 폐기. 검사는 Rule 검증에서 한다
 3. [x] `cord-runtime`이 Run 루트 Span에 `cord.subject.id`와 `cord.subject.type` 기록 (#5, #9 통합 검증)
 4. [x] #10 Collector Langfuse 분기에서 `cord.subject.id` → `langfuse.session.id`, 공개 trace `sessionId` 검증
 5. [ ] 수동 실행의 합성 Subject 생성 규칙 확정
@@ -258,3 +258,13 @@ Collector의 Langfuse 전용 분기에서 이미 처리된 Subject를 `langfuse.
 복사한다. self-hosted 3.225.7의 공개 trace 응답 `sessionId`와 아카이브의 Subject가
 같은지 확인했다. Thread를 묶음 키로 쓰지 않으며 기존 아카이브는 바꾸지 않는다.
 [공개 계약과 실제 검증](../langfuse.md)을 따른다.
+
+
+## 정정 — Subject 추출의 위치 (2026-09-12)
+
+Subject 추출식을 그래프마다 붙는 설정에 두던 계획(Action 1·2)을 폐기한다
+([ADR-0014](0014-no-graph-descriptors.md)). 한 그래프를 여러 Signal이 시작할 수 있고, Signal마다
+입력의 모양과 묶는 기준이 다르다. 추출식은 그래프가 아니라 **연결**, 즉 어떤 Signal이 어떤 Graph를
+시작하는지 정하는 Rule에 속하며 슬라이스 3에서 Rule과 함께 정한다. 지금처럼 호출자가 실행을
+시작할 때는 호출자가 Subject를 직접 넘긴다 (`execute(endpoint, assistant, subject, graph_input)`).
+Subject가 필수 불투명 문자열이라는 결정은 그대로다.

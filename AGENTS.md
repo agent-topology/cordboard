@@ -32,7 +32,11 @@ something works, and do not record an unrun check as passed.
   and Tier policies belong to that graph. Do not require model configuration to
   connect it. ADR-0013 supersedes ADR-0004; optional LiteLLM code is an example.
 - Use public `agent-topology` and `redact-secret` APIs. Their formats and
-  detectors belong upstream; Cordboard policy belongs in `x-cord`.
+  detectors belong upstream.
+- Cordboard connects graphs and records runs; it does not describe a graph.
+  There is no per-graph configuration file and no Cordboard extension inside a
+  graph's manifest. Before adding any setting, ask whether it describes one
+  graph or a connection; only connections belong to Cordboard (ADR-0014).
 - Explicit ADR corrections supersede older examples and HTML artifacts. Check
   the open documentation issues in `ARCHITECTURE.md` before implementing an
   affected contract. Do not silently turn conflicting notes into decisions.

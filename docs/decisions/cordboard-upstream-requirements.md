@@ -4,6 +4,27 @@
 **cordboard가 우회할 목록이 아니라 업스트림에 올릴 목록이다.** 우회를 만들면 스펙이 성숙하지 않는다.
 
 검증 환경 — `agent-topology-langgraph` 0.1.0b2, LangGraph 1.2.11, Python 3.12.
+아래 상태표는 0.1.0b3로 다시 실측했다.
+
+---
+
+## 현재 상태 — 0.1.0b3 실측과 cordboard에서 걸리는 곳 (2026-09-12)
+
+[ADR-0014](0014-no-graph-descriptors.md)와 [ADR-0015](0015-never-block-connection.md) 이후
+cordboard는 그래프를 묘사하지 않고, 매니페스트는 뷰어의 선택적 입력이며, 카탈로그 규칙은
+전부 경고다. 그래서 아래 어느 항목도 **연결을 막지 않는다.** 표의 마지막 열은 "업스트림이
+해결했나"가 아니라 "cordboard가 이걸 실제로 어디에 쓰나"다.
+
+| 항목 | 0.1.0b3 실측 | cordboard에서 걸리는 곳 |
+|---|---|---|
+| AT-1 서브그래프 부모 소실 | **열림.** `depth=1`에서 부모 `sub`가 노드 목록에 없다. 해석 확장은 `sub:inner`를 `scope-not-inspected`로 표시하고 `expanded-subgraph-metadata` 갭을 낸다 | 뷰어의 span 대조. 그래프가 스스로 `depth≥1`을 고를 때만. 기본은 0 |
+| AT-2 sentinel | **실험적 해결.** 프레임워크 중립 `x-topology-interpretation.nodes[].sentinel`(revision 1). 코어는 그대로이고 `entryNodeIds`는 여전히 `__start__` | 뷰어가 `__start__`/`__end__`를 그릴지. 표시 문제 |
+| AT-3 팬아웃 병렬 의미 | **실험적 해결.** 팬아웃 노드에 `branch.value = "all-declared"`(revision 1). 코어는 아님 | R3 **경고**의 품질. `unknown`이면 "확인할 수 없음" |
+| AT-4 joins | **정의로 해결.** `joins`는 명시적 AND 합류다. 일반 엣지 둘이 모이는 것은 join이 아니다. 헬퍼 `derived_join_edges(structure)` | 뷰어의 합류점 표시 |
+| AT-5 이름·id | **전제가 틀렸고 이후 해결.** 이름은 `compile(name=...)`, id는 `describe(graph_id=...)` | cordboard의 요구가 아니다. 문서를 합치거나 고치지 않는다 |
+| AT-6 LangGraph 범위 | 릴리스 노트상 1.2.10–1.2.11 그대로 (범위 밖 버전은 실측하지 않았다) | 뷰어가 **그림을 그릴 수 있는** 범위. 범위 밖 그래프도 그림 없이 연결·기록된다 |
+
+같은 그래프의 `structureHash`는 기본 id에서 0.1.0b2와 0.1.0b3가 같았다(`192398ec…`).
 
 ---
 
@@ -63,6 +84,9 @@ LangGraph에서 인터럽트 ID가 충돌해 그 Run이 영구히 재개 불가�
 
 **cordboard에 미치는 영향:** 거부 규칙의 근거. LangGraph에서는 현재 해석이 맞으므로 동작한다.
 
+> **2026-09-12 정정.** R3은 거부가 아니라 경고다([ADR-0015](0015-never-block-connection.md)).
+> 0.1.0b3의 실험적 branch 해석이 이 질문에 답했고, 확인되지 않는 경우는 경고가 불확실성으로 표시한다.
+
 ---
 
 ### AT-4 · `joins`가 비어 있다 🟡
@@ -93,6 +117,12 @@ describe(compiled_graph)   # → id: "main", name: "LangGraph"
 
 **필요한 것:** `describe(..., name=...)` 또는 이름 소유권이 소비자에게 있다는 명시.
 
+> **2026-09-12 정정.** 이 항목의 전제가 틀렸다. 표시 이름은 원래 `StateGraph.compile(name=...)`로
+> 그래프가 정할 수 있었고, `describe()`가 그 값을 그대로 옮긴다. 실제 결함은 graph id가 `main`으로
+> 고정된 것이었고, [agent-topology#127](https://github.com/agent-topology/agent-topology/issues/127)을
+> 거쳐 0.1.0b3의 `describe(graph_id=...)`로 해결됐다. cordboard는 생성 문서를 덮어쓰지도 합치지도
+> 않으므로([ADR-0014](0014-no-graph-descriptors.md)) 이 항목은 cordboard의 요구가 아니다.
+
 ---
 
 ### AT-6 · LangGraph 지원 범위가 좁다 🟡
@@ -105,6 +135,11 @@ cordboard는 "그래프마다 자기 의존성"을 원칙으로 두는데(ADR-00
 
 **필요한 것:** 지원 범위 확장 정책. 새 LangGraph 마이너가 나올 때 얼마나 빨리 따라가는지.
 
+> **2026-09-12 정정.** "매니페스트가 없으면 등록도 안 되기 때문에 우회가 없다"는 더 이상 맞지 않다.
+> 매니페스트는 연결의 전제조건이 아니다([ADR-0015](0015-never-block-connection.md)). 범위 밖 그래프는
+> 그림 없이 연결·기록되므로, 이 항목은 연결 조건이 아니라 뷰어가 그림을 그릴 수 있는 범위의 문제다.
+> 범위를 넓혀 달라는 요구 자체는 여전히 유효하다.
+
 ---
 
 ### 잘 되어 있는 것 — 기록해 둔다
@@ -112,7 +147,7 @@ cordboard는 "그래프마다 자기 의존성"을 원칙으로 두는데(ADR-00
 - **beta.1 → beta.2에서 같은 그래프의 `structureHash`가 동일했다.** 포맷 안정성의 실측 증거
 - `completeness.gaps`(그래프별)와 `producerLimitations`(생산자 전체) 분리. 항상 존재하는 한계가
   모든 문서를 incomplete로 만들지 않는다
-- `edges[].kind`와 `nodes[].interrupts`가 코어에 있어, 거부 규칙이 확장을 읽지 않고 판정된다
+- `edges[].kind`와 `nodes[].interrupts`가 코어에 있어, R3 규칙이 확장을 읽지 않고 판정된다 (R3은 이제 경고, ADR-0015)
 - `agt`의 종료 코드 8종이 구분돼 있어, 호출자가 원인별로 다르게 대응할 수 있다
 
 ---

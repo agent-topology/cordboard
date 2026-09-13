@@ -219,7 +219,7 @@ Option A였다면 cordboard 안에 묻힌 코드를 들어내야 했을 것이�
 5. [x] 0.1.0-beta.1 퍼블리시 (PyPI 2 · npm 2)
 6. [ ] LangChain(LCEL) 또는 **구조적으로 다른** 생산자 — 지금 두 생산자는 같은 LangGraph 모델을 쓰므로 벤더 중립성이 아직 증명되지 않았다 (README가 직접 인정)
 6. [ ] cordboard 쪽: `agent-topology`를 의존성으로 고정, 버전 명시
-7. [ ] cordboard 쪽: `x-cord` 확장 스키마 정의 (ADR-0009 Action 1b)
+7. [x] ~~cordboard 쪽: `x-cord` 확장 스키마 정의 (ADR-0009 Action 1b)~~ → ADR-0014로 폐기
 8. [ ] **cordboard는 `agent-topology`의 공개 API만 쓴다**를 규칙으로 명시. 내부 경로 참조 금지
 
 
@@ -228,3 +228,14 @@ Option A였다면 cordboard 안에 묻힌 코드를 들어내야 했을 것이�
 [ADR-0013](0013-switchboard-boundary.md)이 모델 소유권의 현재 결정이다.
 `x-cord.tiers` 예제를 제거했다. Cordboard 확장은 연결·기록 정책을 담고,
 모델 매핑이나 Tier 정책을 담지 않는다. upstream topology 형식은 변경하지 않는다.
+
+
+## 정정 — cordboard 확장 폐기 (2026-09-12)
+
+[ADR-0014](0014-no-graph-descriptors.md)가 매니페스트 안의 cordboard 확장을 폐기했다. 위 예제의
+`x-cord` 줄과 Action 7은 역사적 기록이며, 바로 위 #7 정정의 "Cordboard 확장은 연결·기록 정책을
+담고"도 대체된다. 연결 정책은 그래프 문서가 아니라 보드 단위 설정에 속한다.
+
+포맷을 독립 프로젝트로 분리한다는 이 ADR의 결정은 그대로다. cordboard는 그 포맷의 소비자일 뿐
+확장을 붙이지 않는다. `x-*` 확장 자리는 포맷의 기능으로 남고, "`x-cord` 외의 확장이 생기면"이라는
+재검토 조건은 cordboard에 대해서는 더 이상 걸리지 않는다.

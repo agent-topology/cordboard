@@ -23,7 +23,11 @@ The remaining platform and `cord` lifecycle commands are still planned.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
-The HTML artifacts explain the design but contain superseded material. The
+[docs/artifacts/cordboard.html](docs/artifacts/cordboard.html) summarizes the
+design as of 2026-09-12, and
+[docs/artifacts/cordboard-glossary.html](docs/artifacts/cordboard-glossary.html)
+maps each shared word to its meaning in Cordboard documents (ADR-0002). Where
+either disagrees with an ADR, the ADR wins. The
 [upstream requirements](docs/decisions/cordboard-upstream-requirements.md) record
 integration findings; conflicts with accepted decisions are identified below
 rather than silently resolved. Dependency release statements in those documents
@@ -88,7 +92,7 @@ The definitions come from [ADR-0002](docs/decisions/0002-vocabulary.md),
 
 | Term | Meaning |
 | --- | --- |
-| Graph | Executable orchestration unit that describes itself, accepts Runs, and emits spans; not a repository identity |
+| Graph | Executable orchestration unit that accepts Runs and emits spans, and may publish a self-description; not a repository identity |
 | Deployment | Addressable process hosting one or more Graphs |
 | Assistant | Graph plus fixed configuration |
 | Subject | Required opaque URI string identifying the external target of a Run |
@@ -130,56 +134,71 @@ and its violated rules.
 
 [ADR-0009](docs/decisions/0009-well-known-documents.md),
 [ADR-0011](docs/decisions/0011-manifest-derivation.md), and
-[ADR-0012](docs/decisions/0012-topology-spec-split.md) separate two documents:
+[ADR-0012](docs/decisions/0012-topology-spec-split.md) separate two documents a
+Deployment may publish. Neither is required to connect or record a Graph
+([ADR-0015](docs/decisions/0015-never-block-connection.md)): connecting needs a
+reachable Deployment and the Graph the caller selects, and recording needs spans.
+The topology manifest is optional input for the viewer.
 
 - `/.well-known/agent-card.json`: the external A2A contract, with no Cordboard fields.
 - `/.well-known/agent-topology.manifest.json`: internal structure in the
-  independent topology format, with Cordboard policy under `x-cord`.
+  independent topology format, exactly as the graph's producer emitted it.
 
 The topology document always has a `graphs` array, including for one Graph.
 This array convention does not redefine the A2A Agent Card format.
 
-`cord.yaml` supplies connection declarations such as Subject extraction,
-approval, concurrency, and triggers. Model/Tier policies and provider keys are
-excluded from `cord.yaml` and `x-cord`. The graph process calls `agent-topology`
-to derive structure from its compiled graph. Cordboard consumes the resulting
-JSON and composes its extension; it does not implement topology introspection.
-The upstream schema is authoritative for the precise wire format: older
-`derived`/`declared` terminology describes ownership, not reliable literal keys.
+Cordboard does not describe graphs
+([ADR-0014](docs/decisions/0014-no-graph-descriptors.md)). The graph process
+calls `agent-topology` to derive structure from its compiled graph, and the graph
+supplies its own display name (`compile(name=...)`). The document's
+`graphs[].id` is an address inside that document, not an identity; a single-graph
+document can keep the default `main`, and changing it changes `structureHash`.
+Cordboard consumes the resulting JSON unchanged: it adds
+no extension, rewrites no identity, and does not implement topology
+introspection. Settings Cordboard needs in later slices describe connections —
+deployments, triggers, Subject extraction, concurrency, approval expiry — never a
+single graph. The upstream schema is authoritative for the precise wire format;
+older `derived` wording in the ADRs is not a literal key.
 
 `cord up` is intended to compare freshly derived structure with the published
-structure hash and refuse startup on drift. `cord sync` is the explicit refresh
-path. Source-file hashes and Mermaid text are not the comparison contract.
-JSON is authoritative; Mermaid is a rendering aid.
+structure hash and warn on drift without stopping startup. `cord sync` is the
+explicit refresh path. Source-file hashes and Mermaid text are not the comparison
+contract. JSON is authoritative; Mermaid is a rendering aid.
 
 Subgraphs default to opaque nodes (`depth=0`). Per-graph `completeness.gaps`
 and general `producerLimitations` must both be visible; a producer limitation
-does not itself make every document incomplete. These limitations are warnings,
-not independent reasons to refuse registration.
+does not itself make every document incomplete. These limitations are warnings.
 
 ## Catalog validation
 
-[ADR-0007](docs/decisions/0007-catalog-rejection.md) limits rejection to:
+The catalog never refuses to connect a Graph
+([ADR-0015](docs/decisions/0015-never-block-connection.md), replacing the rejection
+rules of [ADR-0007](docs/decisions/0007-catalog-rejection.md)). What the manifest
+can reveal is shown, not enforced:
 
-| Rule | Point | Reason |
-| --- | --- | --- |
-| R1 | Registration | Required derived topology is missing |
-| R2 | Startup | Derived structure differs from the published structure |
-| R3 | Registration | An interrupt is in a parallel branch covered by the rule |
+| Manifest state | Catalog and viewer behavior |
+| --- | --- |
+| Absent | Connected and recorded normally; the viewer shows recorded execution without a topology |
+| Present and valid | Topology drawn; recorded execution correlated against it |
+| Present but schema-invalid | Document ignored with a warning; connection and recording unaffected |
+| Drifted (R2) | Warning; the topology is shown as stale and recorded execution is not correlated against it |
 
-R3 uses core edge-kind and interrupt fields according to the ADR's 2026-09-11
-correction. Static interrupts can be derived; dynamic interrupts depend on
-author declarations. Undeclared dynamic calls cannot be discovered from the
-topology alone. Cross-framework parallel semantics remain an upstream question
-(AT-3), so the rule is not evidence of a universal guarantee.
+A drifted picture is the harm ADR-0011 worried about, so the mitigation lives in
+what the viewer displays rather than in a log line: a stale topology must never
+look current.
 
-R3 has an explicit `unsafe.allow_parallel_interrupt` override with persistent
-catalog/viewer disclosure. R1 and R2 have no override. Other conditions, such as
-partial policy declarations, missing Agent Cards, or unreachable Deployments,
-produce warnings or status information. A rejection must explain the rule,
-cause, and repair. New rejection rules must satisfy the ADR's three conditions:
-document-only judgment, effectively no false positives, and silent or
-irreversible harm if allowed.
+R3 is a warning: an interrupt in a direct fan-out branch, judged from core
+edge-kind and interrupt fields. It covers static interrupts only; dynamic
+`interrupt()` calls are not visible in the topology and have no declaration path
+(ADR-0014). Whether a fan-out runs all branches comes from `agent-topology`'s
+experimental branch interpretation; when that is `unknown`, the warning says the
+condition cannot be confirmed. Warnings need no override.
+
+Missing Agent Cards, derivation gaps, producer limitations, and unreachable
+Deployments remain warnings or status information. A new rejection rule would
+have to describe the connection rather than how a Graph is built, and satisfy
+ADR-0007's three conditions: document-only judgment, effectively no false
+positives, and silent or irreversible harm if allowed.
 
 ## Model and telemetry paths
 
@@ -259,14 +278,13 @@ as executable specifications.
 
 | Finding | Sources and required follow-up |
 | --- | --- |
-| Wire examples span multiple topology revisions | ADR-0007/0011 retain literal `derived` references; ADR-0009/0012 use `structure` and `x-cord`. ADR-0011 also mixes old source-hash/`derive.xray` text with structure-hash/`derive.depth` corrections. Validate against a pinned upstream schema before implementing. |
-| R3 index summary is stale | The decision index's 2026-09-10 summary calls R3 LangGraph-only; ADR-0007 explicitly retracts that on 2026-09-11. AT-3 still asks for confirmation of parallel semantics. |
-| Model configuration in historical HTML | ADR-0013 supersedes shared LiteLLM, platform Tier policy, and provider credentials as a completion gate. Both HTML artifacts carry a notice; their diagrams and embedded examples are historical. |
-| Vocabulary artifacts predate ADR-0002 | Both HTML artifacts retain banned-word rules or old Graph/Manifest definitions; ADR-0003 also retains a banned-word reference. Use context-sensitive mappings, contract-based Graph identity, and `cord.cascade.depth`. |
+| Wire examples span multiple topology revisions | ADR-0007/0011 retain literal `derived` references; ADR-0009/0012 use `structure`, and their Cordboard-extension examples are withdrawn by ADR-0014. ADR-0011 also mixes old source-hash/`derive.xray` text with structure-hash/`derive.depth` corrections. Validate against a pinned upstream schema before implementing. |
+| R3 index summary is stale | The decision index's 2026-09-10 summary calls R3 a LangGraph-only rejection rule; ADR-0007 retracts the LangGraph-only claim on 2026-09-11, and ADR-0015 makes R3 a warning. |
+| ADR-0003 predates ADR-0002's mapping rule | Both HTML artifacts were rebuilt on 2026-09-12 with definitions and mappings instead of banned words. ADR-0003 still retains a banned-word reference; read it through ADR-0002's mapping rule and `cord.cascade.depth`. |
 | ADR-0010 is unwritten | The index labels the DeepAgents template decision Accepted but explicitly says no ADR file exists. The design direction is recorded, but its formal ADR remains pending. |
 
-The upstream log additionally tracks expanded-subgraph identity (AT-1), sentinel
-semantics (AT-2), joins (AT-4), graph-name ownership (AT-5), version support
-(AT-6), and the resolved exporter integration (RS-1). It also records a beta.2 test
-environment while ADR-0011 still proposes a beta.1 dependency pin. These are
-topology integration inputs to verify, not installed topology dependencies.
+The [upstream requirements](docs/decisions/cordboard-upstream-requirements.md)
+record each `agent-topology` finding against its measured `0.1.0b3` behavior and
+where Cordboard actually uses it. After ADR-0014 and ADR-0015 none of them can
+block a connection; they affect viewer and warning quality only. No
+`agent-topology` package is an installed Cordboard dependency yet.

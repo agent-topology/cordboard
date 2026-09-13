@@ -277,9 +277,9 @@ OTel이 traces·metrics·logs를 "signals"라 부르는 것을 첫 판에서 놓
 
 ## Action Items
 
-1. [ ] **cordboard 용어 사전를 금지 중심에서 정의 중심으로 다시 만든다.** 각 항목에 "cordboard 문서에서의 뜻"을 넣는다
+1. [x] **cordboard 용어 사전를 금지 중심에서 정의 중심으로 다시 만든다.** 각 항목에 "cordboard 문서에서의 뜻"을 넣는다 — [용어집](../artifacts/cordboard-glossary.html) 2026-09-12. 속성 키·Langfuse 매핑은 코드와 실측 문서에 대조했다
 2. [ ] `cord.chain.depth` → `cord.cascade.depth` 개명. 명사도 Cascade Depth
-3. [ ] 설계 문서(HTML 아티팩트)의 금지어 섹션을 글로서리 링크로 교체
+3. [x] 설계 문서(HTML 아티팩트)의 금지어 섹션을 글로서리 링크로 교체 — 2026-09-12 설계 현황 재작성
 4. [ ] Outcome 두 목록을 `cord-runtime`에 enum으로 정의. 서로 섞이면 타입 오류 (ADR-0008 Action 1과 동일)
 5. [x] #5의 `cord_runtime.execution.run`이 Run 루트에 `cord.semconv.version=0.1.0` 기록 (2026-09-11)
 6. [ ] `OTEL_SEMCONV_STABILITY_OPT_IN` 설정을 고정하고 값을 문서화
@@ -307,3 +307,22 @@ OTel이 traces·metrics·logs를 "signals"라 부르는 것을 첫 판에서 놓
 모델 구성은 그래프 내부다. `cord.tier`는 선택적인 불투명한 관측 라벨이며,
 Run semconv 0.3.0에서는 Tier 없는 Attempt를 허용한다. 질의는 기존 0.2.0의
 Tier 필수 계약도 계속 검증한다. 모델명과 Tier를 알지 않아도 실행을 연결하고 기록한다.
+
+
+## 정정 — Graph와 Manifest의 정의 (2026-09-12)
+
+위 어휘표의 두 정의를 고친다.
+
+| 이름 | 이전 정의 | 현재 정의 |
+|---|---|---|
+| Graph | Manifest로 자기를 설명하고, Run을 받고, Span을 낸다 | Run을 받고 Span을 낸다. Manifest로 자기를 설명**할 수 있다** |
+| Manifest | `cord.yaml`(선언) + `at.structure`(파생). Graph의 정체성 그 자체 | 그래프가 `agent-topology`로 낸 **자기 설명 문서 그대로**. 뷰어의 선택적 입력 |
+
+근거는 둘이다. [ADR-0014](0014-no-graph-descriptors.md)가 선언 절(`cord.yaml`)을 없앴고,
+[ADR-0015](0015-never-block-connection.md)가 매니페스트를 연결의 전제조건에서 뺐다. 연결의
+정체성은 어느 Deployment의 어느 그래프인가에서 오고, 실행 기록의 정체성은 그래프가 붙이는
+`cord.graph.id`다(위 #6 정정). 매니페스트는 정체성이 아니다.
+
+위 #6 정정의 "upstream Manifest 이름 소유권(AT-5)을 새로 정의하지 않는다"는 전제가 사라졌다.
+표시 이름은 `compile(name=...)`로 그래프가 정한다. 매니페스트 안의 `graphs[].id`는 업스트림
+정의상 문서 안 주소일 뿐이라 `cord.graph.id`와 비교할 대상이 아니다.

@@ -13,1136 +13,690 @@
   --adopt:#1D4E79; --adopt-bg:#E2EAF1;
   --graph:#8F6414; --graph-bg:#F0E8D6;
   --build:#A32B2B; --build-bg:#F5E4E4;
-  --out:#8A8F96; --sp:clamp(1rem,3vw,1.75rem);
+  --ok:#2E6B45; --ok-bg:#E1EEE5;
+  --sp:clamp(1rem,3vw,1.75rem);
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--paper);color:var(--ink);
   font-family:"IBM Plex Sans KR",system-ui,sans-serif;font-weight:400;line-height:1.7;letter-spacing:-.005em}
 code,.mono{font-family:"IBM Plex Mono","IBM Plex Sans KR",monospace;font-size:.88em;letter-spacing:0}
+a{color:var(--adopt);text-underline-offset:2px}
 
+.wrap{max-width:1120px;margin:0 auto;padding:0 var(--sp)}
 .spine{position:relative}
 .spine::before{content:"";position:absolute;left:calc(var(--sp) + 7px);top:0;bottom:0;width:1px;background:var(--rule)}
-@media(max-width:820px){.spine::before{display:none}}
 section{position:relative;padding:clamp(2.6rem,6vw,4.2rem) 0 0}
 .sec-inner{max-width:1120px;margin:0 auto;padding:0 var(--sp) 0 calc(var(--sp) + 48px)}
-@media(max-width:820px){.sec-inner{padding-left:var(--sp)}}
 .dot{position:absolute;left:calc(var(--sp) + 1px);width:13px;height:13px;border-radius:50%;
   background:var(--paper);border:1px solid var(--ink);margin-top:.62em}
-@media(max-width:820px){.dot{display:none}}
+@media(max-width:820px){.spine::before,.dot{display:none}.sec-inner{padding-left:var(--sp)}}
 
 h1,h2,h3{font-weight:600;line-height:1.25;letter-spacing:-.02em;margin:0}
+h1{font-size:clamp(2.4rem,7vw,4.4rem);font-weight:700;letter-spacing:-.035em}
 h2{font-size:clamp(1.3rem,3vw,1.8rem)}
-h3{font-size:1.02rem;font-weight:600}
+h3{font-size:1.02rem}
 p{margin:.7rem 0}
-.lede{color:var(--soft);max-width:64ch;font-weight:300;font-size:1.02rem}
-.note{font-size:.86rem;color:var(--faint);max-width:68ch}
+.kicker{font-family:"IBM Plex Mono",monospace;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:.5rem}
+.lede{color:var(--soft);max-width:66ch;font-weight:300;font-size:1.04rem}
+.note{font-size:.86rem;color:var(--faint);max-width:70ch}
 
-.hero{padding-top:clamp(2.5rem,7vw,4.5rem)}
-.hero h1{font-size:clamp(1.95rem,6vw,3.7rem);font-weight:700;letter-spacing:-.045em;line-height:1.04}
-.hero .sub{font-size:clamp(1rem,2.2vw,1.22rem);font-weight:300;color:var(--soft);max-width:50ch;margin-top:1rem;line-height:1.55}
-.tagline{font-size:.8rem;color:var(--faint);border-bottom:1px solid var(--rule);
-  padding-bottom:.7rem;margin-bottom:1.5rem;display:flex;gap:.9rem;flex-wrap:wrap}
-.tagline b{font-weight:500;color:var(--soft)}
-.stage{margin-top:clamp(1.6rem,4vw,2.6rem);background:var(--plate);border:1px solid var(--rule);
-  padding:clamp(.75rem,2.5vw,1.4rem)}
-.stage svg{display:block;width:100%;height:auto}
-.legend{display:flex;gap:1.4rem;flex-wrap:wrap;margin-top:1rem;padding-top:.9rem;
-  border-top:1px solid var(--rule);font-size:.8rem;color:var(--soft)}
-.legend span{display:flex;align-items:center;gap:.45rem}
-.swatch{width:14px;height:9px;display:inline-block;flex:none}
+/* header */
+.top{border-bottom:1px solid var(--rule);padding:1.1rem 0}
+.top .wrap{display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;align-items:baseline;justify-content:space-between}
+.brand{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:1.05rem}
+.brand span{color:var(--faint);font-weight:400;margin-left:.6rem;font-size:.86rem}
+.status{font-size:.82rem;color:var(--soft)}
 
-.premise{margin-top:1.5rem;border-left:3px solid var(--build);padding:.2rem 0 .2rem 1.1rem}
-.premise p{font-size:.92rem;color:var(--soft);margin:.35rem 0;max-width:66ch}
-.premise b{color:var(--ink);font-weight:500}
+/* hero */
+.hero{padding:clamp(2.4rem,7vw,4.6rem) 0 1rem}
+.hero .lede{font-size:1.12rem;margin-top:1.2rem}
+.legend{display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;margin:1.4rem 0 .6rem;font-size:.8rem;color:var(--soft)}
+.legend i{display:inline-block;width:.8rem;height:.8rem;border-radius:2px;margin-right:.4rem;vertical-align:-1px}
+figure{margin:1rem 0 0;background:var(--plate);border:1px solid var(--rule);border-radius:6px;padding:clamp(.6rem,2vw,1.2rem);overflow-x:auto}
+figure svg{display:block;width:100%;min-width:760px;height:auto}
+figcaption{font-size:.8rem;color:var(--faint);margin-top:.6rem}
 
-.scope{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:1.6rem}
-@media(min-width:820px){.scope{grid-template-columns:1fr 1fr}}
-.scope > div{background:var(--plate);padding:1.3rem 1.2rem}
-.scope h3{margin-bottom:.75rem}
-.scope ul{margin:0;padding:0;list-style:none;font-size:.89rem}
-.scope li{display:flex;gap:.6rem;padding:.3rem 0;color:var(--soft);align-items:baseline;line-height:1.55}
-.scope .mk{flex:none;width:1rem;font-family:"IBM Plex Mono",monospace;font-size:.8rem}
-.scope .in .mk{color:var(--build)}
-.scope .out .mk{color:var(--out)}
-.scope .out li{color:var(--faint)}
-.scope b{color:var(--ink);font-weight:500}
+/* blocks */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1.4rem}
+.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-top:1.4rem}
+@media(max-width:900px){.grid3,.grid2{grid-template-columns:1fr}}
+.card{background:var(--plate);border:1px solid var(--rule);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-bottom:.4rem}
+.card ul{margin:.3rem 0 0;padding-left:1.1rem}
+.card li{margin:.2rem 0}
+.own-build{border-top:3px solid var(--build)}
+.own-adopt{border-top:3px solid var(--adopt)}
+.own-graph{border-top:3px solid var(--graph)}
+.tag{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.04em;display:inline-block;padding:.05rem .45rem;border-radius:3px;margin-bottom:.5rem}
+.tag.build{background:var(--build-bg);color:var(--build)}
+.tag.adopt{background:var(--adopt-bg);color:var(--adopt)}
+.tag.graph{background:var(--graph-bg);color:var(--graph)}
+.callout{margin-top:1.4rem;border-left:3px solid var(--ink);background:var(--plate);padding:.9rem 1.1rem;max-width:72ch}
+.callout strong{font-size:1.06rem}
+.fail{border-top:3px solid var(--ink)}
 
-.fails{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:1.5rem}
-@media(min-width:760px){.fails{grid-template-columns:1fr 1fr}}
-.fail{background:var(--plate);padding:1.2rem 1.15rem}
-.fail .tag{font-size:.75rem;font-weight:500;color:var(--build);display:block;margin-bottom:.3rem}
-.fail p{font-size:.88rem;color:var(--soft);margin:.4rem 0 0}
-.fail .sym{margin-top:.7rem;font-size:.82rem;color:var(--ink);border-left:2px solid var(--build);padding-left:.7rem}
+.tw{overflow-x:auto;margin-top:1.2rem;border:1px solid var(--rule);border-radius:6px;background:var(--plate)}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;vertical-align:top;padding:.6rem .8rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;font-size:.8rem;color:var(--soft);background:#EEF0F3}
+tr:last-child td{border-bottom:none}
+td code{white-space:nowrap}
 
-.code{background:var(--ink);color:#D6DCE3;font-family:"IBM Plex Mono",monospace;font-size:.77rem;
-  line-height:1.75;padding:1.05rem 1.15rem;overflow-x:auto;margin:1rem 0;white-space:pre}
-.code .c{color:#7C868F}.code .k{color:#E5A0A0}.code .v{color:#9EC1DC}
-.two{display:grid;gap:1.5rem;margin-top:1.3rem}
-@media(min-width:900px){.two{grid-template-columns:1fr 1fr;gap:2rem}}
-.two h3{margin-bottom:.2rem}
-.two .code{margin-top:.6rem}
+.badge{font-family:"IBM Plex Mono",monospace;font-size:.72rem;padding:.08rem .45rem;border-radius:3px;white-space:nowrap}
+.badge.done{background:var(--ok-bg);color:var(--ok)}
+.badge.next{background:var(--build-bg);color:var(--build)}
+.badge.plan{background:#E4E7EB;color:var(--soft)}
+.badge.warn{background:var(--graph-bg);color:var(--graph)}
 
-.wk{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:1.4rem}
-@media(min-width:760px){.wk{grid-template-columns:1fr 1fr}}
-.wkc{background:var(--plate);padding:1.2rem 1.15rem}
-.wkc .path{font-family:"IBM Plex Mono",monospace;font-size:.82rem;font-weight:500;display:block;margin-bottom:.45rem}
-.wkc.a2a .path{color:var(--adopt)}.wkc.own .path{color:var(--build)}
-.wkc p{font-size:.86rem;color:var(--soft);margin:.3rem 0 0}
-.wkc .st{font-size:.75rem;color:var(--faint);display:block;margin-top:.75rem;font-family:"IBM Plex Mono",monospace}
+pre.tree{background:var(--ink);color:#D6DCE3;font-family:"IBM Plex Mono",monospace;font-size:.8rem;line-height:1.6;
+  padding:1rem 1.2rem;border-radius:6px;overflow-x:auto;margin:1.2rem 0 0}
+pre.tree b{color:#fff;font-weight:500}
+pre.tree i{color:#9AA6B2;font-style:normal}
 
-.modes{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:1.5rem}
-@media(min-width:760px){.modes{grid-template-columns:1fr 1fr}}
-.mode{background:var(--plate);padding:1.2rem 1.15rem}
-.mode.pick{background:#fff;border-top:3px solid var(--build)}
-.mode .badge{font-size:.72rem;font-weight:500;display:inline-block;margin-bottom:.45rem;padding:.2rem .5rem;border:1px solid currentColor}
-.mode.pick .badge{color:var(--build);background:var(--build-bg)}
-.mode.alt .badge{color:var(--faint)}
-.mode p{font-size:.88rem;color:var(--soft);margin:.45rem 0 0}
-.mode ul{margin:.6rem 0 0;padding:0;list-style:none;font-size:.84rem}
-.mode li{display:flex;gap:.55rem;padding:.18rem 0;color:var(--soft);align-items:baseline}
-.mode li .mk{flex:none;font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--faint)}
+.paths{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-top:1.4rem}
+@media(max-width:900px){.paths{grid-template-columns:1fr}}
+.path{background:var(--plate);border:1px solid var(--rule);border-radius:6px;padding:1rem 1.1rem}
+.path .n{font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--faint)}
+.path h3{margin:.15rem 0 .35rem}
+.path .why{color:var(--soft);font-size:.9rem;margin:.2rem 0}
+.path .dec{font-size:.92rem;margin:.5rem 0 0}
+.path.new{border-color:var(--graph)}
 
-.bnd{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:1rem}
-@media(min-width:760px){.bnd{grid-template-columns:1fr 1fr}}
-.bc{background:var(--plate);padding:1.15rem 1.1rem}
-.bc .lab{font-size:.74rem;font-weight:500;display:block;margin-bottom:.4rem}
-.bc.keep{background:#fff}
-.bc.keep .lab{color:var(--build)}
-.bc.side .lab{color:var(--faint)}
-.bc p{font-size:.9rem;color:var(--ink);margin:0}
-.bc .by{font-size:.83rem;color:var(--soft);margin-top:.5rem}
-
-.sig{margin-top:1.5rem;border:1px solid var(--rule)}
-.sigrow{display:grid;gap:.3rem 1.2rem;padding:.7rem 1.05rem;border-bottom:1px solid var(--rule);
-  background:var(--plate);font-size:.87rem;align-items:baseline}
-.sigrow:last-child{border-bottom:0}
-@media(min-width:760px){.sigrow{grid-template-columns:130px 1fr}}
-.sigrow .t{font-family:"IBM Plex Mono",monospace;font-size:.82rem;color:var(--adopt)}
-.sigrow .d{color:var(--soft);font-size:.85rem}
-.sigrow.hi{background:#fff}.sigrow.hi .t{color:var(--build)}
-
-.flows{display:grid;gap:1.6rem;margin-top:1.5rem}
-@media(min-width:900px){.flows{grid-template-columns:1fr 1.15fr;gap:2.2rem}}
-.flow h3{margin-bottom:.9rem}
-.fl{position:relative;padding-left:2.1rem;border-left:1px solid var(--rule);margin-left:.55rem}
-.fs{position:relative;padding:.4rem 0 .8rem}
-.fs::before{content:attr(data-n);position:absolute;left:-2.72rem;top:.42rem;width:1.35rem;height:1.35rem;
-  border-radius:50%;background:var(--paper);border:1px solid var(--rule);color:var(--faint);
-  font-family:"IBM Plex Mono",monospace;font-size:.68rem;display:flex;align-items:center;justify-content:center}
-.fs.new::before{border-color:var(--build);color:var(--build);background:var(--build-bg)}
-.fs .h{font-size:.93rem;font-weight:500}
-.fs .d{font-size:.83rem;color:var(--soft);margin-top:.1rem}
-.fs .m{font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--faint);margin-top:.15rem}
-.fs.new .h{color:var(--build)}
-
-.unh{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:1.5rem}
-@media(min-width:700px){.unh{grid-template-columns:1fr 1fr}}
-@media(min-width:1040px){.unh{grid-template-columns:repeat(4,1fr)}}
-.uh{background:var(--plate);padding:1.05rem 1rem}
-.uh .n{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--faint);display:block;margin-bottom:.4rem}
-.uh h3{font-size:.92rem;margin-bottom:.3rem}
-.uh p{font-size:.81rem;color:var(--soft);margin:0}
-.uh .dec{margin-top:.7rem;font-size:.81rem;color:var(--ink);border-left:2px solid var(--adopt);padding-left:.6rem}
-
-.risks{margin-top:1.5rem;border:1px solid var(--rule)}
-.rk{display:grid;gap:.4rem 1.1rem;padding:1rem 1.15rem;border-bottom:1px solid var(--rule);background:var(--plate)}
-.rk:last-child{border-bottom:0}
-@media(min-width:900px){.rk{grid-template-columns:26px 1fr 92px 1.35fr;align-items:start}}
-.rk.head{background:var(--paper);font-size:.75rem;color:var(--faint);padding:.5rem 1.15rem}
-.rk.top{background:#fff;border-left:3px solid var(--build)}
-.rk .rn{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--faint)}
-.rk .rt{font-size:.92rem;font-weight:500}
-.rk .rt small{display:block;font-weight:400;font-size:.8rem;color:var(--faint);margin-top:.1rem}
-.rk .rc{font-size:.75rem;font-family:"IBM Plex Mono",monospace;color:var(--soft);line-height:1.6}
-.rk .rd{font-size:.85rem;color:var(--soft)}
-.rk .rd b{color:var(--ink);font-weight:500}
-.rk.top .rd b{color:var(--build)}
-
-/* slices */
-.slices{margin-top:1.6rem;border:1px solid var(--rule)}
-.sl{display:grid;gap:.45rem 1.2rem;padding:1.15rem 1.2rem;border-bottom:1px solid var(--rule);background:var(--plate)}
-.sl:last-child{border-bottom:0}
-@media(min-width:920px){.sl{grid-template-columns:70px 1.05fr 1.15fr .9fr;align-items:start}}
-.sl.head{background:var(--paper);font-size:.75rem;color:var(--faint);padding:.5rem 1.2rem}
-.sl.now{background:#fff;border-left:3px solid var(--build)}
-.sl .sn{font-family:"IBM Plex Mono",monospace;font-size:.86rem;font-weight:500;color:var(--faint)}
-.sl.now .sn{color:var(--build)}
-.sl .sg{font-size:.95rem;font-weight:500}
-.sl .sg small{display:block;font-weight:400;font-size:.81rem;color:var(--faint);margin-top:.15rem}
-.sl .sp{font-size:.85rem;color:var(--soft)}
-.sl .sx{font-size:.8rem;color:var(--faint)}
-.sl .sx em{font-style:normal;color:var(--out)}
-
-.tasks{margin-top:1.5rem;border-left:1px solid var(--rule);padding-left:2.1rem;margin-left:.55rem;position:relative}
-.tk{position:relative;padding:.55rem 0 1.05rem}
-.tk::before{content:attr(data-n);position:absolute;left:-2.72rem;top:.55rem;width:1.35rem;height:1.35rem;
-  border-radius:50%;background:var(--paper);border:1px solid var(--rule);color:var(--faint);
-  font-family:"IBM Plex Mono",monospace;font-size:.68rem;display:flex;align-items:center;justify-content:center}
-.tk.gate::before{border-color:var(--build);color:var(--build);background:var(--build-bg)}
-.tk h3{font-size:.98rem}
-.tk.gate h3{color:var(--build)}
-.tk p{font-size:.86rem;color:var(--soft);margin:.25rem 0 0;max-width:70ch}
-.tk .done{margin-top:.5rem;font-size:.82rem;color:var(--ink);border-left:2px solid var(--adopt);padding-left:.65rem}
-
-.notin{margin-top:1.4rem;background:var(--plate);border:1px solid var(--rule);padding:1.1rem 1.2rem}
-.notin h3{font-size:.92rem;margin-bottom:.4rem;color:var(--faint)}
-.notin p{font-size:.85rem;color:var(--faint);margin:.25rem 0 0}
-.notin .list{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--out);line-height:1.9}
-
-.vocab{margin-top:1.6rem;border-top:1px solid var(--rule)}
-.term{border-bottom:1px solid var(--rule);padding:.85rem 0;display:grid;gap:.2rem 1.4rem}
-@media(min-width:880px){.term{grid-template-columns:140px 1fr 240px;align-items:baseline}}
-.term .nm{font-weight:600;font-size:.98rem;display:flex;align-items:baseline;gap:.5rem}
-.term .nm i{font-style:normal;font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--faint)}
-.term .df{font-size:.88rem;color:var(--soft);margin:0}
-.term .mp{font-size:.76rem;color:var(--faint);font-family:"IBM Plex Mono",monospace;line-height:1.7}
-.term.src-ap .nm{color:var(--adopt)}.term.src-wb .nm{color:var(--graph)}.term.src-us .nm{color:var(--build)}
-.banned{margin-top:1.4rem;display:flex;flex-wrap:wrap;gap:.5rem}
-.banned .b{font-size:.8rem;padding:.3rem .6rem;background:var(--plate);border:1px solid var(--rule);color:var(--faint)}
-.banned .b s{color:var(--out)}.banned .b b{color:var(--ink);font-weight:500}
-
-.subj{margin-top:1.5rem;background:var(--plate);border:1px solid var(--rule);padding:clamp(1rem,3vw,1.5rem)}
-.subj svg{display:block;width:100%;height:auto;max-width:760px;margin:0 auto}
-
-.track{position:relative;margin:2.2rem 0 2.5rem;height:2px;background:var(--rule)}
-.track .end{position:absolute;top:-1.9rem;font-size:.78rem;color:var(--faint)}
-.track .end.l{left:0}.track .end.r{right:0;text-align:right}
-.track .tick{position:absolute;top:-5px;width:1px;height:12px;background:var(--rule)}
-.knob{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:var(--ink);
-  transform:translate(-50%,-50%);transition:left .42s cubic-bezier(.4,0,.15,1),background .3s}
-.knob::after{content:"";position:absolute;inset:-7px;border:1px solid var(--ink);border-radius:50%;opacity:.35}
-@media(prefers-reduced-motion:reduce){.knob{transition:none}}
-.placer{display:grid;gap:1.6rem}
-@media(min-width:900px){.placer{grid-template-columns:270px 1fr;gap:2.4rem}}
-.plist{display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule)}
-.pbtn{appearance:none;border:0;background:var(--plate);text-align:left;cursor:pointer;font-family:inherit;
-  font-size:.9rem;color:var(--soft);padding:.85rem 1rem;display:flex;align-items:center;gap:.7rem;line-height:1.4}
-.pbtn:hover{background:#fff}
-.pbtn:focus-visible{outline:2px solid var(--build);outline-offset:-2px}
-.pbtn[aria-selected="true"]{background:var(--ink);color:#fff;font-weight:500}
-.pbtn .n{font-family:"IBM Plex Mono",monospace;font-size:.75rem;color:var(--faint);flex:none}
-.pbtn[aria-selected="true"] .n{color:#9AA6B2}
-.panel h3{font-size:1.15rem;margin-bottom:.15rem}
-.panel .owner{font-size:.82rem;font-weight:500;margin-bottom:1rem}
-.panel p{font-size:.93rem;color:var(--soft);max-width:60ch}
-.panel .split{margin-top:1.2rem;display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
-@media(min-width:620px){.panel .split{grid-template-columns:1fr 1fr}}
-.half{background:var(--plate);padding:.95rem 1.05rem}
-.half .lab{font-size:.75rem;font-weight:500;margin-bottom:.35rem;display:block}
-.half.pf .lab{color:var(--adopt)}.half.gr .lab{color:var(--graph)}
-.half p{font-size:.85rem;margin:0}
-
-.filter{margin-top:1.5rem;border:1px solid var(--rule)}
-.frow{display:grid;gap:.35rem 1.2rem;padding:.75rem 1.05rem;border-bottom:1px solid var(--rule);
-  background:var(--plate);font-size:.87rem;align-items:baseline}
-.frow:last-child{border-bottom:0}
-@media(min-width:800px){.frow{grid-template-columns:186px 92px 1fr}}
-.frow .name{font-family:"IBM Plex Mono",monospace;font-size:.82rem}
-.frow .res{font-size:.76rem;font-weight:500}
-.frow .res.pass{color:var(--adopt)}.frow .res.fail{color:var(--build)}.frow .res.warn{color:var(--graph)}
-.frow .why{color:var(--soft);font-size:.84rem}
-.frow.head{background:var(--paper);font-size:.75rem;color:var(--faint)}
-
-.succ{margin-top:1.5rem;display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
-@media(min-width:760px){.succ{grid-template-columns:repeat(2,1fr)}}
-@media(min-width:1040px){.succ{grid-template-columns:repeat(5,1fr)}}
-.sc{background:var(--plate);padding:1rem .95rem}
-.sc .k{font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--build);display:block;margin-bottom:.45rem}
-.sc p{font-size:.84rem;color:var(--soft);margin:0}
-
-footer{margin-top:clamp(3rem,7vw,5rem);border-top:1px solid var(--rule);padding:2rem 0 3.5rem;font-size:.83rem;color:var(--faint)}
-footer p{max-width:66ch}
-@media(prefers-reduced-motion:no-preference){
-  .draw{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:draw 1s .3s cubic-bezier(.4,0,.2,1) forwards}
-  @keyframes draw{to{stroke-dashoffset:0}}
-}
+footer{margin-top:clamp(3rem,7vw,5rem);border-top:1px solid var(--rule);padding:1.6rem 0 3rem;font-size:.85rem;color:var(--soft)}
 </style>
 </head>
 <body>
-<aside role="note" style="padding:16px 24px;background:#fff3cd;color:#332701;border-bottom:1px solid #d8bd68">
-  <strong>역사적 설계 자료 — 2026-09-11 경계 정정</strong><br>
-  아래 공용 LiteLLM·모델/Tier 설정은 현재 Cordboard 요구사항이 아닙니다.
-  요청자가 Graph를 지정하고 Cordboard는 연결·기록합니다. 모델과 키는 그래프가 소유합니다.
-  <a href="../decisions/0013-switchboard-boundary.md">현재 결정: ADR-0013</a>
-</aside>
-<div class="spine">
 
-<!-- HERO -->
-<section class="hero">
-  <div class="sec-inner">
-    <div class="tagline">
-      <span><b>cordboard</b></span>
-      <span>the switchboard operator for your agent graphs</span>
-      <span>설계 결정 현황</span>
-      <span>1–6단계 완료 · 슬라이스 0 착수</span>
-    </div>
-
-    <h1>레포 하나가<br>프로세스 하나</h1>
-    <p class="sub">
-      그래프는 각자 자기 오리진을 갖고 자기 카드를 낸다.
-      cordboard는 그 오리진들을 연결하고, 하나의 어휘로 묶고, 기록의 원본을 직접 들고 있는다.
-      교환원이 하던 일 — <b>연결하고 기록한다.</b>
-    </p>
-
-    <div class="stage">
-      <svg viewBox="0 0 900 440" role="img" aria-label="구성도. Signal이 Rule 라우터를 거쳐 세 개의 독립 그래프 프로세스로 가고 각 프로세스는 LiteLLM을 거쳐 모델을 부른다. 아래쪽에서 카탈로그가 well-known 문서를 긁고, Span은 Collector 어휘층을 거쳐 Langfuse와 우리 아카이브 양쪽으로 간다.">
-        <defs>
-          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
-            <path d="M0 0 L10 5 L0 10 z" fill="#4E5A66"/></marker>
-          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
-            <path d="M0 0 L10 5 L0 10 z" fill="#A32B2B"/></marker>
-        </defs>
-
-        <text x="8" y="24" font-size="11.5" fill="#7C868F" font-family="IBM Plex Sans KR,sans-serif">실행</text>
-        <line x1="8" y1="32" x2="852" y2="32" stroke="#C7CCD3"/>
-
-        <g font-family="IBM Plex Sans KR,sans-serif">
-          <rect x="8" y="126" width="112" height="58" fill="#F6F7F9" stroke="#4E5A66"/>
-          <text x="20" y="150" font-size="12.5" font-weight="600" fill="#141C26">Signal</text>
-          <text x="20" y="168" font-size="10" fill="#4E5A66">출처는 무엇이든</text>
-
-          <rect x="146" y="126" width="132" height="58" fill="#F5E4E4" stroke="#A32B2B" stroke-width="1.4"/>
-          <text x="158" y="148" font-size="12.5" font-weight="600" fill="#141C26">Rule 라우터</text>
-          <text x="158" y="165" font-size="10" fill="#4E5A66">매칭 · Subject 추출</text>
-          <text x="158" y="178" font-size="9.5" font-family="IBM Plex Mono,monospace" fill="#A32B2B">+ 멱등성 관문</text>
-
-          <rect x="304" y="50" width="216" height="62" fill="#F0E8D6" stroke="#8F6414" stroke-width="1.2" stroke-dasharray="5 4"/>
-          <text x="318" y="72" font-size="12.5" font-weight="600" fill="#141C26">issue-resolver</text>
-          <text x="318" y="89" font-size="9.5" font-family="IBM Plex Mono,monospace" fill="#8F6414">:2026 · pipeline · py3.12</text>
-          <text x="318" y="104" font-size="9.5" font-family="IBM Plex Mono,monospace" fill="#7C868F">agent-card · agent-topology</text>
-
-          <rect x="304" y="128" width="216" height="62" fill="#F0E8D6" stroke="#8F6414" stroke-width="1.2" stroke-dasharray="5 4"/>
-          <text x="318" y="150" font-size="12.5" font-weight="600" fill="#141C26">research-bot</text>
-          <text x="318" y="167" font-size="9.5" font-family="IBM Plex Mono,monospace" fill="#8F6414">:2027 · deep · py3.13</text>
-          <text x="318" y="182" font-size="9.5" font-family="IBM Plex Mono,monospace" fill="#7C868F">agent-card · agent-topology</text>
-
-          <rect x="304" y="206" width="216" height="62" fill="#F0E8D6" stroke="#8F6414" stroke-width="1.2" stroke-dasharray="5 4"/>
-          <text x="318" y="228" font-size="12.5" font-weight="600" fill="#141C26">doc-sync</text>
-          <text x="318" y="245" font-size="9.5" font-family="IBM Plex Mono,monospace" fill="#8F6414">:2028 · pipeline · py3.11</text>
-          <text x="318" y="260" font-size="9.5" font-family="IBM Plex Mono,monospace" fill="#7C868F">agent-card · agent-topology</text>
-
-          <rect x="556" y="128" width="132" height="62" fill="#E2EAF1" stroke="#1D4E79" stroke-width="1.2"/>
-          <text x="568" y="152" font-size="12.5" font-weight="600" fill="#141C26">LiteLLM Proxy</text>
-          <text x="568" y="170" font-size="10" fill="#4E5A66">Tier → Model</text>
-
-          <rect x="724" y="128" width="128" height="62" fill="#F6F7F9" stroke="#4E5A66"/>
-          <text x="736" y="152" font-size="12.5" font-weight="600" fill="#141C26">모델</text>
-          <text x="736" y="170" font-size="10" fill="#4E5A66">프로바이더</text>
-        </g>
-
-        <g stroke="#4E5A66" stroke-width="1.2" fill="none" marker-end="url(#a1)">
-          <line x1="120" y1="155" x2="144" y2="155"/>
-          <path d="M278 155 H292 V81 H302"/><line x1="278" y1="155" x2="302" y2="155"/>
-          <path d="M278 155 H292 V237 H302"/>
-          <path d="M520 81 H538 V155 H554"/><line x1="520" y1="159" x2="554" y2="159"/>
-          <path d="M520 237 H538 V163 H554"/>
-          <line x1="688" y1="159" x2="722" y2="159"/>
-        </g>
-
-        <text x="8" y="292" font-size="11.5" fill="#7C868F" font-family="IBM Plex Sans KR,sans-serif">등록 · 관측</text>
-        <line x1="8" y1="300" x2="852" y2="300" stroke="#C7CCD3"/>
-
-        <g font-family="IBM Plex Sans KR,sans-serif">
-          <rect x="8" y="322" width="176" height="62" fill="#F5E4E4" stroke="#A32B2B" stroke-width="1.4"/>
-          <text x="20" y="344" font-size="12.5" font-weight="600" fill="#141C26">카탈로그</text>
-          <text x="20" y="361" font-size="9.5" fill="#4E5A66">두 문서를 긁는다</text>
-          <text x="20" y="375" font-size="9.5" fill="#4E5A66">병렬 인터럽트는 등록 거부</text>
-
-          <rect x="208" y="322" width="204" height="62" fill="#F5E4E4" stroke="#A32B2B" stroke-width="1.4"/>
-          <text x="220" y="344" font-size="12.5" font-weight="600" fill="#141C26">Collector · 어휘층</text>
-          <text x="220" y="361" font-size="9.5" fill="#4E5A66">cord.* 부여</text>
-          <text x="220" y="375" font-size="9.5" font-family="IBM Plex Mono,monospace" fill="#A32B2B">cord.redacted 없으면 거부</text>
-
-          <rect x="436" y="310" width="204" height="48" fill="#E2EAF1" stroke="#1D4E79" stroke-width="1.2"/>
-          <text x="448" y="330" font-size="12" font-weight="600" fill="#141C26">Langfuse</text>
-          <text x="448" y="347" font-size="9.5" fill="#4E5A66">읽는 화면 · 원본 아님</text>
-
-          <rect x="436" y="368" width="204" height="48" fill="#F5E4E4" stroke="#A32B2B" stroke-width="1.4"/>
-          <text x="448" y="388" font-size="12" font-weight="600" fill="#141C26">raw OTLP 아카이브</text>
-          <text x="448" y="405" font-size="9.5" fill="#4E5A66">기록의 원본 · append-only</text>
-
-          <rect x="664" y="322" width="188" height="62" fill="#F5E4E4" stroke="#A32B2B" stroke-width="1.4"/>
-          <text x="676" y="344" font-size="12.5" font-weight="600" fill="#141C26">그래프 뷰어</text>
-          <text x="676" y="361" font-size="9.5" fill="#4E5A66">기록 ← Langfuse</text>
-          <text x="676" y="375" font-size="9.5" fill="#4E5A66">라이브 ← Aegra SSE</text>
-        </g>
-
-        <path d="M320 268 Q296 300 150 320" stroke="#A32B2B" stroke-width="1.2" fill="none"
-              stroke-dasharray="4 3" marker-end="url(#a2)"/>
-        <text x="196" y="302" font-size="9.5" font-family="IBM Plex Mono,monospace" fill="#A32B2B">.well-known</text>
-        <path d="M400 270 Q360 296 310 320" stroke="#8F6414" stroke-width="1.1" fill="none" stroke-dasharray="4 3"/>
-        <path d="M600 192 Q520 268 360 320" stroke="#8F6414" stroke-width="1.1" fill="none" stroke-dasharray="4 3"/>
-        <g stroke="#4E5A66" stroke-width="1.2" fill="none" marker-end="url(#a1)">
-          <path d="M412 344 L434 334"/><line x1="640" y1="334" x2="662" y2="344"/>
-        </g>
-        <path class="draw" style="--len:50" d="M412 366 L434 392" stroke="#A32B2B" stroke-width="1.2" fill="none" marker-end="url(#a2)"/>
-      </svg>
-
-      <div class="legend">
-        <span><i class="swatch" style="background:#F5E4E4;border:1px solid #A32B2B"></i>직접 만든다 · 직접 소유한다</span>
-        <span><i class="swatch" style="background:#E2EAF1;border:1px solid #1D4E79"></i>가져온다</span>
-        <span><i class="swatch" style="background:#F0E8D6;border:1px dashed #8F6414"></i>그래프가 소유 · 각자 격리</span>
-      </div>
-    </div>
-
-    <div class="premise">
-      <p><b>전제.</b> 여러 팀이 쓰는 사내 플랫폼이 아니라 <b>혼자 쓰는 로컬 도구</b>이고, 다음 프로젝트를 위한 학습 매체다.</p>
-      <p>그래서 규약 강제 수준은 낮춰도 되고, 대신 만들고 띄우는 마찰이 훨씬 중요해진다.
-      "노트북에서 계정 없이 뜬다"가 부가 조건이 아니라 주 조건이다.</p>
-    </div>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">cordboard<span>the switchboard operator for your agent graphs</span></div>
+    <div class="status">설계 현황 · 2026-09-12 · 슬라이스 0·0.5 완료, 슬라이스 1 준비</div>
   </div>
-</section>
+</header>
 
-<!-- SLICE 0 : moved up, it's what happens next -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>슬라이스 0 — 걷는 뼈대</h2>
-    <p class="lede">
-      질문 하나에만 답한다 — <b>"Tier가 올라간 Node"를 우리 데이터로 실제로 셀 수 있는가.</b>
-      성공 기준 C가 이 프로젝트에서 가장 비싼 미지이고, 틀렸다는 걸 6주 뒤에 알면 그 6주치 데이터가 통째로 못 쓰게 된다.
-    </p>
-
-    <div class="tasks">
-      <div class="tk" data-n="1">
-        <h3>그래프 하나 — 플랫폼 없이</h3>
-        <p>노드 셋의 고정 위상 <code>fetch → draft → verify</code>. <code>draft</code>가 fast Tier에서 규칙표를 통과 못 하도록 일부러 설계한다.
-        승격이 관측 대상이므로 <b>재현 가능하게 실패해야</b> 한다. <code>cord new</code>는 아직 없다 — 손으로 쓴다.
-        가짜 토큰을 프롬프트에 미리 심어 둔다.</p>
-        <p class="done">완료 — 플랫폼이 하나도 안 떠 있는 상태에서 pytest가 통과한다.</p>
-      </div>
-      <div class="tk" data-n="2">
-        <h3>cord-runtime v0 + Collector</h3>
-        <p>둘을 같이 만든다. 따로 만들면 둘 다 검증이 안 된다.
-        SpanProcessor가 패턴을 지우고 <code>cord.redacted=true</code>를 찍는다. 헬퍼가 Run / Step / Attempt span을 만든다.
-        Collector는 OTLP를 받아 <code>cord.redacted</code>가 없으면 버리고, 파일 exporter로 내보낸다.</p>
-        <p class="done">완료 — 한 번 돌리면 아카이브에 span이 쌓이고, SpanProcessor를 주석 처리하면 파일이 빈다.</p>
-      </div>
-      <div class="tk gate" data-n="3">
-        <h3>질의 스크립트 초안 — 관문</h3>
-        <p>아카이브를 읽어 "Tier가 올라간 Node"를 센다. 데이터가 몇 줄뿐이라 답이 맞는지 눈으로 확인할 수 있다.
-        <b>여기서 반드시 확정할 것</b> — Attempt가 부모 Step 아래 형제 행으로 서 있는가.
-        아니면 GROUP BY가 아니라 JSON 파싱이 되고, 그건 성공 기준 C의 실패다.</p>
-        <p class="done">완료 — 질의가 답을 낸다. 그리고 Attempt 계층을 한 번 일부러 잘못 만들어 보고 질의가 깨지는 걸 확인한다.</p>
-      </div>
-      <div class="tk" data-n="4">
-        <h3>LiteLLM 프록시</h3>
-        <p><code>fast</code> / <code>deep</code> 두 별칭만. <b>DB 없이</b> 시작한다 — 가상 키와 예산은 이 슬라이스의 질문과 무관하다.
-        그래프의 모델 호출을 프록시 경유로 바꾸고, 프록시의 otel 콜백도 같은 Collector로 보낸다.</p>
-        <p class="done">완료 — 승격이 하드코딩이 아니라 실제로 일어나고, 프록시가 낸 span도 아카이브에 있다.</p>
-      </div>
-      <div class="tk" data-n="5">
-        <h3>Aegra</h3>
-        <p>설정 파일은 손으로 쓴다 — 생성은 슬라이스 1. Postgres 하나.
-        <code>POST /threads</code> → <code>POST /threads/{id}/runs</code>로 실행하고 호출에 <code>traceparent</code>를 주입한다.</p>
-        <p class="done">완료 — 프로세스 경계를 넘어도 span이 한 trace로 묶인다. 고아 span 0건.</p>
-      </div>
-      <div class="tk gate" data-n="6">
-        <h3>종료 판정 셋</h3>
-        <p>① 질의가 "Tier가 올라간 Node 상위 N개"를 답한다.<br>
-        ② 리댁터를 끄면 아카이브에 아무것도 안 들어온다.<br>
-        ③ 심어 둔 가짜 토큰이 아카이브 어디에도 없다 — grep으로 확인.</p>
-        <p class="done">셋 다 통과해야 슬라이스 0.5로 간다. 하나라도 실패하면 아카이브 포맷이나 Attempt 계층을 다시 잡는다 — 지금은 데이터가 다섯 줄이라 공짜다.</p>
-      </div>
-    </div>
-
-    <div class="notin">
-      <h3>슬라이스 0에 없는 것</h3>
-      <p class="list">cord new · cord up · cord add · 카탈로그 · well-known 두 문서 · 뷰어 · Rule 라우터 · 승인함 · Langfuse · 두 번째 그래프</p>
-      <p>전부 손으로 띄운다. 자동화할 대상의 모양을 모르는 상태에서 자동화를 먼저 만들면 두 번 만들게 된다.</p>
-    </div>
+<div class="wrap hero">
+  <div class="kicker">Hello Girl들이 앉아 있던 수동 교환기, cord board</div>
+  <h1>연결하고,<br>기록한다.</h1>
+  <p class="lede">그래프는 자기 일을 하고, 원하면 자기를 설명한다. cordboard는 호출자가 고른 그래프에 회선을 꽂고,
+    무슨 일이 있었는지를 기록의 원본으로 직접 들고 있는다. 통화 내용은 모른다 — 그래프를 묘사하지도,
+    연결을 막지도 않는다.</p>
+  <div class="legend">
+    <span><i style="background:var(--build)"></i>cordboard가 직접 만든다</span>
+    <span><i style="background:var(--adopt)"></i>가져와서 쓴다</span>
+    <span><i style="background:var(--graph)"></i>그래프가 소유한다</span>
   </div>
-</section>
+  <figure>
+    <svg viewBox="0 0 1040 400" role="img" aria-labelledby="hero-t hero-d" font-family="IBM Plex Sans KR, system-ui, sans-serif">
+      <title id="hero-t">cordboard의 연결과 기록 경로</title>
+      <desc id="hero-d">호출자가 Deployment의 Graph를 골라 cordboard가 실행을 연결한다. 그래프는 프로세스 안에서 span을 지우고 도장을 찍어 Collector로 보내고, Collector는 도장 없는 span을 버린 뒤 아카이브와 Langfuse로 보낸다. 매니페스트는 선택적으로 뷰어에 들어간다.</desc>
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#141C26"/></marker>
+        <marker id="ahf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7C868F"/></marker>
+      </defs>
 
-<!-- SLICE MAP -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>슬라이스 순서</h2>
-    <p class="lede">
-      층별로 자르지 않는다. "Collector를 다 만들고 → 뷰어를 다 만들고"로 가면 마지막까지 아무것도 검증되지 않는다.
-      각 슬라이스는 얇지만 한쪽 끝에서 다른 쪽 끝까지 관통하고, <b>가장 비싼 미지를 가장 먼저</b> 만난다.
-    </p>
-    <div class="slices">
-      <div class="sl head"><span></span><span>목표</span><span>증명하는 것</span><span>일부러 안 하는 것</span></div>
+      <!-- caller -->
+      <rect x="16" y="150" width="120" height="70" rx="6" fill="#F6F7F9" stroke="#7C868F"/>
+      <text x="76" y="180" text-anchor="middle" font-size="14" font-weight="600" fill="#141C26">호출자</text>
+      <text x="76" y="200" text-anchor="middle" font-size="11" fill="#4E5A66">사람 · Signal(계획)</text>
 
-      <div class="sl now">
-        <span class="sn">0</span>
-        <span class="sg">걷는 뼈대<small>지금 여기</small></span>
-        <span class="sp">위험 1·2 — 어휘가 질의에 답하는가, 마스킹 관문이 작동하는가</span>
-        <span class="sx"><em>카탈로그 · 뷰어 · 라우터 · 승인 · Langfuse</em></span>
-      </div>
+      <!-- cordboard connect -->
+      <rect x="176" y="140" width="150" height="90" rx="6" fill="#F5E4E4" stroke="#A32B2B"/>
+      <text x="251" y="170" text-anchor="middle" font-size="14" font-weight="600" fill="#A32B2B">cordboard · 연결</text>
+      <text x="251" y="192" text-anchor="middle" font-size="11" font-family="IBM Plex Mono, monospace" fill="#141C26">execute(endpoint,</text>
+      <text x="251" y="208" text-anchor="middle" font-size="11" font-family="IBM Plex Mono, monospace" fill="#141C26">graph, subject, input)</text>
+      <line x1="136" y1="185" x2="174" y2="185" stroke="#141C26" stroke-width="1.4" marker-end="url(#ah)"/>
 
-      <div class="sl">
-        <span class="sn">0.5</span>
-        <span class="sg">Langfuse 얹기<small>원본 경로가 증명된 다음</small></span>
-        <span class="sp">같은 질의를 Public API로 한 번 더. 두 경로의 답이 다르면 그 자체가 발견</span>
-        <span class="sx"><em>뷰어</em></span>
-      </div>
+      <!-- deployment -->
+      <rect x="368" y="96" width="250" height="178" rx="8" fill="#E2EAF1" stroke="#1D4E79"/>
+      <text x="382" y="118" font-size="12" font-weight="600" fill="#1D4E79">Deployment — Aegra 프로세스</text>
+      <rect x="384" y="130" width="218" height="96" rx="6" fill="#F0E8D6" stroke="#8F6414"/>
+      <text x="398" y="152" font-size="14" font-weight="600" fill="#8F6414">Graph</text>
+      <text x="398" y="172" font-size="11" fill="#141C26">업무 로직 · 상태 · 검증</text>
+      <text x="398" y="189" font-size="11" fill="#141C26">모델 · 키 · 승격 결정</text>
+      <text x="398" y="206" font-size="11" fill="#141C26">인터럽트 위치 · 부작용 멱등성</text>
+      <text x="398" y="252" font-size="11" fill="#1D4E79">redact-secret로 지우고 도장 → span</text>
+      <line x1="326" y1="185" x2="366" y2="185" stroke="#141C26" stroke-width="1.4" marker-end="url(#ah)"/>
 
-      <div class="sl">
-        <span class="sn">1</span>
-        <span class="sg">두 번째 그래프<small>pipeline + deep, 다른 파이썬 버전</small></span>
-        <span class="sp">실패 모드 A, 기준 A·B — 경계가 버티는가. 뷰어가 고정 위상만 그릴 수 있으면 여기서 드러난다</span>
-        <span class="sx"><em>승인 · 트리거 · 라이브</em></span>
-      </div>
+      <!-- collector -->
+      <rect x="660" y="150" width="150" height="70" rx="6" fill="#E2EAF1" stroke="#1D4E79"/>
+      <text x="735" y="178" text-anchor="middle" font-size="14" font-weight="600" fill="#1D4E79">OTel Collector</text>
+      <text x="735" y="198" text-anchor="middle" font-size="11" fill="#141C26">도장 없는 span은 버린다</text>
+      <line x1="618" y1="185" x2="658" y2="185" stroke="#141C26" stroke-width="1.4" marker-end="url(#ah)"/>
+      <text x="638" y="176" text-anchor="middle" font-size="10" fill="#4E5A66">OTLP</text>
 
-      <div class="sl">
-        <span class="sn">2</span>
-        <span class="sg">사람과 시계</span>
-        <span class="sp">위험 3 — 인터럽트 앞에 부작용을 일부러 넣은 그래프로, 뷰어가 중복 Step을 잡는지</span>
-        <span class="sx"><em>트리거</em></span>
-      </div>
+      <!-- archive -->
+      <rect x="860" y="96" width="164" height="74" rx="6" fill="#F5E4E4" stroke="#A32B2B"/>
+      <text x="942" y="124" text-anchor="middle" font-size="13" font-weight="600" fill="#A32B2B">OTLP 아카이브</text>
+      <text x="942" y="143" text-anchor="middle" font-size="11" fill="#141C26">기록의 원본 · append-only</text>
+      <text x="942" y="159" text-anchor="middle" font-size="10" font-family="IBM Plex Mono, monospace" fill="#4E5A66">archive-escalations</text>
+      <path d="M810,175 C835,175 835,133 858,133" fill="none" stroke="#141C26" stroke-width="1.4" marker-end="url(#ah)"/>
 
-      <div class="sl">
-        <span class="sn">3</span>
-        <span class="sg">트리거와 멱등성<small>file · schedule · manual 만. http는 나중</small></span>
-        <span class="sp">기준 D, 불행 경로 1·8 — 같은 파일을 빠르게 두 번 저장해도 Run이 하나.
-        여기서 <b>지연 기동</b>도 가능해진다 — Signal 도착이 곧 기동 트리거</span>
-        <span class="sx"><em>체인</em></span>
-      </div>
+      <!-- langfuse -->
+      <rect x="860" y="200" width="164" height="60" rx="6" fill="#E2EAF1" stroke="#1D4E79"/>
+      <text x="942" y="226" text-anchor="middle" font-size="13" font-weight="600" fill="#1D4E79">Langfuse</text>
+      <text x="942" y="244" text-anchor="middle" font-size="11" fill="#141C26">읽는 화면 · 원본 아님</text>
+      <path d="M810,195 C835,195 835,230 858,230" fill="none" stroke="#141C26" stroke-width="1.4" marker-end="url(#ah)"/>
 
-      <div class="sl">
-        <span class="sn">4</span>
-        <span class="sg">체인과 동시성</span>
-        <span class="sp">위험 5 — 서로 다른 20개 Subject로 동시 실행, 최종 상태에 남의 Subject가 섞였는지</span>
-        <span class="sx"><em>라이브</em></span>
-      </div>
+      <!-- manifest optional -->
+      <rect x="368" y="318" width="250" height="60" rx="6" fill="#F6F7F9" stroke="#8F6414" stroke-dasharray="5 4"/>
+      <text x="493" y="343" text-anchor="middle" font-size="12" font-weight="600" fill="#8F6414">매니페스트 — 그래프의 자기 설명</text>
+      <text x="493" y="362" text-anchor="middle" font-size="11" fill="#4E5A66">선택. agent-topology가 파생</text>
+      <line x1="493" y1="274" x2="493" y2="316" stroke="#7C868F" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ahf)"/>
 
-      <div class="sl">
-        <span class="sn">5</span>
-        <span class="sg">라이브 화면</span>
-        <span class="sp">위험 6 — 가장 싼 것을 마지막에</span>
-        <span class="sx">—</span>
-      </div>
-    </div>
-    <p class="note" style="margin-top:1.1rem">
-      Langfuse가 0.5로 밀린 이유 — 기록의 원본이 아니게 됐으므로, 첫 슬라이스에서 컨테이너 여섯 개짜리 스택을 띄울 이유가 없다.
-      원본 경로부터 증명하면 된다.
-    </p>
-  </div>
-</section>
+      <rect x="660" y="318" width="150" height="60" rx="6" fill="#F6F7F9" stroke="#A32B2B" stroke-dasharray="5 4"/>
+      <text x="735" y="343" text-anchor="middle" font-size="12" font-weight="600" fill="#A32B2B">뷰어 (계획)</text>
+      <text x="735" y="362" text-anchor="middle" font-size="11" fill="#4E5A66">그림 + 실행 기록</text>
+      <line x1="618" y1="348" x2="658" y2="348" stroke="#7C868F" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ahf)"/>
+      <path d="M942,260 C942,330 860,348 812,348" fill="none" stroke="#7C868F" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ahf)"/>
 
-<!-- SCOPE -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>경계</h2>
-    <p class="lede">
-      호스트가 그래프 소스를 import하지 않는다는 것과, 플랫폼이 그래프의 생애주기를 모른다는 것은 다른 얘기다.
-      npm은 당신 패키지를 자기 프로세스에 링크하지 않지만 만들고 배포하고 설치하고 실행하는 법은 전부 안다.
-    </p>
-    <div class="scope">
-      <div class="in">
-        <h3>하는 것</h3>
-        <ul>
-          <li><span class="mk">1</span><span><b>그래프 카탈로그</b> — 오리진들의 두 문서를 긁어 하나로 답한다. 등록 시 검증도</span></li>
-          <li><span class="mk">2</span><span><b>공용 어휘층</b> — 하나의 Span 모양. Collector에서 돌고, 마스킹의 강제 지점이다</span></li>
-          <li><span class="mk">3</span><span><b>데이터에서 파생되는 뷰어</b> — 뷰어 코드에 어떤 그래프의 Node 이름도 없다</span></li>
-          <li><span class="mk">4</span><span><b>선언적 트리거 라우터</b> — 새 Rule마다 코드를 쓰지 않는다</span></li>
-          <li><span class="mk">5</span><span><b>그래프 패키지 생애주기</b> — scaffold · 선언 · 편입 · 기동</span></li>
-          <li><span class="mk">6</span><span><b>기록의 원본</b> — raw OTLP 아카이브. 벤더 스키마에 이력을 맡기지 않는다</span></li>
-        </ul>
-      </div>
-      <div class="out">
-        <h3>명시적으로 하지 않는 것</h3>
-        <ul>
-          <li><span class="mk">×</span><span>실행 런타임 — Thread·체크포인트·재개·취소·스트리밍은 Aegra</span></li>
-          <li><span class="mk">×</span><span>오케스트레이션 프레임워크 — LangGraph도 DeepAgents도 대체하지 않는다</span></li>
-          <li><span class="mk">×</span><span>트레이스 <b>저장 엔진</b> — Langfuse + ClickHouse. 단 그것이 원본은 아니다</span></li>
-          <li><span class="mk">×</span><span>의존성 해석 — uv 워크스페이스</span></li>
-          <li><span class="mk">×</span><span>마켓플레이스 · 레지스트리 — 우리 그래프는 이식 가능한 상품이 아니다</span></li>
-          <li><span class="mk">×</span><span>노코드 빌더 · 평가 플랫폼 · 프롬프트 관리</span></li>
-          <li><span class="mk">×</span><span>멀티테넌시 · 과금 · SSO</span></li>
-          <li><span class="mk">×</span><span>프로덕션 배포 — k8s, CI/CD, 시크릿 관리, 롤아웃</span></li>
-        </ul>
-      </div>
-    </div>
-    <div class="fails">
-      <div class="fail">
-        <span class="tag">실패 모드 A</span><h3>두 번째 모노리스</h3>
-        <p>플랫폼이 그래프 내부를 너무 많이 알게 된다. 새 그래프를 붙이려면 플랫폼 코드를 고쳐야 한다.</p>
-        <p class="sym">증상 — 플랫폼 저장소에 특정 그래프의 상태 이름이 등장하는 순간.</p>
-      </div>
-      <div class="fail">
-        <span class="tag">실패 모드 B</span><h3>아무것도 아닌 층</h3>
-        <p>너무 얇아서 Aegra와 Langfuse를 그냥 쓰는 것보다 나은 게 없다.</p>
-        <p class="sym">증상 — 이 플랫폼을 걷어내도 아무도 불편해하지 않는 순간.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- GRAPH AS REPO -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>그래프 하나 = 레포 하나</h2>
-    <p class="lede">
-      레포 전체가 하나의 관리 단위다. 계약은 루트의 <code>cord.yaml</code> 하나이고, 나머지 산출물은 전부 여기서 생성된다.
-    </p>
-    <div class="two">
-      <div>
-        <h3>레포 구조</h3>
-<div class="code">issue-resolver/
-├── <span class="k">cord.yaml</span>          <span class="c">← 계약의 전부</span>
-├── pyproject.toml
-├── src/issue_resolver/
-│   ├── graph.py       <span class="c">:graph 를 export</span>
-│   ├── nodes/
-│   └── state.py
-└── tests/</div>
-        <h3 style="margin-top:1.3rem">CLI 표면</h3>
-<div class="code"><span class="k">cord new</span> &lt;name&gt;                <span class="c">기본: pipeline</span>
-<span class="k">cord new</span> &lt;name&gt; --template deep  <span class="c">도구 루프</span>
-<span class="k">cord add</span> &lt;경로|git&gt;             <span class="c">워크스페이스 편입</span>
-<span class="k">cord up</span>                        <span class="c">uv sync → 프로세스 기동</span>
-<span class="k">cord up</span> --only &lt;n&gt;             <span class="c">하나만</span>
-<span class="k">cord run</span> &lt;name&gt;                <span class="c">수동 실행</span>
-<span class="k">cord watch</span>                     <span class="c">로컬 트리거 데몬</span></div>
-      </div>
-      <div>
-        <h3>cord.yaml</h3>
-<div class="code"><span class="k">name</span>: <span class="v">issue-resolver</span>
-<span class="k">version</span>: <span class="v">0.3.0</span>
-<span class="k">entrypoint</span>: <span class="v">src/issue_resolver/graph.py:graph</span>
-<span class="k">isolation</span>: <span class="v">process</span>
-
-<span class="k">inputs</span>:
-  issue_url: {type: string, required: true}
-
-<span class="k">subject</span>:
-  type: github_issue
-  from: $.issue_url
-
-<span class="k">nodes</span>:
-  - {name: read_issue}
-  - {name: draft_commit, tier: {start: standard, escalate_to: deep}}
-  - {name: await_approval, interrupts: true,
-     side_effects_before: none}
-  - {name: publish, idempotency_key: [subject, node, attempt]}
-
-<span class="k">concurrency</span>:
-  key: [assistant, subject]
-  on_conflict: skip
-  max_in_flight: 2
-
-<span class="k">approval</span>:
-  remind_after: 4h
-  timeout: 72h
-  on_timeout: halt
-
-<span class="k">triggers</span>:
-  - on: http.github.issues.labeled
-    when: 'label == "agent:resolve"'</div>
-      </div>
-    </div>
-
-    <h3 style="margin-top:1.8rem">템플릿 두 종류</h3>
-    <div class="modes">
-      <div class="mode pick">
-        <span class="badge">기본값</span><h3>pipeline</h3>
-        <p>고정 위상. <code>workbench</code>가 이 모양이다 — 읽기 → 검증 → 초안 → 승인 → 게시. 에이전트 루프가 아니다.</p>
-        <ul>
-          <li><span class="mk">+</span>인터럽트 노드가 부작용 들어갈 자리 없이 생성된다</li>
-          <li><span class="mk">+</span>부작용 노드에 멱등성 키 패턴이 미리 들어 있다</li>
-          <li><span class="mk">+</span>메시지 히스토리도 요약도 서브에이전트도 없다</li>
-        </ul>
-      </div>
-      <div class="mode alt">
-        <span class="badge">--template deep</span><h3>DeepAgents 기반</h3>
-        <p><code>create_deep_agent()</code>가 <code>CompiledStateGraph</code>를 반환하므로 우리 entrypoint에 그대로 맞는다.
-        도구 루프가 실제로 필요할 때만.</p>
-        <ul>
-          <li><span class="mk">+</span>미들웨어가 계측·마스킹의 in-process 삽입점이 된다</li>
-          <li><span class="mk">+</span>interrupt_on 이 도구 단위 승인을 선언으로 준다</li>
-          <li><span class="mk">−</span>파일시스템·요약·서브에이전트가 기본 스택으로 딸려 온다</li>
-          <li><span class="mk">−</span>문서의 기본 경로가 LangSmith를 가리킨다 — 미들웨어로 우회</li>
-        </ul>
-      </div>
-    </div>
-    <p class="note" style="margin-top:1.1rem">
-      DeepAgents는 플랫폼 구성요소가 아니라 <b>Graph 박스 안</b>에 있다. 우리 6개 능력과 겹치는 것은 0개다.
-      기반으로 강제하면 그래프 층에서 실패 모드 A를 다시 만드는 셈이라 템플릿 선택지로만 둔다.
-      다만 <code>cord-runtime</code>은 OTel SpanProcessor와 DeepAgents 미들웨어 두 형태로 같은 로직을 낸다.
-    </p>
-
-    <h3 style="margin-top:1.8rem">각 프로세스가 내는 두 문서</h3>
-    <div class="wk">
-      <div class="wkc a2a">
-        <span class="path">/.well-known/agent-card.json</span>
-        <p>A2A 스펙 그대로. 우리 필드는 하나도 넣지 않는다. 바깥에서 이걸 어떻게 부르는지에 대한 답이다.</p>
-        <p>Linux Foundation 프로젝트이고 스펙은 1.0. 공개된 카드 다수가 스펙을 안 지키는 상황이라 정확히 내는 것 자체가 기여가 된다.</p>
-        <span class="st">채택 · 확장 없음</span>
-      </div>
-      <div class="wkc own">
-        <span class="path">/.well-known/agent-topology.manifest.json</span>
-        <p>Node, Edge, Tier, Trigger. 안이 어떻게 생겼는지에 대한 답이다. 뷰어가 먹는 것이 이쪽.</p>
-        <p>Agent Card는 의도적으로 내부를 감추는 불투명 계약이라 이 역할을 못 한다. 두 문서는 경쟁하지 않는다.</p>
-        <span class="st">직접 정의 · 이름은 아직 선점하지 않음</span>
-      </div>
-    </div>
-    <p class="note" style="margin-top:1.1rem">
-      <code>agent-graph.json</code>이 아닌 이유 — RFC 8615는 새 well-known URI 등록을 요구하고,
-      특정 애플리케이션용 이름은 구체적이어야 하며 일반 용어 선점은 권장하지 않는다고 명시한다.
-      RFC의 예시가 <code>metadata</code>가 아니라 <code>example-metadata</code>다. 이름은 얻는 것이지 잡는 게 아니다.
-    </p>
-
-    <h3 style="margin-top:1.8rem">격리 수준 — 원칙이 아니라 기본값</h3>
-    <p class="note" style="margin-top:.4rem">
-      <b style="color:var(--build)">정정.</b> 이건 처음에 "경계를 OS가 강제한다"는 아키텍처 원칙으로 세웠다가 논거가 틀려서 강등된 결정이다.
-      경계가 하나가 아니라 둘이었다.
-    </p>
-    <div class="bnd">
-      <div class="bc keep">
-        <span class="lab">경계 1 — 이 프로젝트의 테제</span>
-        <p>플랫폼이 그래프 소스를 모른다.</p>
-        <p class="by">계약이 지킨다 — HTTP 매니페스트 + Span. <b>프로세스 개수와 무관하다.</b>
-        한 프로세스에 그래프가 열 개 있어도 카탈로그는 매니페스트만, 뷰어는 Span만 읽는다.
-        실패 모드 A도 성공 기준 A·B도 전부 여기에 대한 것이다.</p>
-      </div>
-      <div class="bc side">
-        <span class="lab">경계 2 — 곁가지</span>
-        <p>그래프 A가 그래프 B를 import하지 못한다.</p>
-        <p class="by">프로세스가 지킨다. 다만 테제가 아니고, 혼자 쓰는 도구에서 실수로 넘는 일도 아니다 —
-        의도적으로 해야 되는 일이고 하는 순간 안다.</p>
-      </div>
-    </div>
-    <p class="note" style="margin-top:1rem">
-      "이유는 RAM이 아니다"도 수사였다. 3개일 때는 맞지만 15개면 도구가 안 켜진다.
-      그리고 그래프가 늘어나는 것이 이 도구가 성공한 모습이다.
-    </p>
-
-    <div class="modes" style="margin-top:1.2rem">
-      <div class="mode pick">
-        <span class="badge">기본값</span><h3>isolation: process</h3>
-        <p>기본값은 <b>실수의 방향</b>을 정한다. 기본이 공유면 실수는 "몰랐는데 얽혀 있었다"이고 발견이 늦다.
-        기본이 격리면 실수는 "메모리를 좀 더 썼다"이고 즉시 보인다. 후자가 싸다.</p>
-        <ul>
-          <li><span class="mk">격리</span>파이썬 버전이 다름 · 의존성 충돌</li>
-          <li><span class="mk">격리</span>무거운 시스템 의존성 · 버전 공존</li>
-          <li><span class="mk">공유</span>같은 의존성 · 짧게 실행 · 자주 안 돎</li>
-          <li><span class="mk">공유</span>개수가 많음 · 무거운 로컬 자원을 나눠 씀</li>
-        </ul>
-      </div>
-      <div class="mode alt">
-        <span class="badge">슬라이스 3</span><h3>지연 기동 — 원래 안 봤던 선택지</h3>
-        <p><code>cord up</code>은 등록만 하고, Signal이 오면 그때 기동하고, 유휴 10분에 종료한다.
-        inetd와 같은 발상. 채택하면 상주 비용 논쟁의 대부분이 소멸한다.</p>
-        <ul>
-          <li><span class="mk">+</span>20개 등록, 상주 1~2개</li>
-          <li><span class="mk">+</span>매니페스트는 cord.yaml에서 생성하므로 카탈로그는 프로세스 없이도 안다</li>
-          <li><span class="mk">+</span>재개 요청이 곧 기동 트리거 — 상태는 Postgres에 있다</li>
-          <li><span class="mk">−</span>콜드 스타트 2~5초. cord run 대화형에서만 거슬린다</li>
-        </ul>
-      </div>
-    </div>
-    <p class="note" style="margin-top:1rem">
-      플랫폼은 두 모드를 <b>구분하지 못한다</b> — 오리진 목록이 다를 뿐이다. 그게 계약 설계의 요점이었다.
-      슬라이스 0·1에서 프로세스 분리를 유지하는 것도 원칙이어서가 아니라 <b>슬라이스 1의 실험 설계</b>여서다.
-      그리고 남은 열린 문제 하나 — 그래프 간 <b>동기</b> 합성은 <code>1 Run = 1 trace</code>와 충돌해서 당분간 금지한다.
-      그게 실제로 자주 필요해지면 이 결정을 뒤집을 가장 강한 근거가 된다.
-    </p>
-  </div>
-</section>
-
-<!-- SIGNALS -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>Signal의 출처는 GitHub이 아니다</h2>
-    <p class="lede">Rule 라우터는 출처를 모른다. GitHub 웹훅은 <code>http</code> 종류의 한 사례일 뿐이다.</p>
-    <div class="sig">
-      <div class="sigrow"><span class="t">schedule</span><span class="d">매일 09:00 — Aegra가 cron을 이미 준다</span></div>
-      <div class="sigrow"><span class="t">file</span><span class="d">~/notes/**.md 변경 — 로컬 도구라 오히려 자주 쓸 것. 슬라이스 3의 주 시험 대상</span></div>
-      <div class="sigrow"><span class="t">manual</span><span class="d">cord run doc-sync — 개발 중 대부분의 실행</span></div>
-      <div class="sigrow"><span class="t">http</span><span class="d">아무 웹훅. 로컬에서 터널링 마찰이 커서 슬라이스 3에서 뒤로 밀린다</span></div>
-      <div class="sigrow hi"><span class="t">run.finished</span><span class="d">다른 Run의 종료. 그래프끼리 엮이는 지점 — 아무도 안 해 주는 일이라 실패 모드 B에 대한 방어이기도 하다. when 절이 필수이고 체인 깊이 상한이 붙는다</span></div>
-    </div>
-    <p class="note" style="margin-top:1rem">
-      Subject도 이슈가 아니라 그냥 URI다 —
-      <code>github:issue/482</code>, <code>file:~/notes/api.md</code>, <code>run:0193f…</code>, <code>manual:2026-09-08T14:22</code>.
-    </p>
-  </div>
-</section>
-
-<!-- FLOW -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>흐름</h2>
-    <p class="lede">붉은 단계는 흐름을 끝까지 그려서 처음 드러난, 원래 주인이 없던 자리다.</p>
-    <div class="flows">
-      <div class="flow">
-        <h3>준비 경로 — 빌드 타임</h3>
-        <div class="fl">
-          <div class="fs" data-n="1"><span class="h">cord new</span><span class="d">pipeline 또는 deep. 인터럽트 노드는 부작용이 들어갈 자리 없이 생성된다</span></div>
-          <div class="fs" data-n="2"><span class="h">그래프를 쓴다</span><span class="d">플랫폼 없이 pytest로 로컬 검증 가능해야 한다</span></div>
-          <div class="fs" data-n="3"><span class="h">cord add</span><span class="d">워크스페이스에 소스 추가</span></div>
-          <div class="fs" data-n="4"><span class="h">cord up</span><span class="d">Manifest 읽기 → uv sync → 설정 생성 → 두 문서 마운트 → 프로세스 기동 → 싱글턴 기동</span></div>
-          <div class="fs new" data-n="5"><span class="h">카탈로그가 긁고 검증한다</span><span class="d">Node 이름 충돌, entrypoint 부재, Subject 추출식 오류는 경고. 병렬 분기 안의 인터럽트는 등록 거부</span></div>
-        </div>
-        <p class="note" style="margin-top:.6rem">
-          5번 시점에 Run이 하나도 없어도 뷰어는 그래프를 그릴 수 있다.
-          Node는 있고 Step은 없는 상태 — 둘을 가른 이유가 여기서 회수된다.
-        </p>
-      </div>
-      <div class="flow">
-        <h3>실행 경로 — 런타임</h3>
-        <div class="fl">
-          <div class="fs" data-n="1"><span class="h">Signal 도착</span><span class="d">cord watch 또는 http 수신구</span></div>
-          <div class="fs" data-n="2"><span class="h">Rule 매칭</span><span class="d">Assistant + 입력 매핑 + Subject 추출</span></div>
-          <div class="fs new" data-n="3"><span class="h">멱등성 관문</span><span class="d">signal_id 중복 제거(24h) → (assistant, subject) 진행 중 검사 → on_conflict 정책</span></div>
-          <div class="fs" data-n="4"><span class="h">Run 시작</span><span class="d">traceparent 주입 · baggage로 subject·chain.depth 전파</span><span class="m">1 Run = 1 Thread = 1 trace</span></div>
-          <div class="fs" data-n="5"><span class="h">Step 실행</span><span class="d">Node마다 observation, Attempt마다 자식 observation</span></div>
-          <div class="fs" data-n="6"><span class="h">Tier 승격</span><span class="d">LiteLLM 경유. 형제 Attempt 사이의 tier 변화로 남는다</span></div>
-          <div class="fs" data-n="7"><span class="h">Verdict</span><span class="d">규칙표 판정 → score. 위반 규칙 목록을 항상 동반한다</span></div>
-          <div class="fs" data-n="8"><span class="h">Interrupt</span><span class="d">outcome=awaiting_approval 기록 후 프로세스 종료 가능</span></div>
-          <div class="fs new" data-n="9"><span class="h">Approval — 만료 시계 포함</span><span class="d">승인함이 interrupt_id와 함께 재개. 아무도 안 누르면 플랫폼이 remind → timeout → halt</span></div>
-          <div class="fs" data-n="10"><span class="h">종료</span><span class="d">Outcome 확정 → run.finished Signal 발행</span></div>
-        </div>
-      </div>
-    </div>
-
-    <h3 style="margin-top:2rem">불행 경로와 결정</h3>
-    <div class="unh">
-      <div class="uh"><span class="n">01</span><h3>같은 Signal이 두 번</h3>
-        <p>웹훅 중복 발송은 정상 동작이다.</p>
-        <p class="dec">signal_id로 중복 제거 + (assistant, subject) 동시성 정책. 기본 skip.</p></div>
-      <div class="uh"><span class="n">02</span><h3>부작용이 두 번 실행</h3>
-        <p>재개하면 인터럽트된 노드가 처음부터 다시 돈다.</p>
-        <p class="dec">템플릿이 구조로 회피 · 부작용 노드는 멱등성 키 · 뷰어가 중복 Step을 감지.</p></div>
-      <div class="uh"><span class="n">03</span><h3>재개 값이 하나인데 인터럽트가 여럿</h3>
-        <p>RuntimeError. 대기 중 인터럽트가 여럿이면 ID 지정이 필수다.</p>
-        <p class="dec">Approval은 항상 interrupt_id를 동반한다. 하나뿐일 때도 예외 없이.</p></div>
-      <div class="uh"><span class="n">04</span><h3>아무도 승인하지 않는다</h3>
-        <p>Run이 영원히 멈춰 있다. 주인이 없던 자리.</p>
-        <p class="dec">만료 정책은 Manifest가 선언하고 집행은 플랫폼이 한다. 그래프는 만료를 몰라도 된다.</p></div>
-      <div class="uh"><span class="n">05</span><h3>프로세스가 죽는다</h3>
-        <p>Mode 2에서는 이어받을 워커가 없다.</p>
-        <p class="dec">수용. cord up 재기동 시 Aegra 리스 복구가 작동. 카탈로그는 unreachable 표시, Signal은 보류.</p></div>
-      <div class="uh"><span class="n">06</span><h3>Run이 Run을 무한히 부른다</h3>
-        <p>run.finished가 Signal이 되면 순환이 가능해진다.</p>
-        <p class="dec">chain.depth 상한 5 · 자기 루프 차단 · run.finished Rule은 when 절 필수.</p></div>
-      <div class="uh"><span class="n">07</span><h3>트레이스가 경계에서 끊긴다</h3>
-        <p>라우터·그래프·프록시가 전부 별개 프로세스다.</p>
-        <p class="dec">W3C Trace Context 표준대로. 단 체인된 Run은 새 trace — 넣으면 1 Run = 1 trace가 깨진다. caused_by로 잇는다.</p></div>
-      <div class="uh"><span class="n">08</span><h3>Signal이 아무 Rule에도 안 맞는다</h3>
-        <p>조용히 사라지고 있었다.</p>
-        <p class="dec">매칭 실패도 기록한다. signal_id, 페이로드 요약, 시도한 Rule 목록.</p></div>
-    </div>
-  </div>
-</section>
-
-<!-- RISKS -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>위험 순위와 처분</h2>
-    <p class="lede">
-      되돌리기 비용 × 확률로 줄을 세우면 대응이 갈린다. 위 둘은 설계가 걸려 있어 지금 풀었고,
-      나머지는 완화하거나 애초에 닿지 않게 했다.
-    </p>
-    <div class="risks">
-      <div class="rk head"><span></span><span>위험</span><span>비용 / 확률</span><span>처분</span></div>
-
-      <div class="rk top">
-        <span class="rn">1</span>
-        <span class="rt">어휘층을 Langfuse에 얹는 방식<small>성공 기준 C가 여기 걸려 있다</small></span>
-        <span class="rc">최상<br>높음</span>
-        <span class="rd">
-          <b>슬라이스 0에서 검증한다 — 세 갈래.</b>
-          ① Attempt를 metadata가 아니라 자식 observation 행으로. 승격이 JSON 파싱이 아니라 GROUP BY가 된다.
-          ② 질의는 Public API가 1차 경로. 직접 ClickHouse는 임시 조사용.
-          ③ <b>Langfuse는 읽는 화면이지 기록의 원본이 아니다.</b> Collector가 raw OTLP를 우리 아카이브로 한 벌 더 쓴다.
-          Langfuse가 ClickHouse 스키마는 안정적 API 계약이 아니며 업그레이드마다 커스텀 질의를 검증하라고 직접 경고한다.
-        </span>
-      </div>
-
-      <div class="rk top">
-        <span class="rn">2</span>
-        <span class="rt">마스킹이 프로세스 밖에서<small>한 번 새면 회수 불가</small></span>
-        <span class="rc">최상 · 비가역<br>중간</span>
-        <span class="rd">
-          <b>3중, Collector가 강제 지점.</b>
-          그래프 안의 SpanProcessor가 지우고 <code>cord.redacted</code>를 찍는다. LiteLLM 프록시도 같은 처리.
-          그리고 <b>Collector가 cord.redacted 없는 Span을 거부한다.</b>
-          리댁터를 빼면 조용히 새는 게 아니라 화면이 비어서 즉시 눈에 띈다.
-          남는 위험은 패턴 목록이 놓치는 값 — 수용하고 cord.yaml에서 그래프별 추가를 허용한다.
-        </span>
-      </div>
-
-      <div class="rk">
-        <span class="rn">3</span>
-        <span class="rt">인터럽트 앞 이중 실행<small>LangGraph 미해결 이슈 #6208</small></span>
-        <span class="rc">높음<br>높음</span>
-        <span class="rd">
-          우리가 고칠 수 없다. 닿지 않게 한다 — 템플릿이 인터럽트 노드를 부작용 없는 빈 노드로 만들고,
-          부작용 노드는 <code>(subject, node, attempt)</code> 멱등성 키를 갖고,
-          뷰어가 인터럽트 전후 같은 Node의 중복 Step을 경고한다. 슬라이스 2에서 의도적 실패로 시험.
-        </span>
-      </div>
-
-      <div class="rk">
-        <span class="rn">4</span>
-        <span class="rt">병렬 인터럽트 ID 충돌<small>미해결 이슈 #6626</small></span>
-        <span class="rc">중간<br>낮음</span>
-        <span class="rd">
-          <b>등록을 거부한다.</b> 걸리면 그 Run은 영원히 재개 불가라 경고로는 약하다.
-          Manifest의 edges에서 병렬 분기가 보이고 그 안의 노드가 <code>interrupts: true</code>면 카탈로그가 막는다.
-          <b>막을 수 있는 것만 막는다</b> — 3번은 코드를 못 보니 못 막고, 4번은 Manifest만으로 보이니 막는다.
-        </span>
-      </div>
-
-      <div class="rk">
-        <span class="rn">5</span>
-        <span class="rt">동시성 상태 오염<small>격리가 기본값인 동안만 그래프 간이 사라짐</small></span>
-        <span class="rc">높음<br>낮아짐</span>
-        <span class="rd">
-          같은 그래프의 서로 다른 Run 사이에는 남아 있다. <code>max_in_flight: 2</code>로 상한을 낮춘다.
-          그리고 DeepAgents 문서가 같은 위험을 직접 경고한다 — 서브에이전트·병렬 도구·다른 스레드의 병렬 호출이 동시에 도니
-          훅에서 인스턴스 속성을 바꾸지 말고 <b>그래프 상태에 두라</b>는 것. 상태는 스레드 범위라 동시성 하에서 안전하다.
-          템플릿 규칙으로 박고, 슬라이스 4에서 Subject 누출 탐지로 시험한다.
-          <b>공유 그룹을 쓰는 그래프가 생기면 그래프 간 오염이 다시 가능해지므로</b> 그 그룹에도 같은 탐지를 돌린다.
-        </span>
-      </div>
-
-      <div class="rk">
-        <span class="rn">6</span>
-        <span class="rt">뷰어 이중 데이터 소스<small>Langfuse 인제스션은 비동기다</small></span>
-        <span class="rc">낮음<br>높음</span>
-        <span class="rd">
-          화면이 잠깐 어긋날 뿐 데이터는 안 상한다. <b>숨기지 말고 드러낸다</b> —
-          Run 카드에 진행 중(라이브) / 기록됨 배지. 끝난 Run은 Langfuse에 도달할 때까지 SSE 결과를 붙들었다 교체.
-        </span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- VOCABULARY -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>합의된 명사 18개</h2>
-    <p class="lede">
-      이름 색이 출처다. <span style="color:var(--adopt)">파랑</span>은 Agent Protocol,
-      <span style="color:var(--graph)">황토</span>는 <code>workbench</code>,
-      <span style="color:var(--build)">진홍</span>은 우리가 새로 만든 것.
-    </p>
-    <div class="vocab">
-      <div class="term src-us"><span class="nm">Graph</span><p class="df">코드. 레포 하나. 자기 프로세스와 자기 오리진을 갖는다</p><span class="mp">graph_id</span></div>
-      <div class="term src-us"><span class="nm">Manifest</span><p class="df"><code>cord.yaml</code>. 두 well-known 문서와 실행 설정이 여기서 생성된다</p><span class="mp">cord.yaml</span></div>
-      <div class="term src-us"><span class="nm">Deployment</span><p class="df">Graph를 호스팅하는 프로세스 하나. 기본적으로 Graph와 1:1</p><span class="mp">service.name</span></div>
-      <div class="term src-ap"><span class="nm">Assistant</span><p class="df">Graph + 고정된 설정. API 경계에서만 쓰는 말</p><span class="mp">/assistants</span></div>
-      <div class="term src-ap"><span class="nm">Run</span><p class="df">Assistant를 입력 하나로 한 번 실행한 것. 모든 것의 단위</p><span class="mp">run → langfuse trace</span></div>
-      <div class="term src-us"><span class="nm">Subject</span><p class="df">Run이 다루는 외부 대상. URI 문자열. <b>필수</b></p><span class="mp">cord.subject.id<br>→ langfuse session_id</span></div>
-      <div class="term src-wb"><span class="nm">Node <i>정적</i></span><p class="df">Graph 정의 안의 한 자리. Manifest에 있다</p><span class="mp">cord.node.name</span></div>
-      <div class="term src-us"><span class="nm">Step <i>동적</i></span><p class="df">Node가 한 Run에서 실제로 실행된 것</p><span class="mp">observation (type=span)</span></div>
-      <div class="term src-wb"><span class="nm">Attempt</span><p class="df">한 Step 안의 한 번의 시도. <b>행이 된다</b> — metadata가 아니라 자식 observation</p><span class="mp">observation (type=generation)<br>cord.step.attempt</span></div>
-      <div class="term src-wb"><span class="nm">Tier</span><p class="df">모델 능력 등급의 이름. LiteLLM이 Model로 푼다</p><span class="mp">cord.tier<br>→ gen_ai.request.model</span></div>
-      <div class="term src-wb"><span class="nm">Outcome</span><p class="df">Step에 대한 처분. 런타임이 정한다. 닫힌 목록</p><span class="mp">cord.outcome</span></div>
-      <div class="term src-wb"><span class="nm">Verdict</span><p class="df">결정적 검증기의 판정. 위반 규칙 목록을 항상 동반한다</p><span class="mp">→ langfuse score + comment</span></div>
-      <div class="term src-ap"><span class="nm">Interrupt</span><p class="df">Run이 사람을 기다리며 멈춘 상태</p><span class="mp">interrupt()</span></div>
-      <div class="term src-us"><span class="nm">Approval</span><p class="df">Interrupt에 대한 사람의 답. <b>interrupt_id 필수</b></p><span class="mp">resume(interrupt_id, value)</span></div>
-      <div class="term src-us"><span class="nm">Rule</span><p class="df">Signal을 Assistant + 입력으로 바꾸는 선언</p><span class="mp">cord.yaml triggers</span></div>
-      <div class="term src-us"><span class="nm">Signal ID</span><p class="df">Signal의 중복 판정 키. 출처의 배달 ID 또는 페이로드 해시</p><span class="mp">cord.signal.id</span></div>
-      <div class="term src-us"><span class="nm">Chain Depth</span><p class="df">이 Run이 체인의 몇 번째인가. 상한 5</p><span class="mp">cord.chain.depth (baggage)</span></div>
-      <div class="term src-us"><span class="nm">Caused By</span><p class="df">이 Run을 낳은 Run. 새 trace를 만들되 여기로 잇는다</p><span class="mp">cord.caused_by.run_id</span></div>
-    </div>
-    <p class="note" style="margin-top:1.2rem">
-      Outcome의 값은 닫혀 있다. 값 추가는 어휘 변경이다 —
-      <code>passed · repaired · failed · escalated · awaiting_approval · halted</code>
-    </p>
-    <div class="banned">
-      <span class="b"><s>event</s> → <b>Signal / Span</b></span>
-      <span class="b"><s>agent</s> → <b>Graph</b></span>
-      <span class="b"><s>workflow</s> → <b>Graph</b></span>
-      <span class="b"><s>task, job</s> → <b>Run</b></span>
-      <span class="b"><s>pipeline, chain</s> → <b>Graph</b></span>
-      <span class="b"><s>evaluation, eval</s> → <b>Verdict</b></span>
-      <span class="b"><s>trace</s> → <b>Run</b></span>
-      <span class="b"><s>session</s> → <b>Subject</b></span>
-      <span class="b"><s>thread</s> → <b>Subject</b></span>
-    </div>
-  </div>
-</section>
-
-<!-- SUBJECT -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>Thread는 묶는 도구가 아니다</h2>
-    <p class="lede">
-      <code>thread_id</code>는 체크포인터의 기본 키이고, 같은 Thread의 다음 실행은 앞의 상태를 물려받는다.
-      이슈를 세 번째로 다시 돌리면 1·2회차의 실패한 diff와 누적된 재시도 카운터를 안고 시작하게 된다.
-    </p>
-    <div class="subj">
-      <svg viewBox="0 0 760 220" role="img" aria-label="Subject 하나가 여러 Run을 묶고, Run 하나가 Thread 하나를 갖는 구조.">
-        <g font-family="IBM Plex Sans KR,sans-serif">
-          <rect x="8" y="70" width="150" height="70" fill="#F5E4E4" stroke="#A32B2B" stroke-width="1.4"/>
-          <text x="24" y="98" font-size="14" font-weight="600" fill="#141C26">Subject</text>
-          <text x="24" y="119" font-size="11" fill="#4E5A66">github:issue/482</text>
-          <rect x="240" y="18" width="180" height="48" fill="#E2EAF1" stroke="#1D4E79" stroke-width="1.1"/>
-          <text x="256" y="40" font-size="12.5" font-weight="600" fill="#141C26">Run 1</text>
-          <text x="256" y="57" font-size="10.5" fill="#8F6414">failed</text>
-          <rect x="240" y="82" width="180" height="48" fill="#E2EAF1" stroke="#1D4E79" stroke-width="1.1"/>
-          <text x="256" y="104" font-size="12.5" font-weight="600" fill="#141C26">Run 2</text>
-          <text x="256" y="121" font-size="10.5" fill="#8F6414">halted</text>
-          <rect x="240" y="146" width="180" height="48" fill="#E2EAF1" stroke="#1D4E79" stroke-width="1.6"/>
-          <text x="256" y="168" font-size="12.5" font-weight="600" fill="#141C26">Run 3</text>
-          <text x="256" y="185" font-size="10.5" fill="#1D4E79">passed</text>
-          <g stroke="#A32B2B" stroke-width="1.2" fill="none">
-            <path d="M158 105 H200 V42 H238"/><path d="M200 105 H238"/><path d="M200 105 V170 H238"/>
-          </g>
-          <rect x="470" y="18" width="140" height="48" fill="#F6F7F9" stroke="#C7CCD3"/>
-          <text x="484" y="41" font-size="11.5" fill="#4E5A66">Thread A</text>
-          <text x="484" y="57" font-size="9.5" fill="#7C868F" font-family="IBM Plex Mono,monospace">체크포인트 범위</text>
-          <rect x="470" y="82" width="140" height="48" fill="#F6F7F9" stroke="#C7CCD3"/>
-          <text x="484" y="105" font-size="11.5" fill="#4E5A66">Thread B</text>
-          <text x="484" y="121" font-size="9.5" fill="#7C868F" font-family="IBM Plex Mono,monospace">서로 격리됨</text>
-          <rect x="470" y="146" width="140" height="48" fill="#F6F7F9" stroke="#C7CCD3"/>
-          <text x="484" y="169" font-size="11.5" fill="#4E5A66">Thread C</text>
-          <text x="484" y="185" font-size="9.5" fill="#7C868F" font-family="IBM Plex Mono,monospace">깨끗한 시작</text>
-          <g stroke="#C7CCD3" stroke-width="1.2">
-            <line x1="420" y1="42" x2="468" y2="42"/><line x1="420" y1="106" x2="468" y2="106"/>
-            <line x1="420" y1="170" x2="468" y2="170"/>
-          </g>
-          <text x="640" y="100" font-size="11" fill="#7C868F">1 Run</text>
-          <text x="640" y="118" font-size="11" fill="#7C868F">= 1 Thread</text>
-        </g>
-      </svg>
-    </div>
-  </div>
-</section>
-
-<!-- PLACEMENT -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2><code>workbench</code>의 네 패턴은 어디로 가는가</h2>
-    <p class="lede">넷 다 일반화되지는 않는다. 항목을 눌러 보세요.</p>
-    <div class="track" aria-hidden="true">
-      <span class="end l">그래프의 업무 로직</span><span class="end r">플랫폼이 소유</span>
-      <i class="tick" style="left:0"></i><i class="tick" style="left:50%"></i><i class="tick" style="left:100%"></i>
-      <i class="knob" id="knob" style="left:0%"></i>
-    </div>
-    <div class="placer">
-      <div class="plist" role="tablist" aria-label="패턴 배치">
-        <button class="pbtn" role="tab" id="t0" aria-controls="p0" aria-selected="true"><span class="n">01</span>노드 선언 계약</button>
-        <button class="pbtn" role="tab" id="t1" aria-controls="p0" aria-selected="false"><span class="n">02</span>모델 게이트웨이</button>
-        <button class="pbtn" role="tab" id="t2" aria-controls="p0" aria-selected="false"><span class="n">03</span>사람 승인 후 재개</button>
-        <button class="pbtn" role="tab" id="t3" aria-controls="p0" aria-selected="false"><span class="n">04</span>결정적 사후 검증</button>
-      </div>
-      <div class="panel" id="p0" role="tabpanel" tabindex="0" aria-live="polite">
-        <h3 id="pTitle"></h3><p class="owner" id="pOwner"></p><p id="pBody"></p>
-        <div class="split">
-          <div class="half pf"><span class="lab">플랫폼이 갖는 것</span><p id="pPf"></p></div>
-          <div class="half gr"><span class="lab">그래프가 갖는 것</span><p id="pGr"></p></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FILTER -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>도입 필터</h2>
-    <p class="lede">
-      계정도, 청구 등급도, 나중에 업그레이드를 강요할 무료 구간도 없어야 한다. 해석이 갈리는 라이선스도 탈락이다.
-    </p>
-    <div class="filter">
-      <div class="frow head"><span>후보</span><span>판정</span><span>이유</span></div>
-      <div class="frow"><span class="name">Aegra</span><span class="res pass">채택</span><span class="why">Apache 2.0. Agent Protocol 구현 — assistants·runs·HITL 재개·cron·리스 기반 크래시 복구. 커스텀 라우트로 두 문서를 마운트</span></div>
-      <div class="frow"><span class="name">Langfuse (셀프호스트)</span><span class="res warn">읽는 화면으로만</span><span class="why">핵심 MIT. 단 ClickHouse 스키마가 안정적 계약이 아니라고 스스로 경고한다 — 기록의 원본은 우리가 따로 든다</span></div>
-      <div class="frow"><span class="name">ClickHouse</span><span class="res pass">따라온다</span><span class="why">Langfuse 셀프호스트의 필수 구성요소. metadata가 Map(LowCardinality) 라 cord.* 키가 그대로 들어간다</span></div>
-      <div class="frow"><span class="name">LiteLLM Proxy</span><span class="res pass">채택</span><span class="why">MIT. enterprise/ 가 더하는 SSO·RBAC·감사로그는 우리 out-of-scope와 겹친다. 슬라이스 0에서는 DB 없이</span></div>
-      <div class="frow"><span class="name">OTel Collector</span><span class="res pass">채택</span><span class="why">어휘층이 사는 곳이자 마스킹의 강제 지점. 아카이브 분기도 여기서</span></div>
-      <div class="frow"><span class="name">uv 워크스페이스</span><span class="res pass">채택</span><span class="why">로컬 경로와 git 소스를 섞어 락·동기화. 의존성 리졸버를 우리가 쓸 이유가 없다</span></div>
-      <div class="frow"><span class="name">A2A Agent Card</span><span class="res pass">채택</span><span class="why">Linux Foundation, 스펙 1.0. 그대로 내고 확장하지 않는다. 내부 구조는 별도 문서로</span></div>
-      <div class="frow"><span class="name">DeepAgents</span><span class="res warn">템플릿으로만</span><span class="why">CompiledStateGraph를 반환하므로 Graph 박스 안에 들어간다. 우리 6개 능력과 겹치는 것은 0개. 기반으로 강제하면 그래프 층에서 실패 모드 A</span></div>
-      <div class="frow"><span class="name">gen_ai.* 시맨틱 컨벤션</span><span class="res warn">조건부</span><span class="why">전부 Development 상태이고 사전 통보 없이 제거될 수 있다. 이름을 빌리되 의존하지 않는다</span></div>
-      <div class="frow"><span class="name">에이전트 마켓플레이스</span><span class="res fail">해당 없음</span><span class="why">이식 가능한 능력을 파는 곳. 우리 그래프는 내 레포 규칙에 용접된 업무 로직이다</span></div>
-      <div class="frow"><span class="name">LangGraph Platform</span><span class="res fail">탈락</span><span class="why">셀프호스트에 엔터프라이즈 키를 요구. 범위에 대한 해석이 커뮤니티에서 갈린다</span></div>
-      <div class="frow"><span class="name">LangSmith</span><span class="res fail">탈락</span><span class="why">무료 보관 2주. 이 플랫폼이 답하려는 질문은 그보다 오래됐다</span></div>
-      <div class="frow"><span class="name">Arize Phoenix</span><span class="res fail">탈락</span><span class="why">Elastic License 2.0으로 OSI 오픈소스가 아니다. 인수 발표문에 존속 약속도 없다</span></div>
-      <div class="frow"><span class="name">n8n</span><span class="res fail">탈락</span><span class="why">소스는 공개지만 사용 제한이 붙는다</span></div>
-    </div>
-  </div>
-</section>
-
-<!-- SUCCESS -->
-<section>
-  <span class="dot"></span>
-  <div class="sec-inner">
-    <h2>끝났는지 판정하는 법</h2>
-    <p class="lede">반증 가능한 형태로만 적는다. 각 기준이 어느 슬라이스에서 판정되는지도 함께.</p>
-    <div class="succ">
-      <div class="sc"><span class="k">A · 슬라이스 1</span><p>무관한 두 번째 그래프를 플랫폼 코드 수정 없이 등록·실행·조회한다</p></div>
-      <div class="sc"><span class="k">B · 슬라이스 1</span><p>뷰어 소스를 다 뒤져도 특정 그래프의 Node 이름이 하나도 없다</p></div>
-      <div class="sc"><span class="k">C · 슬라이스 0</span><p>"지난 8주간 모든 그래프에서 Tier가 올라간 Node 상위 10개"를 질의 하나로 답한다</p></div>
-      <div class="sc"><span class="k">D · 슬라이스 3</span><p>새 Rule을 추가하는 데 필요한 변경이 설정 파일 한 줄이다</p></div>
-      <div class="sc"><span class="k">E · 슬라이스 1</span><p><code>cord up</code> 한 줄로 노트북에서 계정 없이, 키 없이 전부 뜬다</p></div>
-    </div>
-  </div>
-</section>
-
-<footer>
-  <div class="sec-inner">
-    <p>
-      문제와 경계, 어휘, 흐름, 위험, 솔루션 형태, 슬라이스까지 여섯 단계의 결정을 옮긴 것.
-      다음은 문서가 아니라 슬라이스 0의 첫 커밋이다.
-    </p>
-  </div>
-</footer>
+      <text x="16" y="38" font-size="12" fill="#4E5A66">실선 — 지금 동작하고 실측으로 검증된 경로</text>
+      <text x="16" y="58" font-size="12" fill="#4E5A66">점선 — 선택적이거나 아직 계획인 경로</text>
+    </svg>
+    <figcaption>연결에는 매니페스트가 필요 없다. 그림(점선)이 없어도 실선 경로는 그대로 동작한다 — ADR-0015.</figcaption>
+  </figure>
+  <p class="note">전제: 여러 팀이 쓰는 사내 플랫폼이 아니라 혼자 쓰는 로컬 도구다. "노트북에서 계정 없이, 키 없이 뜬다"가 부가 조건이 아니라 주 조건이다.
+    이 문서는 요약이고, 결정의 정본은 <a href="../decisions/DECISIONS.md">ADR 인덱스</a>다.</p>
 </div>
 
-<script>
-const DATA = [
-  { pos: 42, title: "노드 선언 계약",
-    owner: "판정 — 어휘는 플랫폼, 내용은 그래프",
-    body: "노드가 무엇을 읽고 쓰는지, 어떤 Tier에서 시작하는지를 코드가 아니라 데이터로 미리 밝히는 방식 자체는 어떤 그래프에나 쓸모가 있다. 하지만 workbench가 선언하는 상태 이름들은 그 그래프만의 것이다. 플랫폼은 Manifest의 문법만 정의하고, 지키지 않아도 등록은 되게 한다 — 다만 병렬 분기 안의 인터럽트처럼 Manifest만으로 보이는 치명적 구성은 거부한다.",
-    pf: "cord.yaml 스키마와 그것을 읽는 규약. 막을 수 있는 것만 막는 등록 검증.",
-    gr: "무엇을 선언할지. 상태 이름, 검증 규칙, 컨텍스트 예산은 전부 그래프의 사정." },
-  { pos: 96, title: "모델 게이트웨이",
-    owner: "판정 — 플랫폼, 그리고 LiteLLM으로 가져온다",
-    body: "넷 중 가장 명확하게 일반화된다. 모델 호출이 각 그래프 안에서 제각기 일어나면 SDK 내부 재시도가 상위 모델로 조용히 갈아타는 순간을 아무도 보지 못한다. 게이트웨이를 하나로 모으면 승격이 관측 가능한 사건이 되고 비용 집계가 한 군데로 모인다. 프로세스를 나눠도 게이트웨이는 하나로 공유하므로 격리와 충돌하지 않는다.",
-    pf: "LiteLLM 프록시 한 대. Tier→Model 해석, 예산·레이트리밋, 비용 집계, 나가기 전 마스킹.",
-    gr: "어느 Tier에서 시작할지, 어떤 실패에 승격할지 — cord.yaml의 정책 값만 선언한다." },
-  { pos: 58, title: "사람 승인 후 재개",
-    owner: "판정 — 메커니즘은 이미 있다, 우리는 창구와 시계",
-    body: "멈추고 이어받는 능력은 LangGraph 체크포인터와 Aegra의 HITL 재개가 이미 한다. 무엇을 승인받아야 하는지는 그래프의 판단이다. 남는 것이 둘 있다 — 누가 기다리는지를 그래프를 가로질러 한 화면에 모으는 일, 그리고 아무도 안 누를 때 만료시키는 일. 프로세스가 나뉘어 있으니 전자는 더더욱 아무도 안 해 준다.",
-    pf: "승인함 화면. interrupt_id와 함께 재개를 되돌려 보내고, remind → timeout → halt 시계를 든다.",
-    gr: "어디서 멈출지, 무엇을 보여줄지, 승인·거절이 상태를 어떻게 바꿀지. 만료는 몰라도 된다." },
-  { pos: 8, title: "결정적 사후 검증",
-    owner: "판정 — 그래프",
-    body: "모델 출력을 두 번째 모델이 아니라 규칙표로 검사한다는 원칙은 훌륭하지만, 그 규칙표는 전부 특정 그래프의 출력 형태에 대한 것이다. 플랫폼이 공용 검증기를 제공하면 결국 모든 그래프의 출력 스키마를 알아야 하고, 그건 방금 없앤 결합을 뒷문으로 들이는 일이다. 기록할 자리는 이미 있다 — Langfuse의 score가 불리언·범주형 값과 코멘트를 observation에 붙이는 구조라 Verdict와 모양이 맞는다.",
-    pf: "Verdict를 score로, 위반 규칙 목록을 코멘트로 기록. Outcome은 Step의 처분으로 따로.",
-    gr: "규칙표 전부. 무엇이 통과이고 어떻게 고칠지는 그래프만 안다." }
-];
-const btns=[...document.querySelectorAll('.pbtn')],knob=document.getElementById('knob');
-const el={title:document.getElementById('pTitle'),owner:document.getElementById('pOwner'),
-  body:document.getElementById('pBody'),pf:document.getElementById('pPf'),gr:document.getElementById('pGr')};
-function pick(i){
-  const d=DATA[i];
-  btns.forEach((b,j)=>b.setAttribute('aria-selected',j===i?'true':'false'));
-  knob.style.left=d.pos+'%';
-  knob.style.background=d.pos>70?'var(--adopt)':d.pos<30?'var(--graph)':'var(--ink)';
-  el.title.textContent=d.title;el.owner.textContent=d.owner;
-  el.owner.style.color=d.pos>70?'var(--adopt)':d.pos<30?'var(--graph)':'var(--build)';
-  el.body.textContent=d.body;el.pf.textContent=d.pf;el.gr.textContent=d.gr;
-}
-btns.forEach((b,i)=>{
-  b.addEventListener('click',()=>pick(i));
-  b.addEventListener('keydown',e=>{
-    if(e.key==='ArrowDown'||e.key==='ArrowRight'){e.preventDefault();const n=(i+1)%btns.length;btns[n].focus();pick(n);}
-    if(e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault();const n=(i-1+btns.length)%btns.length;btns[n].focus();pick(n);}
-  });
-});
-pick(0);
-</script>
+<main class="spine">
+
+<!-- ============ repo / process / graph ============ -->
+<section id="units">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">정정 · 초기 설계의 첫 문장</div>
+    <h2>레포, 프로세스, 그래프는 서로 다른 것이다</h2>
+    <p class="lede">초기 설계는 "레포 하나가 프로세스 하나"에서 출발했다. 패키징 관례를 정체성으로 착각한 것이다(ADR-0002).
+      이 저장소 하나가 이미 배포 파일 둘로 프로세스 둘을 띄우고, Deployment 하나는 Graph를 여럿 호스팅할 수 있다.
+      cordboard가 연결하는 단위는 레포도 프로세스도 아니고, <strong>호출자가 고른 Deployment의 Graph</strong>다.</p>
+
+    <figure>
+      <svg viewBox="0 0 1040 330" role="img" aria-labelledby="u-t u-d" font-family="IBM Plex Sans KR, system-ui, sans-serif">
+        <title id="u-t">레포, Deployment, Graph의 관계</title>
+        <desc id="u-d">레포 하나에 Aegra 배포 파일이 둘 있고, 각 파일이 프로세스 하나를 띄워 Graph를 호스팅한다. 프로세스 하나가 Graph 둘을 호스팅하는 모양도 가능하다. 호출자는 Deployment 주소와 Graph를 골라 실행한다.</desc>
+        <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#141C26"/></marker></defs>
+
+        <rect x="16" y="40" width="250" height="220" rx="8" fill="#F6F7F9" stroke="#7C868F"/>
+        <text x="32" y="66" font-size="14" font-weight="600" fill="#141C26">레포 하나</text>
+        <text x="32" y="86" font-size="11" fill="#4E5A66">cordboard-proto — 패키징 단위일 뿐</text>
+        <rect x="32" y="112" width="218" height="40" rx="4" fill="#E2EAF1" stroke="#1D4E79"/>
+        <text x="46" y="137" font-size="12" font-family="IBM Plex Mono, monospace" fill="#1D4E79">aegra/aegra.json</text>
+        <rect x="32" y="170" width="218" height="40" rx="4" fill="#E2EAF1" stroke="#1D4E79"/>
+        <text x="46" y="195" font-size="12" font-family="IBM Plex Mono, monospace" fill="#1D4E79">aegra/opaque.json</text>
+        <text x="32" y="240" font-size="11" fill="#4E5A66">어느 그래프가 프로세스를 공유하나 = 배포 파일</text>
+
+        <rect x="340" y="40" width="250" height="100" rx="8" fill="#E2EAF1" stroke="#1D4E79"/>
+        <text x="356" y="64" font-size="12" font-weight="600" fill="#1D4E79">Deployment A — 프로세스</text>
+        <rect x="356" y="78" width="218" height="44" rx="4" fill="#F0E8D6" stroke="#8F6414"/>
+        <text x="370" y="105" font-size="12" font-family="IBM Plex Mono, monospace" fill="#8F6414">Graph minimal-graph</text>
+        <line x1="250" y1="132" x2="338" y2="96" stroke="#141C26" stroke-width="1.3" marker-end="url(#ah2)"/>
+
+        <rect x="340" y="160" width="250" height="100" rx="8" fill="#E2EAF1" stroke="#1D4E79"/>
+        <text x="356" y="184" font-size="12" font-weight="600" fill="#1D4E79">Deployment B — 프로세스</text>
+        <rect x="356" y="198" width="218" height="44" rx="4" fill="#F0E8D6" stroke="#8F6414"/>
+        <text x="370" y="225" font-size="12" font-family="IBM Plex Mono, monospace" fill="#8F6414">Graph opaque-graph</text>
+        <line x1="250" y1="190" x2="338" y2="210" stroke="#141C26" stroke-width="1.3" marker-end="url(#ah2)"/>
+
+        <rect x="664" y="70" width="250" height="160" rx="8" fill="#F6F7F9" stroke="#1D4E79" stroke-dasharray="5 4"/>
+        <text x="680" y="94" font-size="12" font-weight="600" fill="#1D4E79">가능한 모양 — 프로세스 하나</text>
+        <rect x="680" y="108" width="218" height="44" rx="4" fill="#F0E8D6" stroke="#8F6414" stroke-dasharray="4 3"/>
+        <text x="694" y="135" font-size="12" fill="#8F6414">Graph 하나</text>
+        <rect x="680" y="164" width="218" height="44" rx="4" fill="#F0E8D6" stroke="#8F6414" stroke-dasharray="4 3"/>
+        <text x="694" y="191" font-size="12" fill="#8F6414">Graph 둘</text>
+
+        <text x="16" y="298" font-size="12" fill="#141C26">호출자는 <tspan font-weight="600">(Deployment 주소, Graph)</tspan>를 고른다 —</text>
+        <text x="16" y="318" font-size="12" font-family="IBM Plex Mono, monospace" fill="#A32B2B">execute(endpoint, "minimal-graph", subject, graph_input)</text>
+      </svg>
+      <figcaption>실선은 이 저장소에 실제로 있는 배포다. 점선은 정의상 허용되는 모양(Deployment는 Graph를 하나 이상 호스팅한다)의 예시다.</figcaption>
+    </figure>
+
+    <div class="tw"><table>
+      <thead><tr><th>단위</th><th>무엇인가</th><th>누가 정하나</th><th>cordboard가 쓰는 곳</th></tr></thead>
+      <tbody>
+        <tr><td>레포</td><td>코드를 묶는 패키징 관례</td><td>개발자</td><td>쓰지 않는다. 정체성이 아니다</td></tr>
+        <tr><td>Deployment</td><td>주소를 가진 프로세스. Graph를 하나 이상 호스팅</td><td>Aegra 배포 파일</td><td>연결할 주소, 격리 단위</td></tr>
+        <tr><td>Graph</td><td>Run을 받고 span을 내는 실행 단위. 원하면 자기를 설명한다</td><td>그래프 코드 — 표시 이름은 <code>compile(name=...)</code></td><td>호출자가 고르는 대상. 실행 기록의 <code>cord.graph.id</code></td></tr>
+        <tr><td>Run</td><td>실행 하나</td><td>Aegra가 발급한 API Run ID</td><td>trace 하나. <code>cord.run.id</code></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ boundary ============ -->
+<section id="boundary">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">경계 · ADR-0013 · 0014 · 0015</div>
+    <h2>누가 무엇을 소유하나</h2>
+    <p class="lede">교환원은 요청한 상대를 연결하고 통화 기록을 남긴다. 통화 내용을 이해하지 않고, 상대가 어떤 도구로 일하는지 정하지 않으며,
+      상대의 사정을 보고 회선을 거절하지도 않는다.</p>
+
+    <div class="grid3">
+      <div class="card own-build">
+        <span class="tag build">cordboard가 직접 만든다</span>
+        <ul>
+          <li>연결 — 고른 Graph의 실행 API 호출</li>
+          <li>공용 실행 어휘 — Run · Step · Attempt span</li>
+          <li>기록의 원본 — raw OTLP 아카이브와 질의</li>
+          <li>카탈로그와 뷰어 <span class="badge plan">계획</span></li>
+          <li>선언적 Signal 라우팅 <span class="badge plan">계획</span></li>
+          <li>승인함과 만료 시계 <span class="badge plan">계획</span></li>
+          <li>Deployment 기동 <span class="badge plan">계획</span></li>
+        </ul>
+      </div>
+      <div class="card own-adopt">
+        <span class="tag adopt">가져와서 쓴다</span>
+        <ul>
+          <li><strong>Aegra / LangGraph</strong> — 실행, 체크포인트, 재개, 취소, 스트리밍, 복구</li>
+          <li><strong>OTel Collector</strong> — 도장 검문, 내보내기</li>
+          <li><strong>redact-secret</strong> — 비밀 탐지와 공개 정책</li>
+          <li><strong>agent-topology</strong> — 토폴로지 포맷과 파생</li>
+          <li><strong>Langfuse</strong> — 기록을 읽는 화면</li>
+          <li><strong>uv</strong> — 의존성 해석</li>
+        </ul>
+      </div>
+      <div class="card own-graph">
+        <span class="tag graph">그래프가 소유한다</span>
+        <ul>
+          <li>업무 로직, 상태, 결정적 검증(Verdict)</li>
+          <li>모델 선택, 공급자 키, SDK, 게이트웨이</li>
+          <li>재시도와 승격 결정 — 승격은 선언한다</li>
+          <li>인터럽트 위치, 부작용의 멱등성</li>
+          <li>자기 설명 — 이름, 매니페스트 <span class="badge warn">선택</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>그 값이 그래프를 묘사하는가, 연결을 묘사하는가?</strong>
+      <p>설정을 하나 더하려 할 때마다 묻는 질문이다. 그래프를 묘사하면 cordboard에 두지 않는다 — 그래프 하나를 붙이려고
+        cordboard 쪽에 무언가를 써야 한다면 이미 틀렸다. 그래서 그래프마다 붙는 설정 파일도, 매니페스트 안의 cordboard 확장도 없다(ADR-0014).
+        cordboard에 설정이 필요해지면 그것은 연결에 관한 것이다 — 어떤 Deployment가 꽂혀 있나, 무엇이 무엇을 시작하나, Subject를 어떻게 뽑나,
+        동시성과 승인 만료.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="card fail">
+        <div class="kicker">실패 모드 A</div>
+        <h3>두 번째 모놀리스</h3>
+        <p>플랫폼이 그래프 내부를 너무 많이 안다. 새 그래프를 붙이려면 플랫폼을 고쳐야 한다.</p>
+        <p class="note">증상 — cordboard 쪽에 특정 그래프의 노드 이름, 상태 필드, 모델 설정이 등장하는 순간.</p>
+      </div>
+      <div class="card fail">
+        <div class="kicker">실패 모드 B</div>
+        <h3>아무것도 아닌 층</h3>
+        <p>너무 얇아서 Aegra와 Langfuse를 그냥 쓰는 것보다 나은 게 없다.</p>
+        <p class="note">증상 — 걷어내도 아무도 불편하지 않은 순간. 자체 트레이서를 가진 그래프(workbench)가 가장 날카로운 시험이다.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:2rem">명시적으로 하지 않는 것</h3>
+    <div class="tw"><table>
+      <tbody>
+        <tr><td>그래프를 묘사하지 않는다</td><td>그래프 단위 설정 없음, 생성 문서의 이름·id를 고치지 않음 — ADR-0014</td></tr>
+        <tr><td>연결을 막지 않는다</td><td>매니페스트는 선택, 카탈로그 규칙은 전부 경고 — ADR-0015</td></tr>
+        <tr><td>모델을 고르지 않는다</td><td>모델·키·Tier 정책은 그래프 소유. LiteLLM은 선택적 예제 — ADR-0013</td></tr>
+        <tr><td>실행 런타임이 아니다</td><td>Thread·체크포인트·재개·취소·스트리밍은 Aegra</td></tr>
+        <tr><td>오케스트레이션 프레임워크가 아니다</td><td>LangGraph도 DeepAgents도 대체하지 않는다</td></tr>
+        <tr><td>포맷·탐지기를 만들지 않는다</td><td>토폴로지 포맷은 agent-topology, 비밀 탐지는 redact-secret. 우회 대신 업스트림에 올린다</td></tr>
+        <tr><td>트레이스 저장 엔진이 아니다</td><td>Langfuse는 읽는 화면. 원본은 우리가 든다</td></tr>
+        <tr><td>그 밖</td><td>의존성 해석, 평가 플랫폼, 프롬프트 관리, 멀티테넌시, 프로덕션 배포</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ what works now ============ -->
+<section id="now">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">지금 되는 것 · 슬라이스 0 · 0.5</div>
+    <h2>기록 경로는 실측까지 끝났다</h2>
+    <p class="lede">가장 비싼 미지 — 우리 어휘로 기록한 데이터가 질의에 답하는가, 마스킹 관문이 실제로 작동하는가 — 를 가장 먼저 풀었다.
+      연결은 아직 한 가닥이다. 호출자가 Graph를 지정해 실행할 수는 있지만, 카탈로그·뷰어·CLI는 없다.</p>
+
+    <div class="tw"><table>
+      <thead><tr><th>구성</th><th>하는 일</th><th>근거</th></tr></thead>
+      <tbody>
+        <tr><td><code>execution.py</code></td><td>Run · Step · Attempt span과 두 Outcome 목록. Tier 없는 Attempt 허용(semconv 0.3.0)</td><td>ADR-0008 · #4 · #7</td></tr>
+        <tr><td><code>telemetry.py</code></td><td>프로세스 안에서 OTLP envelope 전체를 <code>redact-secret==0.1.0b1</code>로 처리하고 성공 시 <code>cord.redacted=true</code>. block이면 span 전체 억제</td><td>ADR-0006 · #5</td></tr>
+        <tr><td>Collector 0.148.0</td><td>도장 없는 span을 버리는 관문. 날짜별 append-only OTLP JSONL</td><td>ADR-0005 · #5</td></tr>
+        <tr><td><code>archive-escalations</code></td><td>56일 창, span_id 중복 제거, Graph/Node별 명시적 승격 집계</td><td>ADR-0008 · #6</td></tr>
+        <tr><td><code>archive-check</code></td><td>raw·디코드된 아카이브를 redact-secret CLI로 재검사</td><td>#5</td></tr>
+        <tr><td><code>aegra_client.py</code></td><td>Aegra 0.10.4 공개 API로 새 Thread와 Run을 만들어 실행</td><td>ADR-0003 · #9</td></tr>
+        <tr><td><code>langfuse-compare</code></td><td>self-hosted Langfuse 3.225.7 공개 API의 답을 아카이브와 비교</td><td>ADR-0005 · #10</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="grid2">
+      <div class="card">
+        <span class="badge done">실측</span>
+        <h3 style="margin-top:.5rem">모델 없는 그래프도 같은 경로로</h3>
+        <p>opaque graph를 Aegra로 두 번 실행해 span 6개(Run·Step·Attempt 각 2), 모델·Tier 속성 0, 승격 0, 합성 비밀 0을 확인했다.
+          이 저장소는 LiteLLM도 agent-topology도 의존성으로 갖지 않은 채로다.</p>
+      </div>
+      <div class="card">
+        <span class="badge done">실측</span>
+        <h3 style="margin-top:.5rem">통합 경로</h3>
+        <p>Aegra → 그래프 → (선택적) LiteLLM 예제 → Collector로 이어진 실제 아카이브에서 span 40개, 명시적 승격 2회,
+          상태 격리와 동시 실행의 부모 관계를 확인했다. 실제 모델 공급자 호환성은 실행하지 않았고 주장하지 않는다.</p>
+      </div>
+    </div>
+    <p class="note">재현 명령과 결과: <a href="../archive.md">archive</a> · <a href="../archive-query.md">archive-query</a> ·
+      <a href="../aegra.md">aegra</a> · <a href="../switchboard-boundary.md">switchboard-boundary</a> · <a href="../langfuse.md">langfuse</a></p>
+  </div>
+</section>
+
+<!-- ============ record shape ============ -->
+<section id="record">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">실행 기록의 모양 · ADR-0002 · 0003 · 0008</div>
+    <h2>Run 하나는 trace 하나, Attempt는 Step의 자식</h2>
+    <p class="lede">아카이브는 append-only라 트리 모양이 한 번 굳으면 되돌리는 비용이 마이그레이션이 된다. 그래서 데이터가 몇 줄일 때 정했다.</p>
+
+<pre class="tree"><b>Run</b>  <i>trace 하나 · cord.graph.id · cord.subject.id · cord.semconv.version=0.3.0</i>
+└── <b>Step</b>  <i>Node 한 번의 실행 · Outcome: passed | repaired | failed | awaiting_approval | halted</i>
+    ├── <b>Attempt 1</b>  <i>tier=fast (선택) · Outcome: failed</i>
+    ├── <b>Attempt 2</b>  <i>tier=fast · Outcome: escalated   ← 그래프가 선언한 승격</i>
+    └── <b>Attempt 3</b>  <i>tier=deep · Outcome: passed</i>
+        └── <i>그래프 내부의 선택적 span (예: 모델 호출)</i></pre>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>승격은 추론하지 않고 선언한다</h3>
+        <p>모델 문자열이나 Tier 순서로 승격을 판정하지 않는다. 같은 Tier 재시도는 승격이 아니다. 결정적 수리로 통과하면
+          Step은 <code>repaired</code>, 원래 Attempt는 위반 규칙과 함께 <code>failed</code>로 남는다 — 모델이 틀렸다는 사실을 지우지 않는다.</p>
+      </div>
+      <div class="card">
+        <h3>인터럽트는 Step span을 닫는다 <span class="badge plan">선언 · #28</span></h3>
+        <p><code>interrupt()</code>에서 Step을 <code>awaiting_approval</code>로 닫고, 재개는 <code>cord.resumed_from</code>을 단 새 Step을 연다.
+          사람의 판단 시간은 Node가 아니라 Run에 속한다. 규칙의 근거는 workbench가 한 달치 실제 데이터에서 본 14시간짜리 노드 duration이다.
+          슬라이스 2가 처음 실데이터로 시험한다.</p>
+      </div>
+      <div class="card">
+        <h3>Subject가 묶고, Thread는 묶지 않는다</h3>
+        <p>Thread는 체크포인터의 키라서 같은 Thread의 다음 실행은 앞의 상태를 물려받는다. 독립 실행은 새 Thread로 하고,
+          여러 실행은 필수 불투명 문자열인 Subject로 묶는다. Langfuse에서는 <code>session_id</code>가 된다.</p>
+      </div>
+      <div class="card">
+        <h3>재개는 아직 논리 Run이 아니다</h3>
+        <p>Aegra 0.10.4는 재개에도 새 API Run ID를 낸다. 여러 API 호출을 하나의 논리 Run으로 잇는 규약은 승인·재개 통합(슬라이스 2)의 몫으로 미뤄 두었다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ redaction ============ -->
+<section id="gate">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">기록 경로의 관문 · ADR-0005 · 0006</div>
+    <h2>지운 것만 들어온다</h2>
+    <p class="lede">한 번 샌 비밀은 회수할 수 없다. 그래서 지우는 곳과 검문하는 곳을 나눴다. 지우기는 span을 만든 프로세스 안에서,
+      검문은 Collector에서.</p>
+    <div class="grid3">
+      <div class="card own-graph"><span class="tag graph">그래프 프로세스</span><h3>지우고 도장</h3>
+        <p>공개 OTel 인코더로 envelope 전체를 만들고 문자열마다 <code>redact-secret</code>의 기본 정책을 적용한다. 성공해야만 도장을 찍는다.
+          <code>block</code> 판정이 하나라도 있으면 치환 결과가 있어도 span을 통째로 버린다.</p></div>
+      <div class="card own-adopt"><span class="tag adopt">Collector</span><h3>도장만 본다</h3>
+        <p>또 하나의 탐지기가 아니라 관문이다. 도장 없는 span은 버린다. 리댁터를 빼면 조용히 새는 게 아니라 아카이브가 비어서 즉시 보인다.
+          Langfuse 콜백을 직접 다는 것은 이 관문을 우회하므로 금지다.</p></div>
+      <div class="card own-build"><span class="tag build">아카이브</span><h3>원본은 우리가 든다</h3>
+        <p>날짜별 raw OTLP JSONL이 기록의 원본이다. "raw"는 포맷이지 지우지 않았다는 뜻이 아니다. 전체 프롬프트·diff·모델 출력은 span 속성에 넣지 않는다.
+          Langfuse는 같은 기록을 읽는 두 번째 목적지다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ manifest ============ -->
+<section id="manifest">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">자기 설명 · ADR-0009 · 0011 · 0012 · 0015</div>
+    <h2>매니페스트는 관문이 아니라 그림의 재료다</h2>
+    <p class="lede">Deployment는 두 문서를 낼 수 있다 — 바깥에 보이는 A2A <code>agent-card.json</code>(우리 필드 0개)과 안의 구조를 담은
+      <code>agent-topology.manifest.json</code>. 그래프가 자기 프로세스에서 agent-topology로 파생하고, cordboard는 받은 그대로 읽는다.
+      둘 다 연결의 전제조건이 아니다.</p>
+
+    <div class="tw"><table>
+      <thead><tr><th>매니페스트 상태</th><th>연결 · 기록</th><th>카탈로그 · 뷰어</th></tr></thead>
+      <tbody>
+        <tr><td>없음</td><td>정상</td><td>그림 없이 실행 기록만 보여준다</td></tr>
+        <tr><td>있고 스키마에 맞음</td><td>정상</td><td>그림을 그리고 실행 기록을 대조한다</td></tr>
+        <tr><td>스키마 위반</td><td>정상</td><td><span class="badge warn">경고</span> 그 문서를 쓰지 않는다</td></tr>
+        <tr><td>표류 — 게시본 ≠ 현재 구조</td><td>정상, 기동도 멈추지 않음</td><td><span class="badge warn">경고</span> 그림을 낡은 상태로 표시하고 대조하지 않는다. 갱신 경로 안내</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>거짓말은 연결이 아니라 화면에서 막는다</h3>
+        <p>예전에는 표류하면 기동을 거부했다 — "경고는 며칠 뒤 눈이 걸러내고, 그때부터 뷰어가 거짓말한다." 관찰은 옳다. 다만 해로운 것은 표류가 아니라
+          낡은 그림을 현재처럼 보여주는 것이다. 표류한 그림은 보이는 모양 자체가 바뀌므로 로그 한 줄처럼 걸러지지 않는다.</p>
+      </div>
+      <div class="card">
+        <h3>병렬 분기 안의 인터럽트는 경고</h3>
+        <p>한 source에서 나가는 <code>direct</code> 엣지가 둘 이상이고 그 대상에 정적 인터럽트가 있으면 경고한다. 재개 불가 위험(langgraph#6626)은
+          그래프 자신의 실행 안에서 생긴다. 병렬 여부는 agent-topology의 <em>실험적</em> branch 해석에서 오고, <code>unknown</code>이면
+          "확인할 수 없음"으로 표시한다. 동적 <code>interrupt()</code>는 토폴로지에 보이지 않으므로 다루지 않는다.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:2rem">업스트림 상태 — agent-topology 0.1.0b3 실측</h3>
+    <div class="tw"><table>
+      <thead><tr><th>항목</th><th>상태</th><th>cordboard에서 걸리는 곳</th></tr></thead>
+      <tbody>
+        <tr><td>AT-1 depth≥1에서 서브그래프 부모 노드 소실</td><td><span class="badge next">열림</span></td><td>뷰어의 span 대조. 그래프가 스스로 depth≥1을 고를 때만</td></tr>
+        <tr><td>AT-2 sentinel 판별</td><td><span class="badge done">실험적 해결</span></td><td>뷰어가 <code>__start__</code>/<code>__end__</code>를 그릴지</td></tr>
+        <tr><td>AT-3 팬아웃의 병렬 의미</td><td><span class="badge done">실험적 해결</span></td><td>R3 경고의 품질</td></tr>
+        <tr><td>AT-4 joins 정의</td><td><span class="badge done">정의됨</span></td><td>뷰어의 합류점 표시</td></tr>
+        <tr><td>AT-5 이름·id</td><td><span class="badge done">해결</span></td><td>없음 — cordboard는 문서를 합치거나 고치지 않는다</td></tr>
+        <tr><td>AT-6 LangGraph 1.2.10–1.2.11</td><td><span class="badge next">열림</span></td><td>뷰어가 그림을 그릴 수 있는 범위. 범위 밖 그래프도 연결·기록된다</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">어느 항목도 연결을 막지 않는다. 항목별 재현은 <a href="../decisions/cordboard-upstream-requirements.md">업스트림 요구사항</a>에 있다.
+      매니페스트 안의 <code>graphs[].id</code>는 문서 안 주소일 뿐 정체성이 아니고, 한 그래프짜리 문서는 기본값 <code>main</code>으로 충분하다.</p>
+  </div>
+</section>
+
+<!-- ============ isolation ============ -->
+<section id="isolation">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">격리 · ADR-0001</div>
+    <h2>프로세스 분리는 원칙이 아니라 기본값</h2>
+    <p class="lede">처음엔 "경계를 OS가 강제한다"는 원칙으로 세웠다가 논거가 틀려서 강등했다. 경계가 하나가 아니라 둘이었다.</p>
+    <div class="grid2">
+      <div class="card own-build">
+        <div class="kicker">경계 1 — 이 프로젝트의 테제</div>
+        <h3>cordboard는 그래프 소스를 모른다</h3>
+        <p>계약이 지킨다 — 실행 API와 span, 그리고 그래프가 원하면 내는 매니페스트. 프로세스 개수와 무관하다.
+          한 프로세스에 그래프가 열 개 있어도 cordboard는 그 계약만 읽는다.</p>
+      </div>
+      <div class="card own-graph">
+        <div class="kicker">경계 2 — 곁가지</div>
+        <h3>그래프 A가 그래프 B를 import하지 못한다</h3>
+        <p>프로세스가 지킨다. 다만 테제가 아니다. 기본이 격리면 실수는 "메모리를 좀 더 썼다"이고 바로 보인다.
+          기본이 공유면 실수는 "몰랐는데 얽혀 있었다"이고 늦게 발견된다. 앞쪽이 싸다.</p>
+      </div>
+    </div>
+    <p class="note">어느 그래프가 프로세스를 공유하는지는 cordboard 설정이 아니라 Aegra 배포 파일이 표현한다. Signal이 올 때 기동하고
+      유휴 시 내리는 지연 기동은 라우팅과 함께 슬라이스 3에서 다룬다. 프로세스가 떠 있지 않을 때 카탈로그가 보여줄 수 있는 것은 마지막으로 받은 매니페스트다.</p>
+  </div>
+</section>
+
+<!-- ============ planned flow ============ -->
+<section id="flow">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">앞으로의 연결 · 계획</div>
+    <h2>무엇이 무엇을 시작하나</h2>
+    <p class="lede">여기부터는 아직 구현이 없다. 모두 연결에 관한 것이라 cordboard의 몫이다.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Signal 출처</th><th>예</th><th>슬라이스</th></tr></thead>
+      <tbody>
+        <tr><td>manual</td><td>개발 중 대부분의 실행</td><td>3</td></tr>
+        <tr><td>file</td><td>노트 파일이 바뀌면 — 로컬 도구라 오히려 자주 쓴다</td><td>3</td></tr>
+        <tr><td>schedule</td><td>매일 정해진 시각</td><td>3</td></tr>
+        <tr><td>http</td><td>아무 웹훅. GitHub은 한 사례일 뿐 — 로컬 터널링 마찰로 뒤로</td><td>이후</td></tr>
+        <tr><td><code>run.finished</code></td><td>다른 Run의 종료. 그래프끼리 비동기로 엮이는 지점</td><td>4</td></tr>
+      </tbody>
+    </table></div>
+    <p>Rule이 Signal을 Assistant와 입력으로 바꾸고 Subject를 뽑는다. 라우터는 Signal ID로 중복을 없애고 <code>(Assistant, Subject)</code>에 동시성 정책을 적용하며,
+      어느 Rule에도 맞지 않은 Signal도 기록한다. 체인된 Run은 새 trace를 만들고 <code>cord.caused_by.run_id</code>로 앞 Run을 가리키며
+      <code>cord.cascade.depth</code>로 깊이를 남긴다. 동기 합성은 그래프 안의 서브그래프로 한다.</p>
+    <p>승인은 항상 <code>interrupt_id</code>를 동반한다. 어디서 멈추고 답을 어떻게 해석할지는 그래프가, 승인함과 리마인드·만료 시계는 cordboard가 갖는다.</p>
+  </div>
+</section>
+
+<!-- ============ unhappy paths ============ -->
+<section id="unhappy">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">불행 경로와 결정</div>
+    <h2>원래 주인이 없던 자리들</h2>
+    <p class="lede">흐름을 끝까지 그려서 드러난 자리다. 테두리가 황토인 둘은 2026-09-12 경계 정정으로 처분이 바뀐 것이다.</p>
+    <div class="paths">
+      <div class="path"><span class="n">01</span><h3>같은 Signal이 두 번</h3>
+        <p class="why">웹훅 중복 발송은 정상 동작이다.</p>
+        <p class="dec">Signal ID로 중복 제거 + <code>(Assistant, Subject)</code> 동시성 정책. <span class="badge plan">#17</span></p></div>
+      <div class="path"><span class="n">02</span><h3>부작용이 두 번 실행</h3>
+        <p class="why">재개하면 인터럽트된 노드가 처음부터 다시 돈다.</p>
+        <p class="dec">부작용의 멱등성은 그래프 소유. 인터럽트 노드와 부작용을 분리하는 템플릿, 뷰어의 중복 Step 표시. <span class="badge plan">#15</span></p></div>
+      <div class="path"><span class="n">03</span><h3>재개 값은 하나인데 인터럽트가 여럿</h3>
+        <p class="why">대기 중 인터럽트가 여럿이면 ID 없이 재개할 수 없다.</p>
+        <p class="dec">승인은 하나뿐일 때도 예외 없이 <code>interrupt_id</code>를 동반한다. <span class="badge plan">#14</span></p></div>
+      <div class="path"><span class="n">04</span><h3>아무도 승인하지 않는다</h3>
+        <p class="why">Run이 영원히 멈춰 있다.</p>
+        <p class="dec">만료 시계는 cordboard가 집행한다. 만료 기간은 그래프 설명이 아니라 연결 단위 설정이다. <span class="badge plan">#15</span></p></div>
+      <div class="path"><span class="n">05</span><h3>프로세스가 죽는다</h3>
+        <p class="why">실행 중인 Run의 워커가 사라진다.</p>
+        <p class="dec">런타임 복구는 Aegra 소관. 카탈로그는 unreachable로 표시한다.</p></div>
+      <div class="path"><span class="n">06</span><h3>Run이 Run을 무한히 부른다</h3>
+        <p class="why"><code>run.finished</code>가 Signal이 되면 순환이 생긴다.</p>
+        <p class="dec"><code>cord.cascade.depth</code>로 깊이를 기록하고 상한을 둔다. <span class="badge plan">#18</span></p></div>
+      <div class="path"><span class="n">07</span><h3>트레이스가 경계에서 끊긴다</h3>
+        <p class="why">호출자, 그래프, 선택적 게이트웨이가 서로 다른 프로세스다.</p>
+        <p class="dec">W3C Trace Context로 잇는다 — 실측 완료. 체인된 Run은 새 trace, <code>cord.caused_by.run_id</code>로 연결. <span class="badge done">#7 · #9</span></p></div>
+      <div class="path"><span class="n">08</span><h3>Signal이 어느 Rule에도 안 맞는다</h3>
+        <p class="why">조용히 사라지고 있었다.</p>
+        <p class="dec">매칭 실패도 기록한다. <span class="badge plan">#16</span></p></div>
+      <div class="path new"><span class="n">09</span><h3>병렬 분기 안에 인터럽트</h3>
+        <p class="why">걸리면 그 Run은 재개할 수 없다.</p>
+        <p class="dec">예전: 등록 거부. 지금: 경고로 계속 보이게 한다. 위험은 그래프의 실행 안에서 생기고, 실행은 호출자의 선택이다. <span class="badge warn">ADR-0015</span></p></div>
+      <div class="path new"><span class="n">10</span><h3>매니페스트가 표류했다</h3>
+        <p class="why">뷰어가 현재와 다른 그림을 그린다.</p>
+        <p class="dec">예전: 기동 거부. 지금: 그림을 낡은 상태로 표시하고 실행 기록을 대조하지 않는다. <span class="badge warn">ADR-0015 · #13</span></p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ vocabulary ============ -->
+<section id="vocab">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">어휘 · ADR-0002</div>
+    <h2>데이터에 굳는 이름은 정밀하게</h2>
+    <p class="lede">속성 키와 닫힌 목록 값은 몇 주치 데이터에 굳으므로 정밀함이 값을 한다. 사람이 말할 때 쓰는 단어는 문맥이 해결한다 — 금지어가 아니라 매핑이다.
+      같은 단어가 OTel · Langfuse · LangGraph 등에서 어떻게 다른지는 <a href="cordboard-glossary.html">용어집</a>에 있다.</p>
+    <div class="tw"><table>
+      <thead><tr><th>이름</th><th>뜻</th><th>기록되는 곳</th></tr></thead>
+      <tbody>
+        <tr><td>Graph</td><td>Run을 받고 span을 내는 실행 단위. 원하면 자기를 설명한다. 레포가 아니다</td><td><code>cord.graph.id</code></td></tr>
+        <tr><td>Deployment</td><td>주소를 가진 프로세스. Graph를 하나 이상 호스팅</td><td>Aegra 배포 파일</td></tr>
+        <tr><td>Assistant</td><td>Graph + 고정 설정</td><td>Aegra API</td></tr>
+        <tr><td>Manifest</td><td>그래프가 agent-topology로 낸 자기 설명 문서 그대로. 선택</td><td><code>agent-topology.manifest.json</code></td></tr>
+        <tr><td>Subject</td><td>Run이 다루는 외부 대상. 필수 불투명 문자열</td><td><code>cord.subject.id</code> → Langfuse <code>session_id</code></td></tr>
+        <tr><td>Run</td><td>실행 하나. trace 하나</td><td><code>cord.run.id</code></td></tr>
+        <tr><td>Node</td><td>Graph 토폴로지 안의 정적 자리</td><td>매니페스트</td></tr>
+        <tr><td>Step</td><td>한 Run에서 Node가 실제로 실행된 것</td><td>Step span</td></tr>
+        <tr><td>Attempt</td><td>Step 안의 한 번의 시도. 자식 span</td><td>Attempt span</td></tr>
+        <tr><td>Tier</td><td>그래프가 붙이는 선택적 불투명 라벨. 플랫폼은 순서도 모델 매핑도 모른다</td><td><code>cord.tier</code></td></tr>
+        <tr><td>Verdict</td><td>그래프의 결정적 검증 결과. 위반 규칙을 동반</td><td>그래프 소유</td></tr>
+        <tr><td>Outcome</td><td>Step용과 Attempt용 두 닫힌 목록. 값 추가는 어휘 변경</td><td><code>cord.outcome</code></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ slices ============ -->
+<section id="slices">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">슬라이스</div>
+    <h2>층이 아니라 끝에서 끝까지 얇게</h2>
+    <p class="lede">"Collector를 다 만들고 뷰어를 다 만든다"로 가면 마지막까지 아무것도 검증되지 않는다. 슬라이스마다 한쪽 끝에서 다른 쪽 끝까지 관통하고,
+      가장 비싼 미지를 가장 먼저 만난다.</p>
+    <div class="tw"><table>
+      <thead><tr><th>#</th><th>목표</th><th>증명하는 것</th><th>이슈</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>실행 기록과 마스킹 관문</td><td>어휘가 질의에 답하는가, 관문이 작동하는가</td><td>#4–#9</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td>0.5</td><td>Langfuse로 읽기</td><td>원본 경로와 공개 API의 답이 같은가</td><td>#10</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td>1</td><td>두 번째 그래프로 경계 시험</td><td>실패 모드 A — 무관한 그래프가 cordboard 수정 없이 붙는가</td><td>#11 #12 #13</td><td><span class="badge next">다음</span></td></tr>
+        <tr><td>2</td><td>승인과 만료</td><td>사람과 시계. 인터럽트 span 경계, 이중 실행 감지</td><td>#14 #15 #28</td><td><span class="badge plan">계획</span></td></tr>
+        <tr><td>3</td><td>트리거, 중복 제거, 지연 기동</td><td>같은 Signal이 두 번 와도 Run은 하나</td><td>#16 #17</td><td><span class="badge plan">계획</span></td></tr>
+        <tr><td>4</td><td>체인과 동시성</td><td>동시 실행에서 Subject와 상태가 섞이지 않는가</td><td>#18 #19</td><td><span class="badge plan">계획</span></td></tr>
+        <tr><td>5</td><td>라이브 화면</td><td>실행 중에서 기록됨으로 넘어가는 화면</td><td>#20</td><td><span class="badge plan">계획</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ adoption ============ -->
+<section id="adopt">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">도입 필터</div>
+    <h2>계정도, 청구 등급도, 해석이 갈리는 라이선스도 없이</h2>
+    <div class="tw"><table>
+      <thead><tr><th>후보</th><th>판정</th><th>이유</th></tr></thead>
+      <tbody>
+        <tr><td>Aegra</td><td>채택</td><td>Apache 2.0 Agent Protocol 구현. 실행·체크포인트·재개·cron·복구</td></tr>
+        <tr><td>OTel Collector</td><td>채택</td><td>도장 검문과 아카이브 분기가 사는 곳</td></tr>
+        <tr><td>redact-secret</td><td>채택</td><td>Rust 코어 공개 바인딩. 기본 정책이 우리가 원하던 표와 같아 cordboard는 정책을 정의하지 않는다</td></tr>
+        <tr><td>agent-topology</td><td>채택</td><td>프레임워크 중립 토폴로지 포맷. cordboard는 문서 검증·해시에 spec 패키지를 쓰고, 생산자는 그래프의 의존성이다</td></tr>
+        <tr><td>Langfuse (셀프호스트)</td><td>읽는 화면으로만</td><td>ClickHouse 스키마가 안정적 계약이 아니라고 스스로 경고한다. 원본은 따로 든다</td></tr>
+        <tr><td>uv</td><td>채택</td><td>의존성 해석을 우리가 만들 이유가 없다</td></tr>
+        <tr><td>A2A Agent Card</td><td>선택적으로</td><td>그대로 내고 확장하지 않는다. 등록의 전제가 아니다</td></tr>
+        <tr><td>LiteLLM</td><td>그래프의 선택</td><td>모델 게이트웨이는 그래프가 고른다. 저장소에는 선택적 예제로만 있다</td></tr>
+        <tr><td>DeepAgents</td><td>템플릿 선택지</td><td>Graph 박스 안에 들어간다. 기반으로 강제하면 그래프 층에서 실패 모드 A</td></tr>
+        <tr><td>LangGraph Platform · LangSmith · Arize Phoenix · n8n</td><td>탈락</td><td>엔터프라이즈 키, 짧은 무료 보관, OSI 비호환 라이선스, 사용 제한</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ done criteria ============ -->
+<section id="done">
+  <span class="dot"></span>
+  <div class="sec-inner">
+    <div class="kicker">끝났는지 판정하는 법</div>
+    <h2>반증 가능한 형태로만</h2>
+    <div class="tw"><table>
+      <thead><tr><th></th><th>기준</th><th>슬라이스</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr><td>A</td><td>무관한 두 번째 그래프를 cordboard 코드 수정 없이, cordboard 쪽에 아무것도 쓰지 않고 연결·실행·조회한다</td><td>1</td><td><span class="badge next">다음</span></td></tr>
+        <tr><td>B</td><td>뷰어 소스를 다 뒤져도 특정 그래프의 Node 이름이 하나도 없다</td><td>1</td><td><span class="badge next">다음</span></td></tr>
+        <tr><td>C</td><td>지난 56일간 모든 그래프에서 명시적으로 승격된 Attempt의 Graph/Node 상위 N개를 질의 하나로 답한다</td><td>0</td><td><span class="badge done">완료</span></td></tr>
+        <tr><td>D</td><td>새 Rule을 추가하는 데 필요한 변경이 보드 설정 한 줄이다</td><td>3</td><td><span class="badge plan">계획</span></td></tr>
+        <tr><td>E</td><td>한 명령으로 노트북에서 계정 없이, 모델 공급자 키 없이 전부 뜬다</td><td>1</td><td><span class="badge next">다음</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>2026-09-12 기준 요약. 결정의 정본은 <a href="../decisions/DECISIONS.md">ADR 인덱스</a>와 각 ADR이고, 이 문서와 어긋나면 ADR이 이긴다.
+      구현 상태의 정본은 <a href="../../ARCHITECTURE.md">ARCHITECTURE.md</a>다.</p>
+    <p>2026-09-08 설계 세션에서 만든 이전 판("레포 하나가 프로세스 하나")은 git 기록에 남아 있다.
+      같은 단어가 출처마다 어떻게 다른지는 <a href="cordboard-glossary.html">용어집</a>에 있다.</p>
+  </div>
+</footer>
+
 </body>
 </html>
