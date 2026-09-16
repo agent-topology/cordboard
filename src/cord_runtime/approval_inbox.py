@@ -267,7 +267,8 @@ def submit_response(board_dir: Path, *, deployment: str, thread_id: str, interru
             subject = pending["subject"]
 
         try:
-            result = backend.resume(thread_id, assistant, response_value, timeout=timeout)
+            # Authorization and dedupe cover one interrupt, even on a parallel pause.
+            result = backend.resume(thread_id, assistant, {interrupt_id: response_value}, timeout=timeout)
         except RuntimeError:
             response_dedupe.record_outcome(board_dir, deployment, thread_id, interrupt_id,
                                             response_dedupe.UNKNOWN, now=now)

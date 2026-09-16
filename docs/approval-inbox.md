@@ -50,6 +50,12 @@ LangGraph seam, not just the pinned source.
      `UNKNOWN`, never retried automatically; a clean resume is recorded
      `RESUMED` and, best-effort, closes the Thread's `approval_expiry` wait.
 
+     The transport receives `{interrupt_id: response_value}`, including for a
+     single pending interrupt. The value stays opaque, even when it is itself
+     an object. A response authorized for one interrupt must not be interpreted
+     as an answer for another parallel branch. This is covered by the external
+     Testbed #51 two-interrupt regression as well as the local transport tests.
+
   The resumed outcome now decides the Deployment activity claim `ensure_started`
   took, instead of it being discarded (#50): genuine terminal success releases
   it and routes the Run's own `run.finished` Signal through

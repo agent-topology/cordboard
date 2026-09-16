@@ -176,7 +176,7 @@ def test_authorized_response_resumes_and_records_disposition(tmp_path):
                               approver="alice", response_value=True, revision="chk-1",
                               auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
     assert result.status == "resumed"
-    assert backend.resume_calls == [(thread_id, "triage-graph", True)]
+    assert backend.resume_calls == [(thread_id, "triage-graph", {"interrupt-a": True})]
     claim = response_dedupe.get_claim(tmp_path, alias, thread_id, "interrupt-a")
     assert claim["outcome"] == response_dedupe.RESUMED
 
@@ -191,6 +191,22 @@ def test_unauthorized_approver_is_rejected_and_never_reaches_resume(tmp_path):
     assert result.status == "rejected"
     assert backend.resume_calls == []
     assert response_dedupe.get_claim(tmp_path, alias, thread_id, "interrupt-a")["outcome"] == response_dedupe.REJECTED
+
+
+@pytest.mark.parametrize("value", [True, False, None, {"interrupt-b": True}])
+def test_response_targets_only_the_authorized_interrupt(tmp_path, value):
+    alias, thread_id = _seed(tmp_path)
+    backend = FakeBackend(state={
+        "tasks": [{"interrupts": [{"id": "interrupt-a"}, {"id": "interrupt-b"}]}],
+        "checkpoint": {"checkpoint_id": "chk-1"},
+    }, resume_status=RuntimeStatus.INTERRUPTED)
+    result = submit_response(tmp_path, deployment=alias, thread_id=thread_id,
+                             interrupt_id="interrupt-a", approver="alice", response_value=value,
+                             revision="chk-1", auth_boundary=SyntheticEntityAuthBoundary(GRANTS),
+                             now=NOW, backend_factory=_factory({alias: backend}))
+    assert result.status == "resumed"
+    assert backend.resume_calls == [(thread_id, "triage-graph", {"interrupt-a": value})]
+    assert response_dedupe.get_claim(tmp_path, alias, thread_id, "interrupt-b") is None
 
 
 def test_a_ui_supplied_identity_alone_is_never_treated_as_authority(tmp_path):
@@ -297,7 +313,7 @@ def test_resume_starts_the_managed_deployment_before_resuming(tmp_path, monkeypa
                               approver="alice", response_value=True, revision="chk-1",
                               auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
     assert result.status == "resumed"
-    assert backend.resume_calls == [(thread_id, "triage-graph", True)]
+    assert backend.resume_calls == [(thread_id, "triage-graph", {"interrupt-a": True})]
     # A genuine terminal success releases the claim `ensure_started` took.
     assert load_lifecycle(tmp_path)[alias]["active_runs"] == 0
 

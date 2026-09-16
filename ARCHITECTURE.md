@@ -56,8 +56,11 @@ through `cord_runtime.entity_auth.EntityAuthBoundary` (a synthetic,
 test-only implementation ships in-repo; a real entity's production
 authorization stays entity-owned) and `cord_runtime.response_dedupe`'s
 `flock`-guarded cross-process claim before ever calling `backend.resume`,
-recording exactly one of `resumed`/`rejected`/`unknown` per interrupt. No
-`cord` CLI or web surface is added by this slice; that is still planned.
+recording exactly one of `resumed`/`rejected`/`unknown` per interrupt. The
+transport wraps the opaque response value under
+the authorized runtime interrupt ID, so parallel pauses remain independently
+addressed (#51 regression).
+No `cord` CLI or web surface is added by this slice; that is still planned.
 `submit_response` now also calls `ensure_started` before resuming and reads
 the resumed outcome instead of discarding it (#50, below).
 [Signal/Rule routing](docs/signal-routing.md) adds `cord rule add` and
