@@ -7,7 +7,8 @@ graphs and keeping a common record of their execution. Like the operators at a
 manual cord board, it connects and records. The caller chooses the graph; each
 graph owns its business logic, models, credentials and tools. Cordboard does not
 need to know which models a graph uses, or whether it uses a model at all.
-The planned command is `cord`.
+The command is `cord`; [`cord add`/`cord list`/`cord run`](docs/cord-cli.md)
+connect and invoke an existing Deployment. The rest of its lifecycle is planned.
 
 ## Status
 
@@ -17,7 +18,9 @@ in-process redaction, a Collector gate, and raw OTLP JSONL persistence.
 An optional [LiteLLM example](docs/model-proxy.md) connects one graph and archive,
 with deterministic proxy tests requiring no provider credentials. Real-provider
 compatibility remains an unrun example check, not a platform prerequisite.
-The remaining platform, including `cord up`, is still planned.
+[`cord add`/`cord list`/`cord run`](docs/cord-cli.md) connect and invoke an
+existing Deployment without a manifest or model settings. The remaining
+platform, including `cord up`, is still planned.
 
 ```sh
 uv sync --locked --python 3.12
@@ -80,8 +83,9 @@ the architecture document identifies the material differences.
 Slice 0 is a small end-to-end experiment: graphs, Run/Step/Attempt spans, an
 OTel Collector, an archive, and a query with a known answer. Aegra exercises
 the process boundary; the LiteLLM example exercises an optional model path.
-Slice 0.5 adds the verified Langfuse export and comparison; the catalog, custom
-viewer, and CLI lifecycle remain planned for Slice 1.
+Slice 0.5 adds the verified Langfuse export and comparison. Slice 1 begins with
+[connecting and running an existing Deployment through `cord`](docs/cord-cli.md)
+(#12); the catalog, custom viewer, and the rest of the CLI lifecycle remain planned.
 
 Issue #4 establishes the graph contract and corrects the escalation examples.
 Issue #5 verifies redaction release availability and the archive gate with a

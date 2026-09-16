@@ -93,6 +93,17 @@ normalized. This fixes the older runtime's unnecessary colon requirement and
 preserved semantic convention 0.2.0 at implementation time. ADR-0013 now emits
 0.3.0 with optional Tier; the query continues to accept those 0.2.0 archives.
 
+`execute()` accepts an optional `request_context`, transported unread as the
+API's top-level `context` (distinct from `config.configurable`); a graph-owned
+bridge interprets it (#12). Its return always carries `status`: `"success"`
+(with `values`), or `"waiting"` for a server-reported `"interrupted"` Run or
+one still `"pending"`/`"running"` when the wait budget elapses — either way the
+identities are returned, not lost to an exception, and a pause is never
+reported as success or retried. A genuine failure (`"error"`/`"timeout"`
+status, or an unreachable/non-2xx response) still raises `RuntimeError` with a
+payload-free message. See [the `cord` CLI](cord-cli.md) for the command surface
+built on this contract.
+
 **Resume is a different contract.** Aegra 0.10.4 creates a new API Run ID for
 every Run submission, including `command.resume` on an existing Thread. It
 does not maintain ADR-0003's proposed 1:1 API-Run/Thread mapping across resume.

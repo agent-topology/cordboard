@@ -5,11 +5,19 @@ import time
 import requests
 
 
-def execute(endpoint: str, assistant: str, subject: str, graph_input: dict, *, timeout=120):
-    """Return API identities and checkpointed values, without logging payloads.
+def execute(endpoint: str, assistant: str, subject: str, graph_input: dict, *,
+            request_context: dict | None = None, timeout=120):
+    """Return API identities and a bounded status, without logging payloads.
 
     Each call creates a new Thread. Resume and API retries are deliberately not
     exposed: resubmitting a POST can create another execution.
+
+    The returned ``status`` is one of ``"success"`` (``values`` present),
+    ``"waiting"`` (an interrupted Run, or the wait budget elapsed while it was
+    still pending/running; the Run may still be active — poll or resume with
+    the returned identities), or an exception for a genuine failure.
+    ``request_context`` is transported unread as the API's top-level
+    ``context``, distinct from ``config.configurable``.
     """
     if not isinstance(subject, str) or not subject.strip():
         raise ValueError("Subject must be a non-empty string")
@@ -28,20 +36,25 @@ def execute(endpoint: str, assistant: str, subject: str, graph_input: dict, *, t
 
         thread_id = request("POST", "/threads", {})["thread_id"]
         path = f"/threads/{thread_id}"
-        created = request("POST", path + "/runs", {
+        run_body = {
             "assistant_id": assistant, "input": graph_input,
             "config": {"configurable": {"cord_subject": subject}},
             "stream_mode": ["values"],
-        })
-        run_id = created["run_id"]
+        }
+        if request_context is not None:
+            run_body["context"] = request_context
+        run_id = request("POST", path + "/runs", run_body)["run_id"]
         deadline = time.monotonic() + timeout
         while True:
             current = request("GET", path + "/runs/" + run_id)
-            if current["status"] == "success":
+            status = current["status"]
+            if status == "success":
                 values = request("GET", path + "/state")["values"]
-                return {"run_id": run_id, "thread_id": thread_id, "values": values}
-            if current["status"] not in ("pending", "running"):
+                return {"run_id": run_id, "thread_id": thread_id, "status": "success", "values": values}
+            if status == "interrupted":
+                return {"run_id": run_id, "thread_id": thread_id, "status": "waiting"}
+            if status not in ("pending", "running"):
                 raise RuntimeError("Aegra execution did not succeed; inspect metadata and archive")
             if time.monotonic() >= deadline:
-                raise TimeoutError("Aegra execution wait timed out; the run may still be active")
+                return {"run_id": run_id, "thread_id": thread_id, "status": "waiting"}
             time.sleep(.1)

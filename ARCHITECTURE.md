@@ -19,7 +19,11 @@ The separate real-provider example remains unverified; this is not a passed chec
 The [Langfuse comparison](docs/langfuse.md) exports through the Collector gate to
 a pinned self-hosted instance and verifies the same archive cohort through its
 Public API (#10), including model-free execution.
-The remaining platform and `cord` lifecycle commands are still planned.
+The [`cord` CLI](docs/cord-cli.md) adds `cord add`/`cord list`/`cord run` over
+`aegra_client.execute`, with board-level connection storage, bounded exit
+statuses, and a distinct waiting status for a paused or still-running Run (#12).
+The remaining platform lifecycle commands (`cord new`, `cord up`'s drift
+handling, `cord sync`) are still planned.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
