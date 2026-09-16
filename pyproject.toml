@@ -32,6 +32,7 @@ packages = ["src/cord_runtime"]
 archive-escalations = "cord_runtime.archive_query:main"
 langfuse-compare = "cord_runtime.langfuse_query:main"
 archive-check = "cord_runtime.archive_check:main"
+cord = "cord_runtime.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

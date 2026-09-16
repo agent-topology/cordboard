@@ -26,8 +26,10 @@ See also the
 
 Keep graph-specific logic under `examples/`; do not promote it into generic
 platform infrastructure. There is no npm build, Rust crate, formatter, or CI
-workflow here. Remaining platform components and `cord` lifecycle commands
-are planned unless explicitly documented as executable.
+workflow here. [`cord add`/`cord list`/`cord run`](docs/cord-cli.md) are
+executable (#12); remaining platform components and lifecycle commands
+(`cord new`, `cord up`, `cord sync`) are planned unless explicitly documented
+as executable.
 
 ## Documentation and decisions
 

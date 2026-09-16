@@ -1,0 +1,117 @@
+# `cord` CLI: connect and run existing deployments (#12)
+
+`cord add`, `cord list`, and `cord run` connect an already-running Aegra
+Deployment and invoke a caller-selected graph, with no manifest, model
+settings, or graph-specific platform code
+([ADR-0013](decisions/0013-switchboard-boundary.md),
+[ADR-0014](decisions/0014-no-graph-descriptors.md),
+[ADR-0015](decisions/0015-never-block-connection.md)). Cordboard does not
+describe the graph it connects to; a connection record names only where a
+Deployment lives. `cord new`, `cord up`'s manifest/drift handling, and other
+lifecycle commands remain planned (#17, #11, #13, #16).
+
+## Storage
+
+Connections are stored per board (default: the current directory) at
+`.cordboard/connections.json`, a single JSON object keyed by alias:
+
+```json
+{
+  "aegra-local": { "endpoint": "http://127.0.0.1:2026" }
+}
+```
+
+Writes are atomic (write to a temp file, then `os.replace`). The endpoint must
+be an `http`/`https` URL with a host and **no userinfo** (`user:pass@host` is
+rejected); no credentials or graph descriptors are ever stored. Adding an
+alias that already exists fails unless `--replace` is given explicitly — no
+silent overwrite.
+
+Use `--board <dir>` on any command to operate on a board other than the
+current directory.
+
+## Commands
+
+### `cord add <alias> <endpoint> [--replace]`
+
+Registers a Deployment's address under `alias`. Does not contact the
+Deployment or require it to be reachable.
+
+```sh
+$ cord add aegra-local http://127.0.0.1:2026
+added 'aegra-local' -> http://127.0.0.1:2026
+```
+
+### `cord list [alias]`
+
+Prints reachability (`GET /health`) and the graphs the Deployment exposes
+(`GET /assistants`, read for its `graph_id` field — the public Agent Protocol
+surface, not a manifest) for every registered alias, or one named alias.
+Registering a Deployment never requires a manifest to exist
+([ADR-0015](decisions/0015-never-block-connection.md)); `list` shows only what
+the running server itself reports.
+
+```sh
+$ cord list
+aegra-local	http://127.0.0.1:2026	reachable	graphs=minimal-graph, opaque-graph
+```
+
+An unreachable Deployment is shown, not treated as invalid input:
+
+```sh
+$ cord list
+aegra-local	http://127.0.0.1:2026	unreachable	graphs=-
+```
+
+### `cord run <alias> <assistant> <subject> <input.json> [--context <context.json>] [--timeout <seconds>]`
+
+Invokes `assistant` (an explicit assistant id or graph id — the caller's
+choice, never inferred) on the named connection with a required, non-empty,
+opaque `subject` and JSON `input`. `--context`, if given, is transported
+unread as the Agent Protocol's top-level `context` field, distinct from
+`config.configurable`; a graph-owned bridge (for example Omiologic's request
+scope) is what interprets it. `--timeout` bounds how long the command polls
+before reporting a Run as waiting; it does not cancel the server Run.
+
+Prints the result as one JSON line to stdout, separate from any telemetry:
+
+```sh
+$ cord run aegra-local minimal-graph "urn:cordboard:demo" input.json
+{"run_id": "...", "thread_id": "...", "status": "success", "values": {...}}
+```
+
+A new execution always gets a fresh Thread/Run; resume is not implemented
+here (#14). The command never retries an ambiguous POST automatically — each
+invocation submits at most one `POST /threads` and one `POST .../runs`.
+
+## Status and exit codes
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Successful command. For `run`, the Aegra Run reached `status: "success"`. |
+| `2` | Invalid usage or input: bad CLI arguments, an unknown alias, a malformed endpoint or connections file, invalid JSON in the input/context file, or an empty Subject. Nothing is submitted to the Deployment. |
+| `1` | Connection or execution failure: an unreachable Deployment, or a Run whose `status` is not `"success"`. |
+
+`run`'s `status` field distinguishes a bounded **waiting** Run — the server
+reported `"interrupted"` (a pause), or the `--timeout` budget elapsed while it
+was still `"pending"`/`"running"` — from a genuine failure. Both a paused Run
+and a real failure exit `1` (there is no fourth exit code), but a waiting
+result always carries `run_id`/`thread_id` on stdout so the caller can poll or
+resume later; a failure prints a payload-free diagnostic to stderr instead,
+with no request/response body or credential in it. `run` never silently
+treats a pause as success, and never turns it into a retry.
+
+`list` exits `1` if any Deployment it queried was unreachable, `0` otherwise
+(including when no connections are registered yet) — it is a status report,
+not an action that can be misused.
+
+## Out of scope here
+
+Graph scaffolding (`cord new`), automatic server provisioning, entity
+credential or model configuration, approval submission, and resume of an
+interrupted Run (#14) are not part of this surface. An Omiologic readiness
+invocation runs through this same generic path
+(`cord run <alias> readiness <subject> input.json`); it exercises connectivity
+only and is not evidence of `issue_resolution` or `core_notification_fixture`
+behavior, which require entity-owned operational configuration and explicit
+operator authorization.
