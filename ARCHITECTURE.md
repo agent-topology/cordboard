@@ -167,8 +167,16 @@ pause and never reopens on resume (ADR-0008), a Run's truthful `end_ns` is
 now the max of its own span and every Step/Attempt it contains, with
 `approval_wait_ns` separated from `execution_ns` and a missing original
 `awaiting_approval` Step surfaced as `timeline_incomplete` rather than a
-silently wrong total. This closes #46; #47 (a real web viewer over the same
-shared read model) remains separate and unimplemented.
+silently wrong total. This closes #46.
+The [packaged browser viewer](docs/browser-viewer.md) (#48, ADR-0018) now
+exposes that shared model through loopback-only `cord serve`, deployment-scoped
+read routes, server-rendered topology/tree/timeline pages, SSE delivery diagnostics
+and polling fallback. The shared catalog adds full `runs` and validated
+`topology_structure` to its existing summary. Empty and in-progress archives
+use the existing active-file reader. The viewer never submits executions or
+reads graph business state; approval controls (#49) remain unimplemented.
+Browser and installed-wheel evidence, including its interrupt-fixture limitation,
+is recorded in the viewer guide.
 
 The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
 the implemented core/domain libraries and Omiologic Aegra deployment. These are

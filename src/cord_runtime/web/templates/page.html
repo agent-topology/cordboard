@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if run %}Run {{ run.run_id }}{% elif graph %}{{ graph.graph_id }}{% else %}Deployments{% endif %} · Cordboard</title>
+<link rel="stylesheet" href="/static/viewer.css"><script defer src="/static/viewer.js"></script></head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header><a class="brand" href="/">cordboard<span> / observation</span></a><span class="readonly">Read only</span></header>
+<div class="shell">
+<nav aria-label="Deployments"><h2>Deployments &amp; graphs</h2>
+{% for item in catalog.graphs %}
+<a class="graph-link {% if graph == item %}selected{% endif %}" href="{{ graph_url(item) }}">
+<small>{{ item.deployment_alias if item.deployment_alias is not none else item.topology_status }}</small>
+<strong>{{ item.graph_id }}</strong></a>
+{% else %}<p>No connections or recorded graphs.</p>{% endfor %}
+</nav>
+<main id="main" tabindex="-1">
+<div id="connection-alert" role="alert">{% if error %}{{ error }}{% endif %}</div>
+<div id="live-status" aria-live="polite">Observation connected</div>
+<div id="view-content" {% if run %}data-events="{{ run_url(graph, run) }}/events"{% endif %}>
+{% for message in diagnostics %}<p role="alert">{{ message }}</p>{% endfor %}
+{% if error %}<h1>Observation unavailable</h1><a href="/">Retry observation</a>
+{% elif not graph %}
+<p class="eyebrow">Workspace</p><h1>Deployment overview</h1><p class="intro">Connected graphs and their execution records.</p>
+<div class="cards">
+{% for item in catalog.graphs %}
+<article><small>{{ item.deployment_alias if item.deployment_alias is not none else 'Unattributed execution' }}</small>
+<h2><a href="{{ graph_url(item) }}">{{ item.graph_id }}</a></h2>
+{% set badge = topology_labels[item.topology_status] %}<span class="badge">{{ badge[0] }} {{ badge[1] }}</span>
+<p>{{ item.runs|length }} recorded Runs · {{ item.live_runs|length }} live observations</p>
+{% if item.reachable == false %}<p role="alert">Deployment disconnected</p>{% endif %}
+</article>
+{% else %}<article><h2>No graphs yet</h2><p>No connections or recorded Runs. Register a deployment with cord add, or select an archive when starting the viewer.</p></article>{% endfor %}
+</div>
+{% else %}
+<p class="eyebrow">{{ graph.deployment_alias if graph.deployment_alias is not none else 'Unattributed execution' }}</p>
+<h1>{{ graph.graph_id }}</h1>
+{% set badge = topology_labels[graph.topology_status] %}
+<p><span class="badge" data-topology-status="{{ graph.topology_status }}">{{ badge[0] }} {{ badge[1] }}</span>
+{% if graph.reachable == false %}<span role="alert">Deployment disconnected</span>{% endif %}</p>
+{% for warning in graph.topology_warnings %}<p class="notice">{{ warning }}</p>{% endfor %}
+{% if graph.unmatched_node_names %}<p class="notice">Unmatched nodes: {{ graph.unmatched_node_names|join(', ') }}</p>{% endif %}
+{% if not run %}
+<section aria-labelledby="topology-title"><h2 id="topology-title">Published topology</h2>
+{% set diagram = layout(graph.topology_structure) %}
+{% if diagram %}
+<svg class="topology" role="img" aria-labelledby="topology-caption" viewBox="0 0 {{ diagram.width }} {{ diagram.height }}">
+<title id="topology-caption">Published topology for {{ graph.graph_id }}</title>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#536b79"/></marker></defs>
+{% for edge in diagram.edges %}
+<path class="edge" d="M {{ edge.start[0] }} {{ edge.start[1]+18 }} L {{ edge.end[0] }} {{ edge.end[1]-18 }}" marker-end="url(#arrow)"><title>{{ edge.source }} → {{ edge.target }} · {{ edge.kind }}</title></path>
+{% endfor %}
+{% for node in diagram.nodes %}
+<g><rect x="{{ node.x-100 }}" y="{{ node.y-18 }}" width="200" height="36" rx="8"/><text x="{{ node.x }}" y="{{ node.y+5 }}" text-anchor="middle">{{ node.id[:22] }}{% if node.id|length > 22 %}…{% endif %}</text><title>{{ node.id }}</title></g>
+{% endfor %}
+</svg>
+<details><summary>Topology text alternative</summary><ul>{% for node in diagram.nodes %}<li>{{ node.id }}</li>{% endfor %}</ul>
+<ul>{% for edge in diagram.edges %}<li>{{ edge.source }} → {{ edge.target }} ({{ edge.kind }})</li>{% endfor %}</ul></details>
+{% else %}<p>Topology unavailable for correlation. Execution records remain visible.</p>{% endif %}
+</section>
+<section><h2>Executions</h2>
+<form method="get"><label>Subject <input name="subject" value="{{ subject }}" placeholder="Filter by Subject"></label>
+<label>Status / declared outcome <input name="status" value="{{ status }}" list="statuses" placeholder="All statuses"></label>
+<datalist id="statuses">{% for value in ['pending','running','interrupted','success','error','timeout','passed','repaired','failed','awaiting_approval','halted','escalated'] %}<option value="{{ value }}">{% endfor %}</datalist><button>Apply filters</button></form>
+<div class="run-list">{% for item in runs %}
+<article><h3><a href="{{ run_url(graph,item) }}">Run {{ item.run_id }}</a></h3>
+<p>Subject: {{ item.subject_id if 'subject_id' in item else item.subject or 'Unknown' }}</p>
+<p class="badge">{{ item.source if 'source' in item else 'recorded' }}{% if item.aegra_status %} · {{ item.aegra_status }}{% endif %}</p>
+{% if item.steps %}<p>Declared Step outcomes: {% for step in item.steps %}{{ step.outcome }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}</article>
+{% else %}<p>No recorded Runs or live observations match these filters.</p>{% endfor %}</div></section>
+{% else %}
+<a href="{{ graph_url(graph) }}">← All executions</a>
+<h2>Run {{ run.run_id }}</h2>
+<p>Subject: {{ run.subject_id if 'subject_id' in run else run.subject or 'Unknown' }}</p>
+<p class="badge">{{ run.source if 'source' in run else 'recorded' }}{% if run.aegra_status %} · {{ run.aegra_status }}{% endif %}</p>
+{% if run.source == 'ingestion_failed' %}<p role="alert">Ingestion failed: no durable record arrived within the reconciliation deadline.</p>{% endif %}
+{% if 'start_ns' in run %}
+<p>Recorded execution: {{ run.execution_ns|duration }} · Known approval wait: {{ run.approval_wait_ns|duration }}</p>
+{% if run.timeline_incomplete %}<p class="notice">Timeline incomplete — open or unknown wait; no duration is invented.</p>{% endif %}
+<section><h2>Execution timeline</h2><p>Bars share the recorded Run time axis. Exact boundaries are available per row.</p>
+<div class="timeline">{% for row in timeline(run) %}
+<div class="timeline-row"><span>{{ row.label }}</span><div class="track"><span class="bar {{ row.kind }}" style="margin-left:{{ row.left }}%;width:{{ row.width }}%"></span></div>
+<details><summary>{{ row.duration|duration }}</summary><p>Start {{ row.start }} ns<br>End {{ row.end }} ns</p></details></div>{% endfor %}</div></section>
+<section><h2>Run / Step / Attempt tree</h2><details open><summary>Run {{ run.run_id }}</summary>
+{% for step in run.steps %}<details open class="step"><summary>Step {{ step.node }} · {{ step.outcome }}</summary>
+<p>{{ (step.end_ns-step.start_ns)|duration }}{% if step.repeated_execution %} · Repeated execution evidence{% endif %}</p>
+{% if step.awaiting_resume %}<p class="notice">Awaiting resume — open approval wait, duration unknown.</p>{% endif %}
+{% if step.resumed_from %}<p>Resumed from {{ step.resumed_from }} · Approval wait: {{ step.approval_wait_ns|duration }}</p>{% endif %}
+{% if step.outcome == 'awaiting_approval' %}<div class="cord-action-slot" data-run-id="{{ run.run_id }}" data-thread-id="" data-interrupt-id=""></div>{% endif %}
+<ol>{% for attempt in step.attempts %}<li>Attempt {{ attempt.number }} · {{ attempt.outcome }} · {{ (attempt.end_ns-attempt.start_ns)|duration }}{% if attempt.tier %} · Tier {{ attempt.tier }}{% endif %}</li>{% else %}<li>No recorded Attempts.</li>{% endfor %}</ol></details>
+{% else %}<p>No recorded Steps.</p>{% endfor %}</details></section>
+{% else %}<p>Live identity and status only. Run / Step / Attempt timing will appear when the archive arrives.</p>
+{% if run.aegra_status == 'interrupted' %}<div class="cord-action-slot" data-run-id="{{ run.run_id }}" data-thread-id="{{ run.thread_id }}" data-interrupt-id=""></div>{% endif %}
+{% endif %}
+{% endif %}
+{% endif %}
+</div>
+</main></div>
+<footer>cordboard · connects graphs, records runs</footer>
+</body></html>

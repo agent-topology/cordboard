@@ -255,7 +255,8 @@ def correlate_topology(freshness: FreshnessCheck | None, graph_id: str | None = 
     warnings = _document_warnings(document)
     if len(document_graphs) == 1:
         node_ids = tuple(sorted(node["id"] for node in document_graphs[0]["structure"]["nodes"]))
-        return {"status": CURRENT, "node_ids": node_ids, "warnings": tuple(warnings), "correlated": True}
+        return {"status": CURRENT, "node_ids": node_ids, "warnings": tuple(warnings), "correlated": True,
+                "structure": document_graphs[0]["structure"]}
     resolved = _resolve_multi_graph(document_graphs, graph_id, graph_map)
     if resolved is None:
         warnings.append(
@@ -264,7 +265,8 @@ def correlate_topology(freshness: FreshnessCheck | None, graph_id: str | None = 
         )
         return {"status": CURRENT, "node_ids": (), "warnings": tuple(warnings), "correlated": False}
     node_ids = tuple(sorted(node["id"] for node in resolved["structure"]["nodes"]))
-    return {"status": CURRENT, "node_ids": node_ids, "warnings": tuple(warnings), "correlated": True}
+    return {"status": CURRENT, "node_ids": node_ids, "warnings": tuple(warnings), "correlated": True,
+            "structure": resolved["structure"]}
 
 
 def _subjects_view(graph_runs: list[dict]) -> list[dict]:
@@ -299,6 +301,8 @@ def _graph_view(graph_id: str, connection: dict | None, correlation: dict, graph
         "reachable": connection["reachable"] if connection else None,
         "topology_status": correlation["status"],
         "topology_nodes": correlation["node_ids"],
+        "topology_structure": correlation.get("structure"),
+        "runs": graph_runs,
         "topology_warnings": correlation["warnings"],
         "unmatched_node_names": unmatched_node_names,
         "ambiguous_aliases": ambiguous_aliases,
