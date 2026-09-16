@@ -3,6 +3,7 @@ name = "cord-runtime"
 version = "0.0.1"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "agent-topology-spec==0.1.0b3",
   "langgraph==1.2.11",
   "langsmith==0.12.4",
   "redact-secret==0.1.0b1",

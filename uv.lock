@@ -3,6 +3,18 @@ revision = 3
 requires-python = "==3.12.*"
 
 [[package]]
+name = "agent-topology-spec"
+version = "0.1.0b3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jsonschema" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/69/e3/69ed2ef9589f85467a1138c79ab9fb77e4a62498512fd18cced56dbb52fe/agent_topology_spec-0.1.0b3.tar.gz", hash = "sha256:b6da5f5640eae25477771845ea171fef80195856163e69a5f9d4dc047862a71d", size = 13199, upload-time = "2026-09-12T19:16:51.696Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/ac/b727fa2ce0a8ac2dedb9877462a7277cae36d972af2b3c4211dc592f7ae5/agent_topology_spec-0.1.0b3-py3-none-any.whl", hash = "sha256:45732c5080126484af8ba4bea7a1767f72fca27721825c0f678321fa7093e276", size = 10652, upload-time = "2026-09-12T19:16:50.699Z" },
+]
+
+[[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -289,6 +301,7 @@ name = "cord-runtime"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
+    { name = "agent-topology-spec" },
     { name = "langchain-core" },
     { name = "langgraph" },
     { name = "langsmith" },
@@ -310,6 +323,7 @@ proxy = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-topology-spec", specifier = "==0.1.0b3" },
     { name = "langchain-core", specifier = "==1.6.3" },
     { name = "langgraph", specifier = "==1.2.11" },
     { name = "langsmith", specifier = "==0.12.4" },
