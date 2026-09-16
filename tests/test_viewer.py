@@ -23,6 +23,7 @@ from cord_runtime.topology import (
     refresh_snapshot,
 )
 from cord_runtime.viewer import (
+    AMBIGUOUS,
     CURRENT,
     NO_CONNECTION,
     NOT_CHECKED,
@@ -66,15 +67,19 @@ def publisher(response):
 
 
 def _document(graph_ids, *, nodes=("alpha", "omega"), gaps=None, producer_limitations=None):
+    """`nodes` is either one node tuple shared by every graph, or a
+    `{graph_id: node_tuple}` mapping so a multi-graph document can carry
+    distinguishable structures per graph (#43)."""
     def graph(gid):
+        graph_nodes = nodes[gid] if isinstance(nodes, dict) else nodes
         return {
             "id": gid,
             "structure": {
-                "nodes": [{"id": n} for n in nodes],
-                "edges": [{"id": "e1", "source": nodes[0], "target": nodes[-1], "kind": "direct"}],
+                "nodes": [{"id": n} for n in graph_nodes],
+                "edges": [{"id": "e1", "source": graph_nodes[0], "target": graph_nodes[-1], "kind": "direct"}],
                 "joins": [],
-                "entryNodeIds": [nodes[0]],
-                "exitNodeIds": [nodes[-1]],
+                "entryNodeIds": [graph_nodes[0]],
+                "exitNodeIds": [graph_nodes[-1]],
             },
         }
     return finalize_document({
@@ -277,6 +282,39 @@ def test_correlate_topology_multi_graph_document_withholds_nodes(tmp_path):
     assert any("more than one graph" in w for w in result["warnings"])
 
 
+def test_correlate_topology_multi_graph_resolves_via_explicit_graph_map(tmp_path):
+    doc = _document(["a", "b"], nodes={"a": ("draft", "verify"), "b": ("count",)})
+    with publisher({"status": 200, "body": json.dumps(doc).encode()}) as endpoint:
+        check = check_freshness(tmp_path, endpoint)
+    result = correlate_topology(check, "cord-graph-b", {"b": "cord-graph-b"})
+    assert result["status"] == CURRENT
+    assert result["correlated"] is True
+    assert result["node_ids"] == ("count",)
+
+
+def test_correlate_topology_multi_graph_map_naming_a_different_graph_id_still_withholds(tmp_path):
+    doc = _document(["a", "b"], nodes={"a": ("draft", "verify"), "b": ("count",)})
+    with publisher({"status": 200, "body": json.dumps(doc).encode()}) as endpoint:
+        check = check_freshness(tmp_path, endpoint)
+    # graph_map only names "a"; this catalog entry is for a graph_id it never mentions.
+    result = correlate_topology(check, "cord-graph-b", {"a": "cord-graph-a"})
+    assert result["status"] == CURRENT
+    assert result["correlated"] is False
+    assert result["node_ids"] == ()
+    assert any("no explicit Deployment/Graph association" in w for w in result["warnings"])
+
+
+def test_correlate_topology_multi_graph_two_document_graphs_mapped_to_the_same_id_still_withholds(tmp_path):
+    doc = _document(["a", "b"], nodes={"a": ("draft",), "b": ("count",)})
+    with publisher({"status": 200, "body": json.dumps(doc).encode()}) as endpoint:
+        check = check_freshness(tmp_path, endpoint)
+    # An ambiguous mapping (two document graphs claiming the same execution
+    # identity) is never resolved by picking one -- withheld like no mapping.
+    result = correlate_topology(check, "cord-graph-x", {"a": "cord-graph-x", "b": "cord-graph-x"})
+    assert result["correlated"] is False
+    assert result["node_ids"] == ()
+
+
 def test_correlate_topology_drifted_is_stale_and_not_correlated(tmp_path):
     response = {"status": 200, "body": json.dumps(_document(["main"], nodes=("draft",))).encode()}
     with publisher(response) as endpoint:
@@ -305,8 +343,11 @@ def test_correlate_topology_surfaces_gaps_producer_limitations_and_fanout(tmp_pa
 
 # --- build_catalog ------------------------------------------------------------
 
-def _connection(alias, endpoint, graph_ids, *, reachable=True):
-    return alias, {"endpoint": endpoint, "reachable": reachable, "graphs": list(graph_ids)}
+def _connection(alias, endpoint, graph_ids, *, reachable=True, graph_map=None):
+    record = {"endpoint": endpoint, "reachable": reachable, "graphs": list(graph_ids)}
+    if graph_map is not None:
+        record["graph_map"] = graph_map
+    return alias, record
 
 
 def test_two_unrelated_graphs_render_before_any_run_exists():
@@ -363,6 +404,102 @@ def test_unmatched_recorded_node_is_flagged_not_dropped(tmp_path):
     graph = catalog["graphs"][0]
     assert graph["unmatched_node_names"] == ("undeclared-node",)
     assert len(graph["subjects"][0]["runs"]) == 1  # evidence preserved, not dropped
+
+
+def test_two_deployments_sharing_a_graph_id_render_as_independent_entries():
+    # #43 AC1: build_catalog must never overwrite one connection's entry with
+    # another's when both advertise the same graph_id.
+    connections = dict([
+        _connection("prod", "http://prod.example", ["shared-graph"]),
+        _connection("stage", "http://stage.example", ["shared-graph"], reachable=False),
+    ])
+    catalog = build_catalog(connections, {}, {})
+    graphs = [g for g in catalog["graphs"] if g["graph_id"] == "shared-graph"]
+    assert {g["deployment_alias"] for g in graphs} == {"prod", "stage"}
+    by_alias = {g["deployment_alias"]: g for g in graphs}
+    assert by_alias["prod"]["reachable"] is True
+    assert by_alias["stage"]["reachable"] is False
+
+
+def test_recorded_run_for_a_graph_id_shared_by_two_connections_is_ambiguous_not_guessed():
+    # #43 AC2: with nothing to attribute it to one deployment, a recorded Run
+    # for a shared graph_id must not attach to either connection's entry.
+    connections = dict([
+        _connection("prod", "http://prod.example", ["shared-graph"]),
+        _connection("stage", "http://stage.example", ["shared-graph"]),
+    ])
+    spans = _run_tree("shared-graph", "run-1")
+    catalog = build_catalog(connections, {}, spans)
+    graphs = {g["deployment_alias"] or "<ambiguous>": g for g in catalog["graphs"]
+              if g["graph_id"] == "shared-graph"}
+    assert graphs["prod"]["subjects"] == []
+    assert graphs["stage"]["subjects"] == []
+    ambiguous = graphs["<ambiguous>"]
+    assert ambiguous["topology_status"] == AMBIGUOUS
+    assert ambiguous["ambiguous_aliases"] == ("prod", "stage")
+    assert len(ambiguous["subjects"][0]["runs"]) == 1  # evidence preserved, not dropped
+
+
+def test_live_run_for_a_graph_id_shared_by_two_connections_is_ambiguous_too():
+    connections = dict([
+        _connection("prod", "http://prod.example", ["shared-graph"]),
+        _connection("stage", "http://stage.example", ["shared-graph"]),
+    ])
+    live_runs = {"live-1": _live_view("live-1", "shared-graph")}
+    catalog = build_catalog(connections, {}, {}, live_runs=live_runs)
+    ambiguous = next(g for g in catalog["graphs"] if g["topology_status"] == AMBIGUOUS)
+    assert [v["run_id"] for v in ambiguous["live_runs"]] == ["live-1"]
+    for g in catalog["graphs"]:
+        if g["deployment_alias"] is not None:
+            assert g["live_runs"] == []
+
+
+def test_a_graph_id_used_by_only_one_of_two_connections_is_unambiguous():
+    connections = dict([
+        _connection("prod", "http://prod.example", ["only-prod-graph"]),
+        _connection("stage", "http://stage.example", ["shared-graph"]),
+    ])
+    spans = _run_tree("only-prod-graph", "run-1")
+    catalog = build_catalog(connections, {}, spans)
+    graph = next(g for g in catalog["graphs"] if g["graph_id"] == "only-prod-graph")
+    assert graph["deployment_alias"] == "prod"
+    assert graph["topology_status"] != AMBIGUOUS
+    assert len(graph["subjects"][0]["runs"]) == 1
+
+
+def test_multi_graph_document_correlates_via_stored_graph_map_not_by_name(tmp_path):
+    doc = _document(["billing", "reporting"], nodes={"billing": ("charge", "receipt"), "reporting": ("aggregate",)})
+    with publisher({"status": 200, "body": json.dumps(doc).encode()}) as endpoint:
+        freshness = check_freshness(tmp_path, endpoint)
+    connections = dict([_connection("prod", endpoint, ["cord-graph-billing"],
+                                    graph_map={"billing": "cord-graph-billing"})])
+    catalog = build_catalog(connections, {endpoint: freshness}, {})
+    graph = catalog["graphs"][0]
+    assert graph["topology_status"] == CURRENT
+    assert graph["topology_nodes"] == ("charge", "receipt")
+
+
+def test_multi_graph_document_without_a_matching_graph_map_entry_still_withholds_nodes(tmp_path):
+    doc = _document(["billing", "reporting"], nodes={"billing": ("charge", "receipt"), "reporting": ("aggregate",)})
+    with publisher({"status": 200, "body": json.dumps(doc).encode()}) as endpoint:
+        freshness = check_freshness(tmp_path, endpoint)
+    connections = dict([_connection("prod", endpoint, ["cord-graph-billing"])])  # no graph_map at all
+    catalog = build_catalog(connections, {endpoint: freshness}, {})
+    graph = catalog["graphs"][0]
+    assert graph["topology_status"] == CURRENT
+    assert graph["topology_nodes"] == ()
+
+
+def test_format_catalog_text_renders_the_ambiguous_entry_distinctly():
+    connections = dict([
+        _connection("prod", "http://prod.example", ["shared-graph"]),
+        _connection("stage", "http://stage.example", ["shared-graph"]),
+    ])
+    spans = _run_tree("shared-graph", "run-1")
+    catalog = build_catalog(connections, {}, spans)
+    text = format_catalog_text(catalog)
+    assert "ambiguous among prod, stage" in text
+    assert "topology: ambiguous" in text
 
 
 def test_connected_graph_without_a_topology_probe_is_not_checked_not_no_connection():

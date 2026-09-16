@@ -13,6 +13,14 @@ only ever contacts it, per the connection-level opt-in ADR-0013/0014
 describe. No launch command implies no recreation of the entity's process
 factories, auth, or database management -- only reuse of what the operator
 already runs.
+
+A record also optionally carries ``graph_map`` (#43): an explicit
+``{document_graph_id: cord_graph_id}`` association from a topology document's
+local ``graphs[].id`` (never itself an execution identity, ADR-0014) to the
+recorded ``cord.graph.id``, set only via `set_graph_map` -- never inferred by
+name. A record with no ``graph_map`` key is read as an empty mapping: no
+associations, not an error, so every connection record predating this field
+still loads unchanged.
 """
 
 import contextlib
@@ -132,5 +140,33 @@ def add_connection(board_dir: Path, alias: str, endpoint: str, *,
     if launch is not None:
         record["launch"] = launch
         record["idle_after"] = _validate_idle_after(idle_after)
+    data[alias] = record
+    _write_atomic(connections_path(board_dir), data)
+
+
+def _validate_graph_id(value: str, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise InvalidConnection(f"{label} must be a non-empty string")
+    return value
+
+
+def set_graph_map(board_dir: Path, alias: str, document_graph_id: str, graph_id: str) -> None:
+    """Store one explicit association from a topology document's local
+    ``graphs[].id`` (``document_graph_id``) to the recorded ``cord.graph.id``
+    (``graph_id``) for an already-registered alias (#43).
+
+    Never inferred by name: this is the only way a connection record gains a
+    ``graph_map`` entry. Setting the same ``document_graph_id`` again replaces
+    its prior association; other entries are left unchanged.
+    """
+    document_graph_id = _validate_graph_id(document_graph_id, "document graph id")
+    graph_id = _validate_graph_id(graph_id, "graph id")
+    data = load_connections(board_dir)
+    if alias not in data:
+        raise InvalidConnection(f"unknown alias '{alias}'")
+    record = dict(data[alias])
+    graph_map = dict(record.get("graph_map") or {})
+    graph_map[document_graph_id] = graph_id
+    record["graph_map"] = graph_map
     data[alias] = record
     _write_atomic(connections_path(board_dir), data)

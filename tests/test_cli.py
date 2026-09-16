@@ -19,11 +19,12 @@ from cord_runtime.connections import (
     get_connection,
     is_managed,
     load_connections,
+    set_graph_map,
     validate_endpoint,
 )
 from cord_runtime.deployment_lifecycle import load_lifecycle
 from cord_runtime.rules import load_rules
-from cord_runtime.topology import ABSENT, FreshnessCheck, TopologyReading
+from cord_runtime.topology import ABSENT, UNCHANGED, FreshnessCheck, TopologyReading
 
 
 # --- connections.py: storage contract -----------------------------------
@@ -82,6 +83,45 @@ def test_stored_record_carries_no_extra_fields(tmp_path):
     add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026/")
     raw = json.loads(connections_path(tmp_path).read_text(encoding="utf-8"))
     assert raw == {"aegra-local": {"endpoint": "http://127.0.0.1:2026"}}
+
+
+# --- connections.py: explicit graph_map association (#43) ------------------
+
+def test_set_graph_map_stores_the_explicit_association(tmp_path):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    set_graph_map(tmp_path, "aegra-local", "billing", "cord-graph-billing")
+    record = load_connections(tmp_path)["aegra-local"]
+    assert record["graph_map"] == {"billing": "cord-graph-billing"}
+
+
+def test_set_graph_map_unknown_alias_raises(tmp_path):
+    with pytest.raises(InvalidConnection):
+        set_graph_map(tmp_path, "missing", "billing", "cord-graph-billing")
+
+
+@pytest.mark.parametrize("document_graph_id,graph_id", [("", "x"), ("x", ""), (None, "x"), ("x", None)])
+def test_set_graph_map_rejects_empty_ids(tmp_path, document_graph_id, graph_id):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    with pytest.raises(InvalidConnection):
+        set_graph_map(tmp_path, "aegra-local", document_graph_id, graph_id)
+
+
+def test_set_graph_map_replaces_only_the_named_document_graph_id(tmp_path):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    set_graph_map(tmp_path, "aegra-local", "billing", "cord-graph-billing")
+    set_graph_map(tmp_path, "aegra-local", "reporting", "cord-graph-reporting")
+    set_graph_map(tmp_path, "aegra-local", "billing", "cord-graph-billing-v2")
+    record = load_connections(tmp_path)["aegra-local"]
+    assert record["graph_map"] == {"billing": "cord-graph-billing-v2", "reporting": "cord-graph-reporting"}
+
+
+def test_connection_without_graph_map_reads_back_with_no_key(tmp_path):
+    # #43 AC5: a record predating this field has no graph_map key at all --
+    # callers default it to {} themselves; load_connections adds nothing.
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    record = load_connections(tmp_path)["aegra-local"]
+    assert "graph_map" not in record
+    assert record.get("graph_map") or {} == {}
 
 
 # --- connections.py: managed Deployment opt-in (#17) ------------------------
@@ -172,6 +212,78 @@ def test_cmd_deployment_sweep_stops_an_idle_managed_deployment(tmp_path, capsys)
     assert load_lifecycle(tmp_path)["local"]["status"] == "stopped"
 
 
+# --- cli.py: cmd_graph_map / cmd_sync (#43) ---------------------------------
+
+def test_cmd_graph_map_success_exit_zero(tmp_path, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    code = cli.main(["--board", str(tmp_path), "graph-map", "aegra-local", "billing", "cord-graph-billing"])
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_OK
+    assert "mapped 'aegra-local' document graph 'billing' -> 'cord-graph-billing'" in out
+    assert load_connections(tmp_path)["aegra-local"]["graph_map"] == {"billing": "cord-graph-billing"}
+
+
+def test_cmd_graph_map_unknown_alias_exit_two(tmp_path):
+    code = cli.main(["--board", str(tmp_path), "graph-map", "missing", "billing", "cord-graph-billing"])
+    assert code == cli.EXIT_USAGE
+
+
+def test_cmd_graph_map_overwrites_only_its_own_entry(tmp_path):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    cli.main(["--board", str(tmp_path), "graph-map", "aegra-local", "billing", "cord-graph-billing"])
+    cli.main(["--board", str(tmp_path), "graph-map", "aegra-local", "reporting", "cord-graph-reporting"])
+    cli.main(["--board", str(tmp_path), "graph-map", "aegra-local", "billing", "cord-graph-billing-v2"])
+    assert load_connections(tmp_path)["aegra-local"]["graph_map"] == {
+        "billing": "cord-graph-billing-v2", "reporting": "cord-graph-reporting",
+    }
+
+
+def test_cmd_sync_no_connections(tmp_path, capsys):
+    code = cli.main(["--board", str(tmp_path), "sync"])
+    assert code == cli.EXIT_OK
+    assert "no connections registered" in capsys.readouterr().out
+
+
+def test_cmd_sync_unknown_alias_exit_two(tmp_path):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    assert cli.main(["--board", str(tmp_path), "sync", "missing"]) == cli.EXIT_USAGE
+
+
+def test_cmd_sync_reports_valid_status_exit_zero(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    monkeypatch.setattr(cli, "refresh_snapshot",
+                        lambda board_dir, endpoint, **kw: TopologyReading(status=cli.VALID, document={"graphs": []}))
+    code = cli.main(["--board", str(tmp_path), "sync"])
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_OK
+    assert "aegra-local" in out and "valid" in out
+
+
+def test_cmd_sync_reports_absent_status_exit_one_never_blocking(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    monkeypatch.setattr(cli, "refresh_snapshot",
+                        lambda board_dir, endpoint, **kw: TopologyReading(status=ABSENT))
+    code = cli.main(["--board", str(tmp_path), "sync"])
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_FAILURE  # a status report, not a raised error
+    assert "absent" in out
+
+
+def test_cmd_sync_limited_to_one_alias(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "a", "http://a.example")
+    add_connection(tmp_path, "b", "http://b.example")
+    seen = []
+
+    def fake_refresh(board_dir, endpoint, **kw):
+        seen.append(endpoint)
+        return TopologyReading(status=cli.VALID, document={"graphs": []})
+
+    monkeypatch.setattr(cli, "refresh_snapshot", fake_refresh)
+    code = cli.main(["--board", str(tmp_path), "sync", "a"])
+    assert code == cli.EXIT_OK
+    assert seen == ["http://a.example"]
+
+
 # --- cli.py: cmd_list ------------------------------------------------------
 
 class FakeGetResponse:
@@ -253,6 +365,28 @@ def test_cmd_view_renders_graph_before_any_run(tmp_path, monkeypatch, capsys):
     assert "Graph fixture-a" in out
     assert "topology: absent" in out
     assert "no recorded Runs" in out
+
+
+def test_cmd_view_multi_graph_document_correlates_via_graph_map(tmp_path, monkeypatch, capsys):
+    # #43 AC3: cli.cmd_view must feed a connection's explicit graph_map through
+    # to build_catalog/correlate_topology, not just its endpoint/reachability.
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    cli.main(["--board", str(tmp_path), "graph-map", "aegra-local", "billing", "fixture-a"])
+    monkeypatch.setattr(cli.requests, "get", _fake_probe_get)
+    document = {
+        "graphs": [
+            {"id": "billing", "structure": {"nodes": [{"id": "charge"}]}},
+            {"id": "reporting", "structure": {"nodes": [{"id": "aggregate"}]}},
+        ],
+    }
+    monkeypatch.setattr(cli, "check_freshness",
+                        lambda board_dir, endpoint, **kw: FreshnessCheck(
+                            status=UNCHANGED, reading=TopologyReading(status="valid", document=document)))
+
+    code = cli.main(["--board", str(tmp_path), "view"])
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_OK
+    assert "nodes: charge" in out
 
 
 def test_cmd_view_unknown_alias_exit_two(tmp_path):

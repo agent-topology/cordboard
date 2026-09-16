@@ -29,8 +29,9 @@ Public API (#10), including model-free execution.
 The [`cord` CLI](docs/cord-cli.md) adds `cord add`/`cord list`/`cord run` over
 `aegra_client.execute`, with board-level connection storage, bounded exit
 statuses, and a distinct waiting status for a paused or still-running Run (#12).
+`cord sync` (#43) wires the existing explicit topology refresh into the CLI.
 The remaining platform lifecycle commands (`cord new`, `cord up`'s drift
-handling, `cord sync`) are still planned.
+handling) are still planned.
 [Interrupt/resume span boundaries](docs/interrupt-resume.md) close a Step as
 `awaiting_approval` when the graph's own `interrupt()` pauses it and open a new,
 linked Step on resume, through LangGraph's public interrupt contract rather
@@ -102,18 +103,24 @@ cascade fires at most once per completed Run.
 optional published topology over HTTP, classifies it as absent, unreachable,
 invalid, or valid against the pinned `agent-topology-spec==0.1.0b3` schema,
 raises the R3 fan-out/interrupt warning, and tracks a local snapshot to detect
-when a previously fetched document changed (#11). `cord sync`'s explicit
-refresh CLI wiring remains planned, but `cord view` (#13) now calls
-`check_freshness` directly to read the already-stored snapshot state.
+when a previously fetched document changed (#11). `cord sync [alias]` (#43)
+wires this explicit refresh into the CLI, printing each connection's fresh
+`TopologyReading.status`; `cord view` (#13) still calls `check_freshness`
+directly to read the already-stored snapshot state without refreshing it.
 [`cord_runtime.viewer`](src/cord_runtime/viewer.py) is the generic catalog:
 `cord view` joins a connection's reachable Graphs (`/assistants`), optional
 topology, and recorded execution read through the shared archive contract
 (`cord_runtime.archive_query.role`/`parent`, reused rather than
 reimplemented) purely by explicit `cord.*` identity. A drifted document is
 shown stale and withheld from correlation; a topology document publishing
-more than one Graph is shown present but also withheld from correlation,
-since no explicit per-connection Deployment/Graph association storage exists
-yet to disambiguate it (see [docs/viewer.md](docs/viewer.md)) (#13).
+more than one Graph is correlated only through a connection's explicit
+`graph_map` (`cord graph-map`, #43) and otherwise shown present but withheld
+from correlation (see [docs/viewer.md](docs/viewer.md)) (#13). Catalog
+entries are scoped per connection, not merely per `graph_id`: two connections
+advertising the same `graph_id` each render independently, and recorded/live
+execution for a `graph_id` they share, with nothing else to attribute it to
+one of them, renders under a distinct `ambiguous` entry instead of being
+guessed (#43).
 `cord view --watch` (#20) follows one Run's live Aegra SSE stream (`GET
 /threads/{thread_id}/runs/{run_id}/stream`, Aegra 0.10.4's reconnect-safe
 join endpoint) and reconciles it with recorded execution through
@@ -391,9 +398,10 @@ what the viewer displays rather than in a log line: a stale topology must never
 look current. `cord_runtime.topology.fetch_topology`/`check_freshness` classify
 the first three rows and the snapshot-drift half of the fourth (#11);
 `cord_runtime.viewer`/`cord view` now consume them for all four rows (#13):
-"Topology drawn" only when a `current` fetch's document is unambiguous (see
-[docs/viewer.md](docs/viewer.md)'s Deployment/Graph association gap), and
-"shown as stale" for a `changed` fetch.
+"Topology drawn" only when a `current` fetch's document is unambiguous or an
+explicit `graph_map` names one of its Graphs (see
+[docs/viewer.md](docs/viewer.md)'s deployment scoping and multi-graph
+association, #43), and "shown as stale" for a `changed` fetch.
 
 R3 is a warning: an interrupt in a direct fan-out branch, judged from core
 edge-kind and interrupt fields. It covers static interrupts only; dynamic

@@ -12,11 +12,19 @@ record, or a published topology document.
 Graph identity is the Deployment's own reported `graph_id`
 (`GET /assistants`), which is the same string a graph stamps as
 `cord.graph.id` (ADR-0002/ADR-0003). A topology document's `graphs[].id` is a
-different, document-local address (ADR-0014) and is compared to nothing here;
-a document is only used to attach Node structure when it is unambiguous --
-exactly one graph inside it -- because no explicit per-graph association
-storage exists yet. A document with more than one graph is still shown as
+different, document-local address (ADR-0014) and is never compared to it by
+name; a single-graph document is unambiguous on its own, and a multi-graph
+document is only correlated through a connection's explicit `graph_map`
+(#43, `cord_runtime.connections.set_graph_map`) -- never guessed. A document
+with more than one graph and no matching `graph_map` entry is still shown as
 present, just not correlated (see `correlate_topology`).
+
+Catalog entries are scoped per registered connection (alias/endpoint, #43),
+not merely per `graph_id`: two connections advertising the same `graph_id`
+each render independently, with their own reachability and topology. Recorded
+or live execution for a `graph_id` shared by more than one connection, with
+no other identity to disambiguate it, is placed under a distinct `ambiguous`
+entry instead of being attached to either connection -- never guessed.
 """
 
 from typing import Any
@@ -33,6 +41,7 @@ STALE = "stale"
 CURRENT = "current"
 NO_CONNECTION = "no_connection"  # no registered Deployment connection at all for this Graph
 NOT_CHECKED = "not_checked"  # a connection exists but its topology was not probed this call
+AMBIGUOUS = "ambiguous"  # graph_id shared by >1 connection; recorded/live execution cannot be attributed (#43)
 
 
 def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
@@ -151,7 +160,23 @@ def _document_warnings(document: dict) -> list[str]:
     return warnings
 
 
-def correlate_topology(freshness: FreshnessCheck | None) -> dict[str, Any]:
+def _resolve_multi_graph(document_graphs: list[dict], graph_id: str | None,
+                          graph_map: dict[str, str] | None) -> dict | None:
+    """Find the one document-local graph whose explicit `graph_map` entry
+    names `graph_id`, or `None` if there is no such unambiguous match (#43).
+
+    `graph_map` is `{document_graph_id: cord_graph_id}` (`connections.py`'s
+    `set_graph_map`), never inferred by matching names or positions.
+    """
+    if not graph_id or not graph_map:
+        return None
+    by_id = {g["id"]: g for g in document_graphs}
+    matches = [doc_id for doc_id, mapped in graph_map.items() if mapped == graph_id and doc_id in by_id]
+    return by_id[matches[0]] if len(matches) == 1 else None
+
+
+def correlate_topology(freshness: FreshnessCheck | None, graph_id: str | None = None,
+                        graph_map: dict[str, str] | None = None) -> dict[str, Any]:
     """Map one Deployment endpoint's `FreshnessCheck` to viewer display facts.
 
     A drifted (`CHANGED`) document is shown as stale and is never used to
@@ -161,6 +186,13 @@ def correlate_topology(freshness: FreshnessCheck | None) -> dict[str, Any]:
     `freshness is None` means a connection exists but this call did not probe
     its topology (`NOT_CHECKED`); `build_catalog` uses `NO_CONNECTION`
     instead when there is no connection at all for the Graph.
+
+    `graph_id`/`graph_map` (#43) resolve a multi-graph document: when the
+    connection's explicit `graph_map` names exactly one document-local graph
+    for `graph_id`, that graph's Nodes are used. Without a match -- no
+    `graph_map`, no entry for `graph_id`, or more than one document-local
+    graph mapped to it -- Node structure stays withheld exactly as for any
+    other multi-graph document; the mapping is never guessed by name.
     """
     if freshness is None:
         return {"status": NOT_CHECKED, "node_ids": (), "warnings": (), "correlated": False}
@@ -176,14 +208,54 @@ def correlate_topology(freshness: FreshnessCheck | None) -> dict[str, Any]:
     document = freshness.reading.document
     document_graphs = graphs(document)
     warnings = _document_warnings(document)
-    if len(document_graphs) != 1:
+    if len(document_graphs) == 1:
+        node_ids = tuple(sorted(node["id"] for node in document_graphs[0]["structure"]["nodes"]))
+        return {"status": CURRENT, "node_ids": node_ids, "warnings": tuple(warnings), "correlated": True}
+    resolved = _resolve_multi_graph(document_graphs, graph_id, graph_map)
+    if resolved is None:
         warnings.append(
             "document publishes more than one graph; no explicit Deployment/Graph "
-            "association exists yet to pick the right one, so Node structure is withheld"
+            "association names one for this graph, so Node structure is withheld"
         )
         return {"status": CURRENT, "node_ids": (), "warnings": tuple(warnings), "correlated": False}
-    node_ids = tuple(sorted(node["id"] for node in document_graphs[0]["structure"]["nodes"]))
+    node_ids = tuple(sorted(node["id"] for node in resolved["structure"]["nodes"]))
     return {"status": CURRENT, "node_ids": node_ids, "warnings": tuple(warnings), "correlated": True}
+
+
+def _subjects_view(graph_runs: list[dict]) -> list[dict]:
+    subjects: dict[tuple[str, str], list[dict]] = {}
+    for run in graph_runs:
+        key = (run["subject_type"], run["subject_id"])
+        subjects.setdefault(key, []).append({
+            "run_id": run["run_id"],
+            "steps": [{"node": s["node"], "outcome": s["outcome"],
+                       "resumed_from": s["resumed_from"], "repeated_execution": s["repeated_execution"],
+                       "attempts": [
+                {"number": a["number"], "tier": a["tier"], "outcome": a["outcome"]} for a in s["attempts"]
+            ]} for s in run["steps"]],
+        })
+    return [{"subject_type": subject_type, "subject_id": subject_id, "runs": subject_runs}
+            for (subject_type, subject_id), subject_runs in sorted(subjects.items())]
+
+
+def _graph_view(graph_id: str, connection: dict | None, correlation: dict, graph_runs: list[dict],
+                 live_runs: list[dict], *, ambiguous_aliases: tuple[str, ...] = ()) -> dict[str, Any]:
+    unmatched_node_names = ()
+    if correlation["correlated"]:
+        recorded_nodes = {step["node"] for run in graph_runs for step in run["steps"]}
+        unmatched_node_names = tuple(sorted(recorded_nodes - set(correlation["node_ids"])))
+    return {
+        "graph_id": graph_id,
+        "deployment_alias": connection["alias"] if connection else None,
+        "reachable": connection["reachable"] if connection else None,
+        "topology_status": correlation["status"],
+        "topology_nodes": correlation["node_ids"],
+        "topology_warnings": correlation["warnings"],
+        "unmatched_node_names": unmatched_node_names,
+        "ambiguous_aliases": ambiguous_aliases,
+        "subjects": _subjects_view(graph_runs),
+        "live_runs": live_runs,
+    }
 
 
 def build_catalog(connections: dict[str, dict], topology: dict[str, FreshnessCheck], spans: dict,
@@ -192,8 +264,10 @@ def build_catalog(connections: dict[str, dict], topology: dict[str, FreshnessChe
     topology, its recorded execution, and any still-live execution, joined
     only by explicit identity.
 
-    `connections`: `{alias: {"endpoint": str, "reachable": bool, "graphs": [graph_id, ...]}}`,
-        exactly `cord list`'s existing `/assistants` probe shape.
+    `connections`: `{alias: {"endpoint": str, "reachable": bool, "graphs": [graph_id, ...],
+        "graph_map": {document_graph_id: cord_graph_id}}}`, `cord list`'s existing
+        `/assistants` probe shape plus each alias's optional explicit association
+        (#43; absent/`None`/`{}` all mean "no associations").
     `topology`: `{endpoint: FreshnessCheck}`, one check per connected endpoint.
     `spans`: the archive contract's `read_spans(...)` result (may be `{}`).
     `live_runs`: `{run_id: view}` from `cord_runtime.live_reconciliation.reconcile`
@@ -203,11 +277,16 @@ def build_catalog(connections: dict[str, dict], topology: dict[str, FreshnessChe
         recorded execution is always dropped here too, defensively, even
         though `reconcile` already excludes it -- the durable record wins.
 
-    A Graph with a registered connection but zero Runs still renders (its
+    Entries are scoped per connection, not merely per `graph_id` (#43): a
+    Graph with a registered connection but zero Runs still renders (its
     `runs` list is simply empty); a Graph with recorded execution but no
     registered connection still renders, with `topology_status` `"no_connection"`,
     preserving unmatched execution evidence as a diagnostic rather than
-    dropping it (#13).
+    dropping it (#13). When more than one connection advertises the same
+    `graph_id`, each still renders its own isolated entry, and any recorded or
+    live execution for that `graph_id` -- with no other identity to attribute
+    it to one of them -- renders under one additional `"ambiguous"` entry
+    instead of being attached to any of them.
     """
     runs = build_execution_tree(spans)
     by_graph: dict[str, list[dict]] = {}
@@ -223,54 +302,48 @@ def build_catalog(connections: dict[str, dict], topology: dict[str, FreshnessChe
     for views in live_by_graph.values():
         views.sort(key=lambda v: v["run_id"])
 
-    connection_by_graph: dict[str, dict] = {}
+    connections_by_graph: dict[str, list[dict]] = {}
     for alias, info in connections.items():
         for graph_id in info.get("graphs", ()):
-            connection_by_graph[graph_id] = {
+            connections_by_graph.setdefault(graph_id, []).append({
                 "alias": alias, "endpoint": info["endpoint"], "reachable": info["reachable"],
-            }
-
-    graph_views = []
-    for graph_id in sorted(set(connection_by_graph) | set(by_graph) | set(live_by_graph)):
-        connection = connection_by_graph.get(graph_id)
-        if connection is None:
-            correlation = {"status": NO_CONNECTION, "node_ids": (), "warnings": (), "correlated": False}
-        else:
-            correlation = correlate_topology(topology.get(connection["endpoint"]))
-
-        graph_runs = by_graph.get(graph_id, [])
-        unmatched_node_names = ()
-        if correlation["correlated"]:
-            recorded_nodes = {step["node"] for run in graph_runs for step in run["steps"]}
-            unmatched_node_names = tuple(sorted(recorded_nodes - set(correlation["node_ids"])))
-
-        subjects: dict[tuple[str, str], list[dict]] = {}
-        for run in graph_runs:
-            key = (run["subject_type"], run["subject_id"])
-            subjects.setdefault(key, []).append({
-                "run_id": run["run_id"],
-                "steps": [{"node": s["node"], "outcome": s["outcome"],
-                           "resumed_from": s["resumed_from"], "repeated_execution": s["repeated_execution"],
-                           "attempts": [
-                    {"number": a["number"], "tier": a["tier"], "outcome": a["outcome"]} for a in s["attempts"]
-                ]} for s in run["steps"]],
+                "graph_map": info.get("graph_map") or {},
             })
 
-        graph_views.append({
-            "graph_id": graph_id,
-            "deployment_alias": connection["alias"] if connection else None,
-            "reachable": connection["reachable"] if connection else None,
-            "topology_status": correlation["status"],
-            "topology_nodes": correlation["node_ids"],
-            "topology_warnings": correlation["warnings"],
-            "unmatched_node_names": unmatched_node_names,
-            "subjects": [
-                {"subject_type": subject_type, "subject_id": subject_id, "runs": subject_runs}
-                for (subject_type, subject_id), subject_runs in sorted(subjects.items())
-            ],
-            "live_runs": live_by_graph.get(graph_id, []),
-        })
-    return {"graphs": graph_views}
+    entries: list[tuple[tuple, dict]] = []  # (sort_key, view)
+    for graph_id in sorted(set(connections_by_graph) | set(by_graph) | set(live_by_graph)):
+        graph_connections = connections_by_graph.get(graph_id, [])
+        graph_runs = by_graph.get(graph_id, [])
+        graph_live_runs = live_by_graph.get(graph_id, [])
+
+        if not graph_connections:
+            correlation = {"status": NO_CONNECTION, "node_ids": (), "warnings": (), "correlated": False}
+            entries.append(((graph_id, 0),
+                             _graph_view(graph_id, None, correlation, graph_runs, graph_live_runs)))
+            continue
+
+        ambiguous = len(graph_connections) > 1
+        for connection in sorted(graph_connections, key=lambda c: c["alias"]):
+            correlation = correlate_topology(topology.get(connection["endpoint"]), graph_id,
+                                              connection["graph_map"])
+            own_runs = [] if ambiguous else graph_runs
+            own_live = [] if ambiguous else graph_live_runs
+            entries.append(((graph_id, 1, connection["alias"]),
+                             _graph_view(graph_id, connection, correlation, own_runs, own_live)))
+
+        if ambiguous and (graph_runs or graph_live_runs):
+            aliases = tuple(sorted(c["alias"] for c in graph_connections))
+            correlation = {
+                "status": AMBIGUOUS, "node_ids": (), "correlated": False,
+                "warnings": (f"graph_id '{graph_id}' is advertised by more than one connection "
+                             f"({', '.join(aliases)}); recorded/live execution cannot be attributed "
+                             "to one of them and is shown here instead of being guessed",),
+            }
+            entries.append(((graph_id, 2),
+                             _graph_view(graph_id, None, correlation, graph_runs, graph_live_runs,
+                                         ambiguous_aliases=aliases)))
+
+    return {"graphs": [view for _, view in sorted(entries, key=lambda e: e[0])]}
 
 
 def _format_live_source(live: dict[str, Any]) -> str:
@@ -293,7 +366,10 @@ def format_catalog_text(catalog: dict[str, Any]) -> str:
         return "no Graphs: no connections registered and no recorded execution given"
     lines = []
     for graph in catalog["graphs"]:
-        deployment = f"{graph['deployment_alias']}" if graph["deployment_alias"] else "no connection"
+        if graph["topology_status"] == AMBIGUOUS:
+            deployment = f"ambiguous among {', '.join(graph['ambiguous_aliases'])}"
+        else:
+            deployment = f"{graph['deployment_alias']}" if graph["deployment_alias"] else "no connection"
         reachability = {True: "reachable", False: "unreachable", None: ""}[graph["reachable"]]
         header = f"Graph {graph['graph_id']}  ({deployment}"
         header += f", {reachability}" if reachability else ""

@@ -58,6 +58,7 @@ when the fetch is confirmed current:
 | `current` | Valid, and unchanged since the last refresh (or no prior refresh exists to compare against) | yes, if unambiguous | yes |
 | `not_checked` | A connection exists but this call did not probe its topology | no | no |
 | `no_connection` | No registered connection names this Graph at all; it is known only from recorded execution | no | no |
+| `ambiguous` | This `graph_id` is advertised by more than one connection; recorded/live execution cannot be attributed to one of them (#43) | no | no |
 
 A `stale` topology is deliberately never shown as current, and recorded
 execution is never correlated against it, so a drifted picture cannot look
@@ -65,20 +66,29 @@ authoritative (ADR-0011/0015). Recorded execution itself is always shown
 regardless of topology status — a missing, invalid, or stale manifest is a
 viewer limitation, not a reason to hide what actually ran.
 
-## The Deployment/Graph association gap
+## Deployment scoping and the multi-graph association (#43)
 
 A topology document's `graphs[].id` is a document-local address, never a
-`cord.graph.id` (ADR-0014); this codebase does not compare them. When a
-Deployment's topology document publishes exactly one Graph, that Graph's
-structure is unambiguous and `cord view` shows its Nodes. When a document
-publishes more than one Graph, no explicit Deployment/Graph association
-storage exists yet to pick the right one (see the issue's "Blockers and
-handoff": *"Keep deployment/assistant identity, document-local graph address
-and recorded `cord.graph.id` as explicit associations, not name-based
-inference"*), so `cord view` shows the document is present and its
-warnings/gaps, but withholds Node structure rather than guessing by name.
-Resolving this needs an explicit per-connection mapping, which is out of
-scope here.
+`cord.graph.id` (ADR-0014); this codebase does not compare them by name.
+
+Catalog entries are scoped per registered connection (alias/endpoint), not
+merely per `graph_id`. Two connections advertising the same `graph_id` each
+render their own independent entry -- their own `reachable`/topology, never
+merged or overwritten. Recorded or live execution for a `graph_id` shared by
+more than one connection carries no other identity to attribute it to one of
+them, so it renders under one additional `ambiguous` entry instead
+(`topology_status: "ambiguous"`) rather than being guessed onto either.
+
+When a Deployment's topology document publishes exactly one Graph, that
+Graph's structure is unambiguous and `cord view` shows its Nodes. When a
+document publishes more than one Graph, `cord view` correlates it only
+through a connection's explicit `graph_map` (`cord_runtime.connections.
+set_graph_map`, `cord graph-map <alias> <document_graph_id> <graph_id>`) --
+an explicit `{document_graph_id: cord.graph.id}` association, set only by
+that command, never inferred by name or position. A multi-graph document with
+no matching `graph_map` entry (including a record from before this field
+existed, read as an empty mapping) still shows its presence and
+warnings/gaps, but withholds Node structure rather than guessing.
 
 ## Unmatched execution evidence
 
