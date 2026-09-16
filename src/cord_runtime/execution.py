@@ -7,8 +7,14 @@ from uuid import uuid4
 
 from opentelemetry import trace
 from opentelemetry.context import Context
+from opentelemetry.trace import NonRecordingSpan, SpanContext, Status, StatusCode, TraceFlags
 
 SEMCONV_VERSION = "0.3.0"
+
+
+def span_id(span: trace.Span) -> str:
+    """Format a live span's own ID for persistence as a future ``cord.resumed_from``."""
+    return format(span.get_span_context().span_id, "016x")
 
 
 class StepOutcome(Enum):
@@ -30,6 +36,7 @@ class Step:
     tracer: trace.Tracer
     span: trace.Span
     attributes: dict
+    pause: tuple[type[BaseException], ...] = ()
 
     @contextmanager
     def attempt(self, number: int, tier: str | None = None,
@@ -52,13 +59,36 @@ class Step:
         # Explicit Step parent keeps Attempts siblings even in nested contexts.
         with self.tracer.start_as_current_span(
             "attempt", context=trace.set_span_in_context(self.span, Context()),
-            attributes=attributes, record_exception=False,
+            attributes=attributes, record_exception=False, set_status_on_exception=False,
         ) as span:
             try:
                 yield span
+            except self.pause:
+                # A controlled pause (e.g. the graph's own interrupt()) is not a
+                # failure; leave whatever outcome the graph already declared and
+                # let the enclosing Step close next, before this exception
+                # continues upward to actually suspend the host run.
+                raise
             except BaseException:
                 span.set_attribute("cord.outcome", AttemptOutcome.FAILED.value)
+                span.set_status(Status(StatusCode.ERROR))
                 raise
+
+
+@dataclass(frozen=True)
+class RunContinuation:
+    """Safe correlation data for reopening a Run's trace after a pause.
+
+    Every field is a plain string, so a graph may persist this as ordinary
+    checkpointed state; it carries no secrets and no upstream API Run ID.
+    """
+
+    trace_id: str
+    run_span_id: str
+    run_id: str
+    subject: str
+    subject_type: str
+    graph_id: str
 
 
 @dataclass(frozen=True)
@@ -67,23 +97,47 @@ class Run:
     span: trace.Span
     attributes: dict
 
+    @property
+    def continuation(self) -> RunContinuation:
+        context = self.span.get_span_context()
+        return RunContinuation(
+            trace_id=format(context.trace_id, "032x"),
+            run_span_id=span_id(self.span),
+            run_id=self.attributes["cord.run.id"],
+            subject=self.attributes["cord.subject.id"],
+            subject_type=self.attributes["cord.subject.type"],
+            graph_id=self.attributes["cord.graph.id"],
+        )
+
     @contextmanager
-    def step(self, node: str, outcome: StepOutcome):
+    def step(self, node: str, outcome: StepOutcome, *,
+             resumed_from: str | None = None, pause: tuple[type[BaseException], ...] = ()):
         if type(outcome) is not StepOutcome:
             raise TypeError("expected StepOutcome")
         if not node:
             raise ValueError("node is required")
+        if resumed_from is not None and (not isinstance(resumed_from, str) or not resumed_from.strip()):
+            raise ValueError("resumed_from must be a non-empty span ID string")
         attributes = {**self.attributes, "cord.node.name": node}
+        if resumed_from is not None:
+            attributes["cord.resumed_from"] = resumed_from
         with self.tracer.start_as_current_span(
             "step:" + node,
             context=trace.set_span_in_context(self.span, Context()),
             attributes={**attributes, "cord.outcome": outcome.value},
-            record_exception=False,
+            record_exception=False, set_status_on_exception=False,
         ) as span:
             try:
-                yield Step(self.tracer, span, attributes)
+                yield Step(self.tracer, span, attributes, pause)
+            except pause:
+                # ADR-0008: interrupt() closes the Step here as awaiting_approval,
+                # not an error. Resume opens a new Step span; it never reopens
+                # this one, so the pause is never counted as this Step's duration.
+                span.set_attribute("cord.outcome", StepOutcome.AWAITING_APPROVAL.value)
+                raise
             except BaseException:
                 span.set_attribute("cord.outcome", StepOutcome.FAILED.value)
+                span.set_status(Status(StatusCode.ERROR))
                 raise
 
 
@@ -103,3 +157,27 @@ def run(tracer: trace.Tracer, subject: str, subject_type: str, *, graph_id: str,
         attributes={**attributes, "cord.semconv.version": SEMCONV_VERSION},
     ) as span:
         yield Run(tracer, span, attributes)
+
+
+@contextmanager
+def resume_run(tracer: trace.Tracer, continuation: RunContinuation):
+    """Reopen a Run's trace from persisted `RunContinuation` for a new Step.
+
+    Never re-creates the "run" root span: the Run's one trace (ADR-0002) stays
+    open only as address information, so a resumed Step attaches to the same
+    trace_id without a second Run root and without requiring the original
+    process, host Run, or in-memory Run span to still exist.
+    """
+    context = SpanContext(
+        trace_id=int(continuation.trace_id, 16),
+        span_id=int(continuation.run_span_id, 16),
+        is_remote=True,
+        trace_flags=TraceFlags(TraceFlags.SAMPLED),
+    )
+    attributes = {
+        "cord.graph.id": continuation.graph_id,
+        "cord.run.id": continuation.run_id,
+        "cord.subject.id": continuation.subject,
+        "cord.subject.type": continuation.subject_type,
+    }
+    yield Run(tracer, NonRecordingSpan(context), attributes)

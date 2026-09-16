@@ -212,7 +212,7 @@ ADR-0004에서 "승격은 그래프가 소유한다"고 정한 것의 데이터 
 5. [x] 최소 예제의 시도 정책을 `fast → fast → deep`으로. 승격 1회 및 같은 Tier 재시도 검증 (#4)
 6. [ ] 뷰어에 명시적 승격 결정과 Attempt 기록의 불일치 경고 (슬라이스 1). 같은 Tier 재시도는 경고하지 않는다
 7. [ ] 설계 문서 어휘표에 Outcome이 두 층임을 명시
-8. [ ] 인터럽트에서 Step span 종료, 재개 시 `cord.resumed_from`을 단 새 Step span (슬라이스 2)
+8. [x] 인터럽트에서 Step span 종료, 재개 시 `cord.resumed_from`을 단 새 Step span (슬라이스 2, #28)
 
 최소 예제는 두 enum과 런타임 혼용 거부를 구현했다 (#4). 별도 `cord-runtime`의
 span 헬퍼와 enum은 #5에서 구현했다. 두 실행 경로는 #8에서 연결했다. Action 2의 원자적
@@ -282,3 +282,18 @@ duration뿐 아니라 "Step 시간 대비 Attempt 시간" 같은 파생 지표�
 Attempt를 서로 형제로 둔다. 빠져 있던 것은 Run과 Attempt 사이의 한 겹이었고, 그
 부재가 그쪽 `repaired`를 Step이 아니라 Attempt에 얹게 만들었다. 두 프로젝트가 각각
 상대가 못 본 것을 하나씩 갖고 있었다.
+
+
+## 구현 확인 — 인터럽트/재개 경계 (2026-09-15, #28)
+
+위 규칙을 `cord_runtime.execution`에 구현했다. `Run.step(..., pause=(...))`가
+그래프가 넘긴 예외 타입(예: LangGraph의 `GraphInterrupt`)만 실패로 찍지 않고
+통과시킨다 — `cord_runtime`은 어떤 그래프 프레임워크의 이름도 모른다. Step은
+`awaiting_approval`로 닫히고 span status는 오류가 아니며, 열린 Attempt는
+중첩 구조상 항상 먼저 닫힌다. 재개는 `Run.continuation`(문자열 다섯 개, 안전한
+상관관계 데이터)과 `resume_run()`으로 같은 trace에 새 Step span만 열고,
+`cord.resumed_from`에 직전 Step의 span_id를 남긴다 — Run root span은 다시 만들지
+않는다. [entity 배선과 검증](../interrupt-resume.md) 참고. `agent-workflow-core`의
+관찰자 프로토콜은 건드리지 않았다: 공개 seam은 LangGraph의 `interrupt()`/
+`Command(resume=...)`이며, 이는 ARCHITECTURE.md가 이미 Aegra/LangGraph 소유로
+적어 둔 것이다.
