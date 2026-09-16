@@ -6,6 +6,7 @@ its identities). See docs/cord-cli.md for the full command reference.
 """
 
 import argparse
+from datetime import datetime
 import json
 from pathlib import Path
 import sys
@@ -14,6 +15,9 @@ import requests
 
 from cord_runtime.aegra_client import execute
 from cord_runtime.connections import InvalidConnection, add_connection, load_connections
+from cord_runtime.router import route_signal
+from cord_runtime.rules import InvalidRule, SIGNAL_TYPES, add_rule
+from cord_runtime.signals import InvalidSignal, file_signal, manual_signal, schedule_signal
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
@@ -124,6 +128,84 @@ def cmd_run(args: argparse.Namespace) -> int:
     return EXIT_OK if result["status"] == "success" else EXIT_FAILURE
 
 
+def _parse_match_kv(pairs: list[str]) -> dict:
+    match = {}
+    for item in pairs:
+        if "=" not in item:
+            raise InvalidRule(f"expected KEY=VALUE for --match, got '{item}'")
+        key, _, raw = item.partition("=")
+        try:
+            match[key] = json.loads(raw)
+        except ValueError:
+            match[key] = raw
+    return match
+
+
+def _parse_input_kv(pairs: list[str]) -> dict:
+    mapping = {}
+    for item in pairs:
+        if "=" not in item:
+            raise InvalidRule(f"expected DEST=PATH for --input, got '{item}'")
+        key, _, path = item.partition("=")
+        mapping[key] = path
+    return mapping
+
+
+def cmd_rule_add(args: argparse.Namespace) -> int:
+    try:
+        rule = {
+            "name": args.name,
+            "signal_type": args.signal_type,
+            "connection": args.connection,
+            "assistant": args.assistant,
+            "subject": args.subject,
+            "match": _parse_match_kv(args.match),
+            "input": _parse_input_kv(args.input),
+        }
+        add_rule(_board_dir(args), rule, replace=args.replace)
+    except InvalidRule as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    print(f"added rule '{args.name}'")
+    return EXIT_OK
+
+
+def _route_and_report(board_dir: Path, signal: dict, timeout: float) -> int:
+    outcome = route_signal(board_dir, signal, timeout=timeout)
+    print(json.dumps(outcome))
+    if outcome["status"] != "routed":
+        return EXIT_FAILURE
+    return EXIT_OK if outcome["result"]["status"] == "success" else EXIT_FAILURE
+
+
+def cmd_signal_manual(args: argparse.Namespace) -> int:
+    try:
+        payload = _read_json_file(args.input, "signal input")
+        signal = manual_signal(payload, signal_id=args.id)
+    except (InvalidConnection, InvalidSignal) as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    return _route_and_report(_board_dir(args), signal, args.timeout)
+
+
+def cmd_signal_file(args: argparse.Namespace) -> int:
+    try:
+        signal = file_signal(args.path)
+    except InvalidSignal as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    return _route_and_report(_board_dir(args), signal, args.timeout)
+
+
+def cmd_signal_schedule(args: argparse.Namespace) -> int:
+    try:
+        at = datetime.fromisoformat(args.at)
+    except ValueError:
+        return _fail(f"invalid --at timestamp '{args.at}'", EXIT_USAGE)
+    try:
+        signal = schedule_signal(args.name, at)
+    except InvalidSignal as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    return _route_and_report(_board_dir(args), signal, args.timeout)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cord", description=__doc__)
     parser.add_argument("--board", help="Board directory holding .cordboard/ (default: current directory)")
@@ -148,6 +230,42 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Optional JSON file with public request context")
     run.add_argument("--timeout", type=float, default=120.0, help="Seconds to wait for completion")
     run.set_defaults(func=cmd_run)
+
+    rule = sub.add_parser("rule", help="Manage declarative Signal routing rules")
+    rule_sub = rule.add_subparsers(dest="rule_command", required=True)
+
+    rule_add = rule_sub.add_parser("add", help="Add a Rule mapping a Signal type to an Assistant")
+    rule_add.add_argument("name")
+    rule_add.add_argument("signal_type", choices=SIGNAL_TYPES)
+    rule_add.add_argument("connection", help="Registered connection alias")
+    rule_add.add_argument("assistant", help="Explicit assistant id or graph id")
+    rule_add.add_argument("subject", help="Dot-path into the Signal payload for the required Subject")
+    rule_add.add_argument("--match", action="append", default=[],
+                          help="KEY=VALUE equality filter on the Signal payload (repeatable)")
+    rule_add.add_argument("--input", action="append", default=[],
+                          help="DEST=PATH mapping into the Assistant input (repeatable)")
+    rule_add.add_argument("--replace", action="store_true", help="Replace an existing rule of the same name")
+    rule_add.set_defaults(func=cmd_rule_add)
+
+    signal = sub.add_parser("signal", help="Fire a Signal through the declared Rule routing path")
+    signal_sub = signal.add_subparsers(dest="signal_command", required=True)
+
+    signal_manual = signal_sub.add_parser("manual", help="Fire a manual Signal")
+    signal_manual.add_argument("input", type=Path, help="JSON file with the Signal payload")
+    signal_manual.add_argument("--id", default=None, help="Explicit Signal id (default: manual:<timestamp>)")
+    signal_manual.add_argument("--timeout", type=float, default=120.0, help="Seconds to wait for completion")
+    signal_manual.set_defaults(func=cmd_signal_manual)
+
+    signal_file = signal_sub.add_parser("file", help="Fire a Signal from one file's current JSON content")
+    signal_file.add_argument("path", type=Path)
+    signal_file.add_argument("--timeout", type=float, default=120.0, help="Seconds to wait for completion")
+    signal_file.set_defaults(func=cmd_signal_file)
+
+    signal_schedule = signal_sub.add_parser("schedule", help="Fire a Signal for one schedule tick")
+    signal_schedule.add_argument("name")
+    signal_schedule.add_argument("at", help="ISO 8601 timestamp for this schedule tick")
+    signal_schedule.add_argument("--timeout", type=float, default=120.0, help="Seconds to wait for completion")
+    signal_schedule.set_defaults(func=cmd_signal_schedule)
 
     return parser
 

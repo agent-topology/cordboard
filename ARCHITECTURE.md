@@ -28,6 +28,13 @@ handling, `cord sync`) are still planned.
 `awaiting_approval` when the graph's own `interrupt()` pauses it and open a new,
 linked Step on resume, through LangGraph's public interrupt contract rather
 than any change to `agent-workflow-core` or Omiologic (#28).
+[Signal/Rule routing](docs/signal-routing.md) adds `cord rule add` and
+`cord signal manual|file|schedule`, one generic router
+(`cord_runtime.router.route_signal`) all three sources call, evaluating only
+a Rule's declared match/mapping dot-paths against an already-registered
+connection/Assistant (#12) without interpreting payload meaning; unmatched
+Signals and invalid mappings are recorded with bounded, sanitized diagnostics
+and no payload (#16).
 [`cord_runtime.topology`](src/cord_runtime/topology.py) reads a Deployment's
 optional published topology over HTTP, classifies it as absent, unreachable,
 invalid, or valid against the pinned `agent-topology-spec==0.1.0b3` schema,
