@@ -5,6 +5,7 @@ the boundary. No SDK ReadableSpan or shared Resource is mutated.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 import logging
 
 from google.protobuf.descriptor import FieldDescriptor
@@ -90,6 +91,29 @@ def redact_request(request: ExportTraceServiceRequest) -> ExportTraceServiceRequ
     return accepted
 
 
+#: Fixed, value-free reasons `ExportOutcome.reason` takes -- never a response
+#: body, header, or URL (#45 AC2/AC5).
+UNREACHABLE = "unreachable"
+HTTP_ERROR = "http_error"
+REJECTED_SPANS = "rejected_spans"
+PROCESSING_FAILED = "processing_failed"
+
+
+@dataclass(frozen=True)
+class ExportOutcome:
+    """The most recent export attempt's delivery outcome, kept alongside the
+    OTel SDK's own `SpanExportResult` rather than in place of it, so a
+    caller can distinguish *why* delivery failed instead of a bare boolean
+    (#45 AC2). `rejected_spans` is populated only when the Collector's own
+    OTLP `partial_success` explicitly reported a count; it is never invented
+    for the other failure reasons, which the pinned Collector cannot supply
+    a count for."""
+
+    delivered: bool
+    reason: str | None = None
+    rejected_spans: int | None = None
+
+
 class RedactingOTLPExporter(SpanExporter):
     """Synchronous, bounded-time exporter for the local archive slice.
 
@@ -101,27 +125,41 @@ class RedactingOTLPExporter(SpanExporter):
         self.endpoint = endpoint
         self.session = requests.Session()
         self.session.trust_env = False
+        self.last_export: ExportOutcome | None = None
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
+        reason = None
+        rejected_spans = None
         try:
             safe = redact_request(encode_spans(spans))
             if not safe.resource_spans:
+                self.last_export = ExportOutcome(delivered=True)
                 return SpanExportResult.SUCCESS
-            response = self.session.post(
-                self.endpoint,
-                data=safe.SerializeToString(),
-                headers={"Content-Type": "application/x-protobuf"},
-                timeout=10,
-                allow_redirects=False,
-            )
+            try:
+                response = self.session.post(
+                    self.endpoint,
+                    data=safe.SerializeToString(),
+                    headers={"Content-Type": "application/x-protobuf"},
+                    timeout=10,
+                    allow_redirects=False,
+                )
+            except requests.RequestException:
+                reason = UNREACHABLE
+                raise
             if response.status_code != 200:
+                reason = HTTP_ERROR
                 raise RuntimeError
             result = ExportTraceServiceResponse.FromString(response.content)
             if result.partial_success.rejected_spans:
+                reason = REJECTED_SPANS
+                rejected_spans = result.partial_success.rejected_spans
                 raise RuntimeError
         except Exception:
-            logger.warning("telemetry export failed")
+            reason = reason or PROCESSING_FAILED
+            self.last_export = ExportOutcome(delivered=False, reason=reason, rejected_spans=rejected_spans)
+            logger.warning("telemetry export failed: %s", reason)
             return SpanExportResult.FAILURE
+        self.last_export = ExportOutcome(delivered=True)
         return SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:

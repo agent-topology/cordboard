@@ -9,20 +9,38 @@ import subprocess
 import time
 
 from google.protobuf.json_format import MessageToJson
+from opentelemetry.exporter.otlp.proto.common.trace_encoder import encode_spans
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult
 import pytest
 import requests
 
 from cord_runtime.archive_check import check
+from cord_runtime.archive_health import HealthStatus, archive_health
+from cord_runtime.collector_health import REACHABLE, UNAVAILABLE, check_collector_health, wait_for_collector_recovery
 from cord_runtime.execution import AttemptOutcome, StepOutcome, run
+from cord_runtime.telemetry import UNREACHABLE as EXPORT_UNREACHABLE
 from cord_runtime.telemetry import RedactingOTLPExporter, redact_request
 from conftest import CREDENTIAL, PRIVATE_KEY, ROOT
-from test_telemetry import request, spans
+from test_telemetry import Capture, request, spans
 
 pytestmark = pytest.mark.collector
+
+
+class CollectorEndpoint(str):
+    """The OTLP export URL, as every existing caller already uses it
+    directly, plus this same Collector's health-check URL (#45 AC2) as an
+    attribute so no existing call site needs to change."""
+
+    health: str
+
+
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
 
 
 @contextmanager
@@ -31,12 +49,12 @@ def collector(directory, config=None):
     assert binary.is_file(), "pinned Collector required; see docs/archive.md"
     version = subprocess.run([str(binary), "--version"], capture_output=True, text=True, check=True)
     assert "0.148.0" in version.stdout
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
+    port = free_port()
+    health_port = free_port()
     directory.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "CORD_ARCHIVE_DIR": str(directory),
-           "CORD_OTLP_ENDPOINT": f"127.0.0.1:{port}", "TZ": "UTC"}
+           "CORD_OTLP_ENDPOINT": f"127.0.0.1:{port}",
+           "CORD_HEALTH_ENDPOINT": f"127.0.0.1:{health_port}", "TZ": "UTC"}
     process = subprocess.Popen(
         [str(binary), "--config", str(config or ROOT / "collector/config.yaml")],
         env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -52,7 +70,9 @@ def collector(directory, config=None):
             except OSError:
                 assert time.monotonic() < deadline, "Collector did not become ready"
                 time.sleep(.05)
-        yield f"http://127.0.0.1:{port}/v1/traces"
+        endpoint = CollectorEndpoint(f"http://127.0.0.1:{port}/v1/traces")
+        endpoint.health = f"http://127.0.0.1:{health_port}/"
+        yield endpoint
     finally:
         process.terminate()
         try:
@@ -240,3 +260,108 @@ def test_query_actual_archive_fixture(tmp_path):
         capture_output=True, text=True,
     )
     assert result.returncode == 0 and json.loads(result.stdout) == expected
+
+
+def test_collector_health_visible_independent_of_runtime(tmp_path):
+    """#45 AC2: reachability comes from the Collector's own health endpoint,
+    never inferred from whether a graph Run succeeded."""
+    directory = tmp_path / "health"
+    never_bound = free_port()
+    assert check_collector_health(f"http://127.0.0.1:{never_bound}/", timeout=.5) == UNAVAILABLE
+    with collector(directory) as endpoint:
+        assert check_collector_health(endpoint.health, timeout=5) == REACHABLE
+    # The context manager has already stopped this Collector.
+    assert check_collector_health(endpoint.health, timeout=.5) == UNAVAILABLE
+
+
+def test_collector_stop_restart_bounded_recovery(tmp_path):
+    """#45 AC2: a stop is visible immediately, a bounded wait never reports a
+    stopped Collector as recovered, and restarting on the same configured
+    port is observed within the bound."""
+    binary = Path(os.environ.get("OTELCOL", ROOT / ".tools/otelcol-contrib"))
+    assert binary.is_file(), "pinned Collector required; see docs/archive.md"
+    directory = tmp_path / "recovery"
+    directory.mkdir(parents=True, exist_ok=True)
+    port, health_port = free_port(), free_port()
+    env = {**os.environ, "CORD_ARCHIVE_DIR": str(directory), "CORD_OTLP_ENDPOINT": f"127.0.0.1:{port}",
+           "CORD_HEALTH_ENDPOINT": f"127.0.0.1:{health_port}", "TZ": "UTC"}
+    health_url = f"http://127.0.0.1:{health_port}/"
+
+    def start():
+        return subprocess.Popen([str(binary), "--config", str(ROOT / "collector/config.yaml")],
+                                 env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    process = start()
+    try:
+        assert wait_for_collector_recovery(health_url, timeout=15, poll_interval=.05)
+        process.terminate()
+        process.wait(timeout=10)
+        assert wait_for_collector_recovery(health_url, timeout=1, poll_interval=.1) is False
+        process = start()  # restart on the very same configured port
+        assert wait_for_collector_recovery(health_url, timeout=15, poll_interval=.05)
+    finally:
+        process.terminate()
+        process.communicate(timeout=10)
+
+
+def test_export_unreachable_reason_against_a_real_stopped_collector(tmp_path):
+    """#45 AC2: delivery loss is reported with its own reason, not
+    concealed behind a bare failure boolean, when the Collector this
+    exporter is actually configured for is unreachable."""
+    directory = tmp_path / "unreachable"
+    with collector(directory) as endpoint:
+        target = str(endpoint)
+    # The context manager already stopped this Collector; nothing listens.
+    exporter = RedactingOTLPExporter(target)
+    provider = TracerProvider(resource=Resource({}))
+    captured = Capture()
+    provider.add_span_processor(SimpleSpanProcessor(captured))
+    with provider.get_tracer("test").start_as_current_span("test"):
+        pass
+    provider.shutdown()
+    assert exporter.export(captured.spans) == SpanExportResult.FAILURE
+    assert exporter.last_export.reason == EXPORT_UNREACHABLE
+    exporter.shutdown()
+
+
+def test_archive_health_pending_before_first_export_then_healthy(tmp_path):
+    """#45 AC1/AC4: absence of files is PENDING, not a failure, and the
+    same directory becomes HEALTHY once the real Collector's gated export
+    lands -- evidence-based, not inferred. Uses a real SDK-exported span
+    (real timestamps), not the raw `request()` fixture the redaction-only
+    tests above use, since `archive_health` applies the full archive
+    contract rather than only the gate."""
+    directory = tmp_path / "fresh"
+    directory.mkdir()
+    assert archive_health([directory]).status is HealthStatus.PENDING
+    with collector(directory) as endpoint:
+        provider = TracerProvider(resource=Resource({"service.name": "health-fixture"}))
+        provider.add_span_processor(SimpleSpanProcessor(RedactingOTLPExporter(endpoint)))
+        with provider.get_tracer("fixture").start_as_current_span("span"):
+            pass
+        provider.shutdown()
+        deadline = time.monotonic() + 5
+        while archive_health([directory]).status is not HealthStatus.HEALTHY:
+            assert time.monotonic() < deadline, "archive did not become healthy after a real export"
+            time.sleep(.05)
+    assert archive_health([directory]).span_count == 1
+
+
+def test_replay_through_real_collector_does_not_duplicate_health_spans(tmp_path):
+    """#45 AC3: a retransmitted, identically-accepted export is not double
+    counted by the health reader, exercised through the real gate/archive
+    pipeline rather than a synthetic file."""
+    directory = tmp_path / "replay-health"
+    captured = Capture()
+    provider = TracerProvider(resource=Resource({"service.name": "replay-fixture"}))
+    provider.add_span_processor(SimpleSpanProcessor(captured))
+    with provider.get_tracer("fixture").start_as_current_span("span"):
+        pass
+    provider.shutdown()
+    req = redact_request(encode_spans(captured.spans))
+    with collector(directory) as endpoint:
+        send(endpoint, req)
+        send(endpoint, req)
+    health = archive_health([directory])
+    assert health.status is HealthStatus.HEALTHY
+    assert health.span_count == 1

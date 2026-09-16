@@ -484,6 +484,23 @@ the archive remains unchanged. Missing ingestion is distinct from an empty count
 Direct ClickHouse queries are temporary
 investigation tools, not durable integration contracts.
 
+[Delivery health](docs/delivery-health.md) (#45) adds two read-only surfaces
+without changing the record-of-origin contract above.
+`cord_runtime.archive_health` classifies an archive directory as `pending`
+(no files yet), `empty`, `incomplete` (a file's trailing line looks like an
+append still in flight -- tolerated without accepting a genuinely corrupt
+complete record), `failed`, or `healthy`; `cord_runtime.collector_health`
+polls the Collector's own `health_check` extension
+(`collector/config.yaml`'s `CORD_HEALTH_ENDPOINT`, default
+`127.0.0.1:13133`) so an outage is visible independently of any graph Run's
+own status, with a bounded recovery wait.
+`telemetry.RedactingOTLPExporter.last_export` reports which of four fixed
+reasons (`unreachable`/`http_error`/`rejected_spans`/`processing_failed`) the
+most recent export failed for, never inventing a rejected-span count the
+Collector's own `partial_success` response did not itself report. All of it
+is sanitized, fixed-vocabulary diagnostics, matching #5's `ArchiveError`
+discipline; none of it is wired into `cord view` or any web surface yet.
+
 ## Isolation, routing, and approval
 
 [ADR-0001](docs/decisions/0001-isolation-level.md) makes process isolation the

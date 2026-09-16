@@ -76,6 +76,9 @@ export TZ=UTC
 `TZ=UTC` is required: the pinned OTTL `Now()` uses the process timezone. The
 receiver binds to `127.0.0.1:4318`; `CORD_OTLP_ENDPOINT` can override the bind
 address for local testing. Do not expose this unauthenticated receiver remotely.
+The Collector's own `health_check` extension binds to `127.0.0.1:13133`
+(`CORD_HEALTH_ENDPOINT` overrides it); [delivery health](delivery-health.md)
+polls it to distinguish a Collector outage from silence.
 
 In another terminal:
 
