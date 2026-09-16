@@ -6,9 +6,10 @@ its identities). See docs/cord-cli.md for the full command reference.
 """
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
+import shlex
 import sys
 
 import requests
@@ -16,6 +17,7 @@ import requests
 from cord_runtime.aegra_client import execute
 from cord_runtime.archive_query import ArchiveError, read_spans
 from cord_runtime.connections import InvalidConnection, add_connection, load_connections
+from cord_runtime.deployment_lifecycle import stop_idle
 from cord_runtime.router import route_signal
 from cord_runtime.rules import InvalidRule, SIGNAL_TYPES, add_rule
 from cord_runtime.signals import InvalidSignal, file_signal, manual_signal, schedule_signal
@@ -53,11 +55,25 @@ def _read_json_file(path: Path, label: str):
 
 
 def cmd_add(args: argparse.Namespace) -> int:
+    launch = shlex.split(args.launch) if args.launch else None
     try:
-        add_connection(_board_dir(args), args.alias, args.endpoint, replace=args.replace)
+        add_connection(_board_dir(args), args.alias, args.endpoint,
+                       launch=launch, idle_after=args.idle_after, replace=args.replace)
     except InvalidConnection as exc:
         return _fail(str(exc), EXIT_USAGE)
-    print(f"added '{args.alias}' -> {args.endpoint}")
+    suffix = " (managed)" if launch else ""
+    print(f"added '{args.alias}' -> {args.endpoint}{suffix}")
+    return EXIT_OK
+
+
+def cmd_deployment_sweep(args: argparse.Namespace) -> int:
+    board_dir = _board_dir(args)
+    try:
+        connections = load_connections(board_dir)
+    except InvalidConnection as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    stopped = stop_idle(board_dir, connections, now=datetime.now(timezone.utc).timestamp())
+    print("stopped: " + ", ".join(sorted(stopped)) if stopped else "no idle managed deployments")
     return EXIT_OK
 
 
@@ -246,8 +262,19 @@ def build_parser() -> argparse.ArgumentParser:
     add = sub.add_parser("add", help="Register an existing deployment")
     add.add_argument("alias")
     add.add_argument("endpoint", help="Deployment base URL (http/https, no userinfo)")
+    add.add_argument("--launch", default=None,
+                     help="Operator-supplied command that starts this Deployment's own entrypoint; "
+                          "presence opts the Deployment into managed startup/idle shutdown (#17)")
+    add.add_argument("--idle-after", type=float, default=None, dest="idle_after",
+                     help="Seconds of no active claim before a managed Deployment is stopped (default: 600)")
     add.add_argument("--replace", action="store_true", help="Replace an existing alias")
     add.set_defaults(func=cmd_add)
+
+    deployment = sub.add_parser("deployment", help="Manage managed Deployment lifecycle")
+    deployment_sub = deployment.add_subparsers(dest="deployment_command", required=True)
+    deployment_sweep = deployment_sub.add_parser(
+        "sweep", help="Stop every managed Deployment idle beyond its declared idle_after")
+    deployment_sweep.set_defaults(func=cmd_deployment_sweep)
 
     list_cmd = sub.add_parser("list", help="Show reachability and graphs for registered deployments")
     list_cmd.add_argument("alias", nargs="?", default=None)

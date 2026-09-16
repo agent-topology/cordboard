@@ -44,6 +44,27 @@ a Rule's declared match/mapping dot-paths against an already-registered
 connection/Assistant (#12) without interpreting payload meaning; unmatched
 Signals and invalid mappings are recorded with bounded, sanitized diagnostics
 and no payload (#16).
+`route_signal` now also durably deduplicates by Signal ID, applies a "skip"
+default (Assistant, Subject) concurrency claim, and -- for a connection that
+declares an operator-supplied ``launch`` command -- starts that managed
+Deployment lazily before submission and marks it active (#17). All three are
+file-backed claim stores under `.cordboard/` (`cord_runtime.signal_dedupe`,
+`cord_runtime.concurrency`, `cord_runtime.deployment_lifecycle`) so they
+survive a process restart between the claim and the outcome, not just a
+retry within one process. A Signal ID is claimed only immediately before
+submission and never rolled back afterward, since a failed or ambiguous
+`execute()` result still means the Run may have been accepted; a Signal that
+never reaches submission (unmatched, invalid mapping, concurrency skip, or a
+managed Deployment that failed to start/become healthy) is not claimed, so a
+corrected redelivery can still retry. `active_runs` is tracked per Deployment
+alias, not per Graph, so one Graph on a shared Deployment going idle never
+stops a sibling Graph's still-active Run; `cord deployment sweep` stops every
+managed Deployment idle beyond its declared `idle_after` (default 600s;
+Signal-ID retention default is 24h). A connection with no `launch` command
+stays external and is never started or stopped, only ever contacted, as
+before. `ensure_started` is written as the shared entry point a future
+approval-resume submission would also call, but no resume orchestration
+exists in this codebase yet to wire it into.
 [`cord_runtime.topology`](src/cord_runtime/topology.py) reads a Deployment's
 optional published topology over HTTP, classifies it as absent, unreachable,
 invalid, or valid against the pinned `agent-topology-spec==0.1.0b3` schema,
@@ -352,9 +373,10 @@ choice, not what keeps platform code independent of graph business logic.
 Producer compatibility still constrains supported graph dependencies.
 
 The design artifact proposes Signal sources including manual, file, schedule,
-HTTP, and `run.finished`. Rules select an Assistant, map input, and extract a
-Subject. The router deduplicates Signal IDs and applies concurrency policy on
-`(Assistant, Subject)`; unmatched Signals must also be recorded.
+HTTP, and `run.finished`; manual, file, and schedule are implemented (#16).
+Rules select an Assistant, map input, and extract a Subject. The router
+deduplicates Signal IDs and applies "skip"-default concurrency policy on
+`(Assistant, Subject)` (#17); unmatched Signals are also recorded.
 
 Approval always carries `interrupt_id`. Graphs decide where to interrupt and
 how to interpret the response; the platform owns the inbox and reminder/expiry
@@ -363,8 +385,11 @@ resumed node can execute again. Side-effect idempotency remains graph-owned.
 
 Cross-graph composition is asynchronous through `run.finished`. A child Run
 gets a new trace and records `cord.caused_by.run_id`; cascade depth uses
-`cord.cascade.depth`. Synchronous composition stays inside a Graph as subgraphs.
-Lazy startup is planned with routing in Slice 3, not assumed for the first slices.
+`cord.cascade.depth`. Synchronous composition stays inside a Graph as
+subgraphs. Lazy startup landed with routing (#17): a connection that declares
+an operator-supplied `launch` command is started on demand and stopped once
+idle; a connection without one stays external and is only ever contacted, as
+in the first slices. `run.finished` cascades themselves remain planned (#18).
 
 ## Open documentation issues
 

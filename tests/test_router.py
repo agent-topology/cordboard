@@ -9,6 +9,7 @@ signals are recorded without the payload. Uses a fixed clock and fake
 
 from datetime import datetime, timezone
 import json
+import socket
 
 import pytest
 
@@ -207,3 +208,182 @@ def test_manual_execution_end_to_end_success(board, fake_execute):
     outcome = router.route_signal(board, signal)
     assert outcome["status"] == "routed"
     assert outcome["result"] == {"run_id": "r-1", "thread_id": "t-1", "status": "success", "values": {}}
+
+
+# --- #17 AC1: repeated Signal delivery does not create duplicate work -----
+
+def test_repeated_delivery_of_the_same_signal_id_is_a_duplicate_not_a_second_run(board, fake_execute):
+    _add_rule(board, "manual")
+    signal = manual_signal({"subject": "manual:demo", "body": "hi"}, signal_id="fixed-id", now=FIXED_NOW)
+    first = router.route_signal(board, signal, now=FIXED_NOW)
+    second = router.route_signal(board, signal, now=FIXED_NOW)
+    assert first["status"] == "routed"
+    assert second == {"status": "duplicate", "signal_id": "fixed-id", "rule": "manual-rule"}
+    assert len(fake_execute) == 1
+
+
+def test_redelivery_after_an_ambiguous_submission_failure_is_still_a_duplicate(board, monkeypatch):
+    """execute() raising is ambiguous transport (aegra_client's own contract):
+    the Run may have been accepted, so a retry must not resubmit it."""
+    _add_rule(board, "manual")
+    calls = []
+
+    def raising_execute(*_args, **_kwargs):
+        calls.append(1)
+        raise RuntimeError("Aegra API request failed; check service readiness and input contract")
+
+    monkeypatch.setattr(router, "execute", raising_execute)
+    signal = manual_signal({"subject": "manual:demo", "body": "hi"}, signal_id="fixed-id", now=FIXED_NOW)
+    first = router.route_signal(board, signal, now=FIXED_NOW)
+    second = router.route_signal(board, signal, now=FIXED_NOW)
+    assert first["status"] == "execution_failed"
+    assert second == {"status": "duplicate", "signal_id": "fixed-id", "rule": "manual-rule"}
+    assert len(calls) == 1
+
+
+def test_redelivery_after_a_restart_still_sees_the_same_duplicate_claim(board, fake_execute):
+    """A restart is just a fresh call against the same on-disk board_dir."""
+    _add_rule(board, "manual")
+    signal = manual_signal({"subject": "manual:demo", "body": "hi"}, signal_id="fixed-id", now=FIXED_NOW)
+    router.route_signal(board, signal, now=FIXED_NOW)
+    outcome = router.route_signal(board, signal, now=FIXED_NOW)
+    assert outcome["status"] == "duplicate"
+
+
+def test_redelivery_of_an_unmatched_signal_is_not_blocked_as_a_duplicate(board, fake_execute):
+    """Nothing was submitted for an unmatched Signal, so a corrected Rule must
+    still be able to route a later delivery of the same Signal id."""
+    signal = manual_signal({"subject": "manual:demo", "body": "hi"}, signal_id="fixed-id", now=FIXED_NOW)
+    first = router.route_signal(board, signal, now=FIXED_NOW)
+    assert first["status"] == "unmatched"
+    _add_rule(board, "manual")
+    second = router.route_signal(board, signal, now=FIXED_NOW)
+    assert second["status"] == "routed"
+
+
+def test_rapid_file_notifications_coalesce_by_content_but_distinct_content_still_runs(board, fake_execute,
+                                                                                        tmp_path):
+    """`file_signal`'s id is a content hash (ADR-0002): several rapid
+    notifications of the *same unchanged* file content (a common inotify
+    burst for one save) share one id and coalesce to one Run; a notification
+    that actually carries new content gets its own Run. Known counts: 3
+    deliveries, 2 distinct contents, 1 coalesced pair -> 2 Runs."""
+    _add_rule(board, "file")
+    event_path = tmp_path / "event.json"
+
+    event_path.write_text(json.dumps({"subject": "file:notes/api.md", "body": "v1"}), encoding="utf-8")
+    first_signal = file_signal(event_path)
+    outcome_1 = router.route_signal(board, first_signal, now=FIXED_NOW)
+
+    # A second, rapid notification of the unchanged file: same content hash, same id.
+    second_signal = file_signal(event_path)
+    outcome_2 = router.route_signal(board, second_signal, now=FIXED_NOW)
+
+    event_path.write_text(json.dumps({"subject": "file:notes/api.md", "body": "v2"}), encoding="utf-8")
+    third_signal = file_signal(event_path)
+    outcome_3 = router.route_signal(board, third_signal, now=FIXED_NOW)
+
+    assert first_signal["id"] == second_signal["id"]
+    assert third_signal["id"] != first_signal["id"]
+    assert outcome_1["status"] == "routed"
+    assert outcome_2 == {"status": "duplicate", "signal_id": first_signal["id"], "rule": "file-rule"}
+    assert outcome_3["status"] == "routed"
+    assert len(fake_execute) == 2
+
+
+# --- #17 AC2: declared (Assistant, Subject) conflicts hold under concurrency
+
+def test_concurrent_arrival_for_the_same_assistant_and_subject_is_skipped(board, monkeypatch):
+    _add_rule(board, "manual")
+    holder = manual_signal({"subject": "manual:demo", "body": "hi"}, signal_id="holder", now=FIXED_NOW)
+    latecomer = manual_signal({"subject": "manual:demo", "body": "hi"}, signal_id="latecomer", now=FIXED_NOW)
+
+    def blocking_execute(*_args, **_kwargs):
+        # Simulate the claim still being held mid-flight by re-entering the
+        # router for a second Signal before the first call returns.
+        inner = router.route_signal(board, latecomer, now=FIXED_NOW)
+        assert inner == {"status": "concurrency_skipped", "signal_id": "latecomer", "rule": "manual-rule"}
+        return {"run_id": "r-1", "thread_id": "t-1", "status": "success", "values": {}}
+
+    monkeypatch.setattr(router, "execute", blocking_execute)
+    outcome = router.route_signal(board, holder, now=FIXED_NOW)
+    assert outcome["status"] == "routed"
+
+
+def test_a_skipped_concurrency_conflict_does_not_consume_the_signal_dedupe_claim(board, fake_execute):
+    _add_rule(board, "manual")
+    from cord_runtime.concurrency import try_claim
+
+    signal = manual_signal({"subject": "manual:demo", "body": "hi"}, signal_id="fixed-id", now=FIXED_NOW)
+    try_claim(board, "triage-graph", "manual:demo", now=FIXED_NOW.timestamp(), stale_after=180)
+    skipped = router.route_signal(board, signal, now=FIXED_NOW, timeout=10)
+    assert skipped["status"] == "concurrency_skipped"
+    assert fake_execute == []
+
+    from cord_runtime.concurrency import release
+    release(board, "triage-graph", "manual:demo")
+    routed = router.route_signal(board, signal, now=FIXED_NOW)
+    assert routed["status"] == "routed"
+
+
+def test_different_subjects_execute_concurrently_without_conflict(board, fake_execute):
+    _add_rule(board, "manual")
+    signal_a = manual_signal({"subject": "manual:a", "body": "hi"}, signal_id="a", now=FIXED_NOW)
+    signal_b = manual_signal({"subject": "manual:b", "body": "hi"}, signal_id="b", now=FIXED_NOW)
+    outcome_a = router.route_signal(board, signal_a, now=FIXED_NOW)
+    outcome_b = router.route_signal(board, signal_b, now=FIXED_NOW)
+    assert outcome_a["status"] == "routed"
+    assert outcome_b["status"] == "routed"
+
+
+# --- #17 AC4/AC5: managed Deployment startup, health failure stays visible -
+
+def _closed_local_port() -> int:
+    """A port nothing listens on: bind-then-close, rather than a fixed
+    number that may collide with a real service already running locally."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+@pytest.fixture
+def managed_board(tmp_path):
+    add_connection(tmp_path, "local", f"http://127.0.0.1:{_closed_local_port()}", launch=["true"])
+    return tmp_path
+
+
+def test_managed_deployment_starts_before_execution(managed_board, monkeypatch, fake_execute):
+    import cord_runtime.router as router_module
+
+    started = []
+
+    def fake_ensure_started(board_dir, alias, connection, *, now, health_timeout):
+        started.append(alias)
+        return {"status": "running", "pid": 1}
+
+    released = []
+    monkeypatch.setattr(router_module, "ensure_started", fake_ensure_started)
+    monkeypatch.setattr(router_module, "release_active", lambda *a, **k: released.append(a[1]))
+    _add_rule(managed_board, "manual", connection="local")
+    signal = manual_signal({"subject": "manual:demo", "body": "hi"}, now=FIXED_NOW)
+    outcome = router.route_signal(managed_board, signal, now=FIXED_NOW)
+    assert outcome["status"] == "routed"
+    assert started == ["local"]
+    assert released == ["local"]
+
+
+def test_managed_deployment_startup_failure_is_visible_and_signal_stays_retryable(managed_board, fake_execute,
+                                                                                   monkeypatch):
+    # Real ensure_started()/health check, but with a tiny timeout: nothing
+    # listens on this endpoint, so startup must fail fast, not for real 30s.
+    monkeypatch.setattr(router, "_HEALTH_TIMEOUT", 0.05)
+    _add_rule(managed_board, "manual", connection="local")
+    signal = manual_signal({"subject": "manual:demo", "body": "hi"}, signal_id="fixed-id", now=FIXED_NOW)
+    outcome = router.route_signal(managed_board, signal, now=FIXED_NOW)
+    assert outcome["status"] == "deployment_unavailable"
+    assert "error" in outcome
+    assert fake_execute == []
+    # Nothing was submitted, so the same Signal id must still be retryable
+    # once the Deployment is reachable -- the failure never claimed dedupe.
+    from cord_runtime.signal_dedupe import is_duplicate
+    assert is_duplicate(managed_board, "fixed-id", now=FIXED_NOW.timestamp()) is False

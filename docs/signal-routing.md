@@ -14,8 +14,9 @@ change to `cord_runtime.router`.
 
 A Signal is an external event ([ADR-0002](decisions/0002-vocabulary.md)):
 `{"type": "manual" | "file" | "schedule", "id": "<deterministic string>",
-"payload": {...}}`. Identity is deterministic per source so a later dedup
-layer (#17) can be added without changing this contract:
+"payload": {...}}`. Identity is deterministic per source, which is what lets
+`cord_runtime.signal_dedupe` (#17) key its durable claim on this same id
+without changing this contract:
 
 | Source | Id | Payload |
 | --- | --- | --- |
@@ -88,6 +89,15 @@ Each prints one JSON line and routes through `cord_runtime.router.route_signal`:
 - **`unmatched`** — no declared Rule applies to this Signal.
 - **`invalid_mapping`** — a Rule matched, but its declared `subject`/`input`
   path was missing from the payload, or its `connection` alias is unknown.
+- **`concurrency_skipped`** — a Rule matched and mapped, but another Run is
+  already in flight for the same declared (Assistant, Subject) pair; the
+  declared default is to skip, not queue or run anyway (#17).
+- **`deployment_unavailable`** — a Rule's `connection` declares a managed
+  `launch` command (below) that failed to start or become healthy; `error`
+  carries the failure. Nothing was submitted, so this Signal id stays
+  retryable.
+- **`duplicate`** — this Signal id was already claimed and submitted within
+  the retention window (default 24h); a Run was not resubmitted.
 
 `unmatched` and `invalid_mapping` both exit `1` and append one bounded,
 sanitized record — `signal_type`, `signal_id`, and a `reason` string only,
@@ -95,12 +105,46 @@ sanitized record — `signal_type`, `signal_id`, and a `reason` string only,
 misconfigured or unrouted Signal stays visible without a second telemetry
 path or a leaked secret.
 
+## Deduplication, concurrency, and managed Deployment startup (#17)
+
+Immediately before submitting a Run, `route_signal` applies three durable,
+restart-safe checks, each backed by its own file under `.cordboard/` so they
+survive a process restart between a claim and its outcome:
+
+1. **Concurrency** (`cord_runtime.concurrency`): a claim on the declared
+   (Assistant, Subject) pair. The only implemented policy is "skip" — a
+   second arrival for a pair still claimed is turned away, not queued. A
+   claim older than the execution timeout plus a startup/health budget is
+   treated as abandoned (a crashed holder) and reclaimed.
+2. **Managed Deployment startup** (`cord_runtime.deployment_lifecycle`): a
+   connection registered with `cord add --launch "<command>" [--idle-after
+   SECONDS]` is managed; Cordboard starts that Deployment's own existing
+   entrypoint if it is not already running and polls its public `/health`
+   before submitting. A connection registered without `--launch` is
+   external and is never started or stopped, only ever contacted, exactly
+   as before. `cord deployment sweep` stops every managed Deployment that is
+   idle (no active claim) beyond its declared `idle_after` (default 600s);
+   it is meant to be invoked by an operator's own cron, the same way this
+   command's own trigger is (see below) — `cord` runs no background scheduler.
+   A Deployment that hosts more than one Graph tracks one active-claim count
+   per Deployment alias, so one Graph going idle never stops a sibling
+   Graph's still-active Run.
+3. **Signal-ID dedupe** (`cord_runtime.signal_dedupe`): claimed only
+   immediately before submission, and never rolled back afterward — a failed
+   or ambiguous `execute()` result still means the Run may have been
+   accepted, so a redelivered Signal (including after a restart) must not
+   resubmit it. A Signal that never reaches submission (unmatched, an
+   invalid mapping, a concurrency skip, or a Deployment that failed to
+   start) is not claimed, so a corrected redelivery can still retry. The
+   default retention window is 24h.
+
 ## Out of scope here
 
-HTTP/webhook adapters, `run.finished` cascades, production scheduler
-infrastructure (this command is the trigger; an operator's own cron/inotify/CI
-step invokes it), and durable deduplication guarantees are #17's concern.
-`cord signal schedule` records one tick you name explicitly; it does not run a
-background scheduler. Interpreting Signal payload meaning to pick or
-substitute a target, or requiring model/provider configuration to route, is
-out of scope by design ([ADR-0013](decisions/0013-switchboard-boundary.md)).
+HTTP/webhook adapters, `run.finished` cascades, and production scheduler
+infrastructure beyond `cord deployment sweep` (an operator's own
+cron/inotify/CI step invokes both it and `cord signal ...`). `cord signal
+schedule` records one tick you name explicitly; it does not run a background
+scheduler. Interpreting Signal payload meaning to pick or substitute a
+target, or requiring model/provider configuration to route, is out of scope
+by design ([ADR-0013](decisions/0013-switchboard-boundary.md)). Declared
+concurrency policies other than "skip" are not implemented.
