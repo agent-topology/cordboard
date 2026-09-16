@@ -1,12 +1,14 @@
-"""One generic Signal -> Rule -> Assistant routing path for all sources (#16).
+"""One generic Signal -> Rule -> Assistant routing path for all sources
+(#16), including the ``run.finished`` cascade (#18).
 
-``route_signal`` is the single entry point manual, file, and schedule Signals
-all pass through (ADR-0013 switchboard boundary). It evaluates only a Rule's
-declared match/mapping expressions -- bounded dot-paths into the Signal
-payload -- and never inspects payload meaning to pick or substitute a target.
-Unmatched Signals and invalid mappings are recorded with bounded, sanitized
-diagnostics (Signal type/id and a reason string) so they stay visible without
-ever persisting the payload itself.
+``route_signal`` is the single entry point manual, file, schedule, and
+``run.finished`` Signals all pass through (ADR-0013 switchboard boundary).
+It evaluates only a Rule's declared match/when/mapping expressions --
+bounded dot-paths into the Signal payload -- and never inspects payload
+meaning to pick or substitute a target. Unmatched Signals and invalid
+mappings are recorded with bounded, sanitized diagnostics (Signal type/id
+and a reason string) so they stay visible without ever persisting the
+payload itself.
 
 Three durable, restart-safe checks (#17) sit between a matched Rule and the
 actual submission, in this order:
@@ -22,6 +24,16 @@ actual submission, in this order:
    immediately before `execute()`, and never rolled back afterwards, because
    a failed or ambiguous submission result still means the Run may have been
    accepted.
+
+Chaining (#18): a matched Rule's execution reaching logical Run terminal
+state (`execute()`'s own ``"success"``, never each Aegra API Run completion
+-- a pause/resume must not create a false cascade) makes `route_signal`
+construct that Run's own `run.finished` Signal and route it again, after this
+call's own claims are released so a cascade Run never contends with its own
+parent's (Assistant, Subject) claim. Recursion is bounded by
+`MAX_CASCADE_DEPTH`; the same #17 Signal-ID dedupe claim (keyed on the
+completed Run's id) makes a redelivered or re-derived completion for one Run
+cascade at most once.
 """
 
 from datetime import datetime, timezone
@@ -34,6 +46,9 @@ from cord_runtime.connections import InvalidConnection, get_connection
 from cord_runtime.deployment_lifecycle import ensure_started, release_active
 from cord_runtime.rules import load_rules
 from cord_runtime.signal_dedupe import claim as claim_signal
+from cord_runtime.signals import run_finished_signal
+
+MAX_CASCADE_DEPTH = 5
 
 
 class MappingError(ValueError):
@@ -53,7 +68,8 @@ def _matches(rule: dict, signal: dict) -> bool:
     if rule["signal_type"] != signal["type"]:
         return False
     payload = signal["payload"]
-    for path, expected in rule.get("match", {}).items():
+    condition = rule["when"] if rule["signal_type"] == "run.finished" else rule.get("match", {})
+    for path, expected in condition.items():
         try:
             if _lookup(payload, path) != expected:
                 return False
@@ -107,10 +123,17 @@ def route_signal(board_dir: Path, signal: dict, *, timeout: float = 120.0,
     (Assistant, Subject) pair, ``{"status": "deployment_unavailable", ...,
     "error": ...}`` when a matched Rule's managed Deployment failed to start
     or become healthy, ``{"status": "duplicate", "signal_id": ...}`` when this
-    Signal ID already has a live dedupe claim, or
-    ``{"status": "execution_failed", ..., "error": ...}`` when a matched,
-    well-mapped Rule's target could not be reached or did not accept the Run
-    -- ``error`` is ``execute()``'s own payload-free message.
+    Signal ID already has a live dedupe claim, ``{"status":
+    "cascade_depth_exceeded", "signal_id": ..., "depth": ...}`` when a
+    ``run.finished`` Signal already carries the planned maximum cascade depth
+    (#18), or ``{"status": "execution_failed", ..., "error": ...}`` when a
+    matched, well-mapped Rule's target could not be reached or did not accept
+    the Run -- ``error`` is ``execute()``'s own payload-free message.
+
+    A ``"routed"`` result whose execution reached logical Run terminal state
+    also carries ``"cascade"``: this call's own recursive ``route_signal``
+    outcome for that Run's ``run.finished`` Signal (#18), typically
+    ``"unmatched"`` when no cascade Rule applies.
 
     ``now`` is an injected clock (default: real UTC time) so the
     concurrency/dedupe/lifecycle checks above are deterministically testable.
@@ -118,6 +141,14 @@ def route_signal(board_dir: Path, signal: dict, *, timeout: float = 120.0,
     board_dir = Path(board_dir)
     now = now or datetime.now(timezone.utc)
     now_ts = now.timestamp()
+
+    if signal["type"] == "run.finished":
+        depth = signal["payload"].get("cascade_depth", 0)
+        if depth >= MAX_CASCADE_DEPTH:
+            _record_unmatched(board_dir, signal,
+                               f"cascade depth {depth} is at the maximum of {MAX_CASCADE_DEPTH}")
+            return {"status": "cascade_depth_exceeded", "signal_id": signal["id"], "depth": depth}
+
     rules = load_rules(board_dir)
     matching = [r for r in rules if _matches(r, signal)]
     if not matching:
@@ -133,27 +164,41 @@ def route_signal(board_dir: Path, signal: dict, *, timeout: float = 120.0,
         return {"status": "invalid_mapping", "signal_id": signal["id"], "rule": rule["name"]}
 
     assistant = rule["assistant"]
+    caused_by_run_id = signal["payload"]["run_id"] if signal["type"] == "run.finished" else None
+    child_cascade_depth = signal["payload"].get("cascade_depth", 0) + 1 if signal["type"] == "run.finished" else 0
     stale_after = timeout + _HEALTH_TIMEOUT + _STALE_CLAIM_BUFFER
     if not try_claim_concurrency(board_dir, assistant, subject, now=now_ts, stale_after=stale_after):
         return {"status": "concurrency_skipped", "signal_id": signal["id"], "rule": rule["name"]}
 
+    response = None
     try:
         started = ensure_started(board_dir, rule["connection"], connection,
                                   now=now_ts, health_timeout=_HEALTH_TIMEOUT)
         if started["status"] == "start_failed":
-            return {"status": "deployment_unavailable", "signal_id": signal["id"],
-                    "rule": rule["name"], "error": started["error"]}
-
-        if not claim_signal(board_dir, signal["id"], now=now_ts):
-            return {"status": "duplicate", "signal_id": signal["id"], "rule": rule["name"]}
-
-        try:
-            result = execute(connection["endpoint"], assistant, subject, graph_input, timeout=timeout)
-        except (ValueError, RuntimeError) as exc:
-            # aegra_client.execute's exceptions are already payload/credential-free.
-            return {"status": "execution_failed", "signal_id": signal["id"],
-                    "rule": rule["name"], "error": str(exc)}
-        return {"status": "routed", "signal_id": signal["id"], "rule": rule["name"], "result": result}
+            response = {"status": "deployment_unavailable", "signal_id": signal["id"],
+                        "rule": rule["name"], "error": started["error"]}
+        elif not claim_signal(board_dir, signal["id"], now=now_ts):
+            response = {"status": "duplicate", "signal_id": signal["id"], "rule": rule["name"]}
+        else:
+            try:
+                result = execute(connection["endpoint"], assistant, subject, graph_input, timeout=timeout,
+                                  caused_by_run_id=caused_by_run_id, cascade_depth=child_cascade_depth)
+            except (ValueError, RuntimeError) as exc:
+                # aegra_client.execute's exceptions are already payload/credential-free.
+                response = {"status": "execution_failed", "signal_id": signal["id"],
+                            "rule": rule["name"], "error": str(exc)}
+            else:
+                response = {"status": "routed", "signal_id": signal["id"], "rule": rule["name"], "result": result}
     finally:
         release_active(board_dir, rule["connection"], connection, now=now_ts)
         release_concurrency(board_dir, assistant, subject)
+
+    # Chain (#18) only after this Run's own claims are released, so a cascade
+    # Run never contends with its own parent's (Assistant, Subject) claim.
+    if response["status"] == "routed" and response["result"].get("status") == "success" \
+            and response["result"].get("run_id"):
+        finished = run_finished_signal(run_id=response["result"]["run_id"], subject=subject,
+                                        connection=rule["connection"], assistant=assistant,
+                                        status=response["result"]["status"], cascade_depth=child_cascade_depth)
+        response["cascade"] = route_signal(board_dir, finished, timeout=timeout, now=now)
+    return response

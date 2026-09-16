@@ -29,6 +29,8 @@ async def graph(config: dict):
         with tracing_context(enabled=False), run(
             provider.get_tracer("cordboard.aegra"), values.get("cord_subject"),
             "fixture", graph_id="minimal-graph", run_id=values["run_id"],
+            caused_by_run_id=values.get("cord_caused_by_run_id"),
+            cascade_depth=values.get("cord_cascade_depth", 0),
         ) as active:
             # A closure stays within this execution; no SDK object enters the
             # API config or Postgres checkpoint metadata.

@@ -36,12 +36,14 @@ def _poll_until_settled(request, path, run_id, thread_id, timeout):
 
 
 def execute(endpoint: str, assistant: str, subject: str, graph_input: dict, *,
-            request_context: dict | None = None, timeout=120):
+            request_context: dict | None = None, timeout=120,
+            caused_by_run_id: str | None = None, cascade_depth: int = 0):
     """Return API identities and a bounded status, without logging payloads.
 
-    Each call creates a new Thread. API retries are deliberately not exposed:
-    resubmitting a POST can create another execution. To continue a Thread
-    that came back ``"waiting"``, use ``resume()``.
+    Each call creates a new Thread -- a new trace for a #18 cascade child, not
+    a resume of the Run that caused it. API retries are deliberately not
+    exposed: resubmitting a POST can create another execution. To continue a
+    Thread that came back ``"waiting"``, use ``resume()``.
 
     The returned ``status`` is one of ``"success"`` (``values`` present),
     ``"waiting"`` (an interrupted Run, or the wait budget elapsed while it was
@@ -49,6 +51,12 @@ def execute(endpoint: str, assistant: str, subject: str, graph_input: dict, *,
     the returned identities), or an exception for a genuine failure.
     ``request_context`` is transported unread as the API's top-level
     ``context``, distinct from ``config.configurable``.
+
+    ``caused_by_run_id``/``cascade_depth`` (#18) are transported the same way
+    as ``cord_subject``, under ``config.configurable``, so a graph that reads
+    them can stamp its own ``cord.caused_by.run_id``/``cord.cascade.depth``
+    span attributes (`cord_runtime.execution.run`) when it opens its Run.
+    Neither is interpreted here; a graph that ignores them still runs.
     """
     if not isinstance(subject, str) or not subject.strip():
         raise ValueError("Subject must be a non-empty string")
@@ -57,9 +65,12 @@ def execute(endpoint: str, assistant: str, subject: str, graph_input: dict, *,
         request = _session_request(session, endpoint)
         thread_id = request("POST", "/threads", {})["thread_id"]
         path = f"/threads/{thread_id}"
+        configurable = {"cord_subject": subject, "cord_cascade_depth": cascade_depth}
+        if caused_by_run_id is not None:
+            configurable["cord_caused_by_run_id"] = caused_by_run_id
         run_body = {
             "assistant_id": assistant, "input": graph_input,
-            "config": {"configurable": {"cord_subject": subject}},
+            "config": {"configurable": configurable},
             "stream_mode": ["values"],
         }
         if request_context is not None:

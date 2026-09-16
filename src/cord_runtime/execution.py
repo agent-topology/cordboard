@@ -143,15 +143,29 @@ class Run:
 
 @contextmanager
 def run(tracer: trace.Tracer, subject: str, subject_type: str, *, graph_id: str,
-        run_id: str | None = None):
+        run_id: str | None = None, caused_by_run_id: str | None = None, cascade_depth: int = 0):
+    """Open a new Run's trace.
+
+    ``caused_by_run_id``/``cascade_depth`` (#18) record this Run's cascade
+    identity -- which Run's `run.finished` Signal caused this one, and how
+    many cascade hops deep it is (0: not a cascade child). Each call opens a
+    brand-new trace; chaining never reopens a prior Run's trace the way
+    ``resume_run`` does.
+    """
     if not isinstance(subject, str) or not subject.strip() or not subject_type:
         raise ValueError("Subject and type are required")
     if not isinstance(graph_id, str) or not graph_id.strip():
         raise ValueError("explicit Graph identity is required")
     if run_id is not None and (not isinstance(run_id, str) or not run_id.strip()):
         raise ValueError("Run identity must be a non-empty string")
+    if caused_by_run_id is not None and (not isinstance(caused_by_run_id, str) or not caused_by_run_id.strip()):
+        raise ValueError("caused_by_run_id must be a non-empty string")
+    if not isinstance(cascade_depth, int) or isinstance(cascade_depth, bool) or cascade_depth < 0:
+        raise ValueError("cascade_depth must be a non-negative integer")
     attributes = {"cord.graph.id": graph_id, "cord.run.id": run_id or str(uuid4()), "cord.subject.id": subject,
-                  "cord.subject.type": subject_type}
+                  "cord.subject.type": subject_type, "cord.cascade.depth": cascade_depth}
+    if caused_by_run_id is not None:
+        attributes["cord.caused_by.run_id"] = caused_by_run_id
     with tracer.start_as_current_span(
         "run", context=Context(), record_exception=False,
         attributes={**attributes, "cord.semconv.version": SEMCONV_VERSION},

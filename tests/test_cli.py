@@ -436,7 +436,8 @@ def test_cmd_signal_manual_routes_and_exits_zero_on_success(tmp_path, monkeypatc
     _add_routing_rule(tmp_path, "manual")
     input_path = _input_file(tmp_path, {"subject": "manual:demo", "body": "hi"})
 
-    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120):
+    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120,
+                     caused_by_run_id=None, cascade_depth=0):
         return {"run_id": "r", "thread_id": "t", "status": "success", "values": {}}
 
     monkeypatch.setattr("cord_runtime.router.execute", fake_execute)
@@ -461,7 +462,8 @@ def test_cmd_signal_file_routes(tmp_path, monkeypatch, capsys):
     event_path = tmp_path / "event.json"
     event_path.write_text(json.dumps({"subject": "file:notes/api.md", "body": "changed"}), encoding="utf-8")
 
-    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120):
+    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120,
+                     caused_by_run_id=None, cascade_depth=0):
         return {"run_id": "r", "thread_id": "t", "status": "success", "values": {}}
 
     monkeypatch.setattr("cord_runtime.router.execute", fake_execute)
@@ -473,7 +475,8 @@ def test_cmd_signal_schedule_routes(tmp_path, monkeypatch, capsys):
     add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
     _add_routing_rule(tmp_path, "schedule", subject="schedule", input={"body": "schedule"})
 
-    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120):
+    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120,
+                     caused_by_run_id=None, cascade_depth=0):
         return {"run_id": "r", "thread_id": "t", "status": "success", "values": {}}
 
     monkeypatch.setattr("cord_runtime.router.execute", fake_execute)

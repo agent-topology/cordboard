@@ -94,3 +94,76 @@ def test_load_rules_rejects_non_array_file(tmp_path):
     path.write_text(json.dumps({"not": "an array"}), encoding="utf-8")
     with pytest.raises(InvalidRule, match="JSON array"):
         load_rules(tmp_path)
+
+
+# --- run.finished cascade rules (#18) ---------------------------------------
+
+RUN_FINISHED_RULE = {
+    "name": "cascade-b",
+    "signal_type": "run.finished",
+    "connection": "aegra-local",
+    "assistant": "graph-b",
+    "when": {"assistant": "graph-a", "status": "success"},
+}
+
+
+def test_add_run_finished_rule_requires_a_non_empty_when(tmp_path):
+    with pytest.raises(InvalidRule, match="when"):
+        add_rule(tmp_path, {**RUN_FINISHED_RULE, "when": {}})
+
+
+def test_add_run_finished_rule_rejects_missing_when(tmp_path):
+    rule = dict(RUN_FINISHED_RULE)
+    del rule["when"]
+    with pytest.raises(InvalidRule, match="when"):
+        add_rule(tmp_path, rule)
+
+
+def test_add_run_finished_rule_rejects_match_field(tmp_path):
+    with pytest.raises(InvalidRule, match="when"):
+        add_rule(tmp_path, {**RUN_FINISHED_RULE, "match": {"status": "success"}})
+
+
+def test_add_non_run_finished_rule_rejects_when_field(tmp_path):
+    with pytest.raises(InvalidRule, match="when"):
+        add_rule(tmp_path, {**VALID_RULE, "when": {"status": "success"}})
+
+
+def test_add_run_finished_rule_subject_defaults_to_inherited_subject(tmp_path):
+    add_rule(tmp_path, RUN_FINISHED_RULE)
+    assert load_rules(tmp_path)[0]["subject"] == "subject"
+
+
+def test_add_run_finished_rule_accepts_explicit_subject_override(tmp_path):
+    add_rule(tmp_path, {**RUN_FINISHED_RULE, "subject": "run_id"})
+    assert load_rules(tmp_path)[0]["subject"] == "run_id"
+
+
+def test_add_run_finished_rule_rejects_self_loop_same_connection_and_assistant(tmp_path):
+    """A cascade Rule whose 'when' pins the exact (connection, assistant) it
+    also targets would immediately re-trigger the Run that produced it."""
+    with pytest.raises(InvalidRule, match="self-loop"):
+        add_rule(tmp_path, {
+            "name": "cyclic", "signal_type": "run.finished", "connection": "aegra-local",
+            "assistant": "graph-a", "when": {"assistant": "graph-a"},
+        })
+
+
+def test_add_run_finished_rule_self_loop_check_defaults_when_connection_to_own_connection(tmp_path):
+    """A 'when' with no explicit 'connection' key is still checked against
+    the Rule's own connection, since most boards route within one connection."""
+    with pytest.raises(InvalidRule, match="self-loop"):
+        add_rule(tmp_path, {
+            "name": "cyclic", "signal_type": "run.finished", "connection": "aegra-local",
+            "assistant": "graph-a", "when": {"assistant": "graph-a", "status": "success"},
+        })
+
+
+def test_add_run_finished_rule_same_assistant_different_connection_is_not_a_self_loop(tmp_path):
+    """Same assistant name on a *different* connection is a distinct target,
+    not a self-loop -- the check is on the (connection, assistant) pair."""
+    add_rule(tmp_path, {
+        "name": "not-cyclic", "signal_type": "run.finished", "connection": "other-conn",
+        "assistant": "graph-a", "when": {"connection": "aegra-local", "assistant": "graph-a"},
+    })
+    assert load_rules(tmp_path)[0]["assistant"] == "graph-a"
