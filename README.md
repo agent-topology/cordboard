@@ -22,6 +22,11 @@ compatibility remains an unrun example check, not a platform prerequisite.
 existing Deployment without a manifest or model settings. The remaining
 platform, including `cord up`, is still planned.
 
+The [internal dependency review (2026-09-15)](docs/internal-dependencies.md)
+documents the implemented workflow core, campaign/Git graphs and Omiologic Aegra
+deployment. Their API, topology and telemetry integration with Cordboard remains
+separate work; the review identifies the concrete remaining gaps.
+
 ```sh
 uv sync --locked --python 3.12
 uv run --locked python -m examples.minimal_graph
@@ -73,6 +78,7 @@ replacement orchestration framework are outside the design's scope.
 | [Visual design](docs/artifacts/cordboard.html) | Interactive overview of the original design and proposed slices |
 | [Cross-system glossary](docs/artifacts/cordboard-glossary.html) | Interactive vocabulary reference |
 | [Upstream requirements](docs/decisions/cordboard-upstream-requirements.md) | Findings and open questions for topology and redaction dependencies |
+| [Internal dependency review](docs/internal-dependencies.md) | Six repository snapshots, implemented contracts, release distinctions and remaining integration gaps |
 
 Open either HTML file directly in a browser. They need no application server.
 Some examples and terminology in these artifacts predate later ADR corrections;

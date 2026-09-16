@@ -8,7 +8,31 @@
 
 ---
 
-## 현재 상태 — 0.1.0b3 실측과 cordboard에서 걸리는 곳 (2026-09-12)
+## 현재 상태 — 내부 의존성 소스 점검 (2026-09-15)
+
+여섯 저장소의 정확한 커밋, 태그, 실제 pin과 구현 근거는
+[내부 의존성 점검](../internal-dependencies.md)에 기록했다. 아래 2026-09-12 표는
+beta.3 실측 이력이며, 현재 개발 소스 상태는 다음과 구분한다.
+
+- **AT-1:** beta.3에서는 남아 있지만 beta.4 후보 소스에서 해결됐다. 부모 node를 유지하고
+  `subgraphId`로 별도 `graphs[]` 자식을 가리킨다. `expanded-subgraph-metadata`는 후보에서
+  폐기됐다. 후보 artifact 검증은 기록되어 있으나 배포는 아직 대기 중이다.
+- **AT-2·AT-3:** 여전히 실험적 해석이다. materialized child가 있는 graph는 revision `"2"`를
+  쓰며 revision `"1"`만 아는 소비자는 이를 불투명하게 취급한다. 동적 interrupt는 여전히
+  정적 topology에서 알 수 없다. **AT-4·AT-5**의 기존 결론은 유지한다.
+- **AT-6:** Python LangGraph 1.2.10–1.2.11 범위는 후보에서도 그대로다.
+- **RS:** upstream beta.2와 Omiologic의 `0.1.0b2` pin을 확인했다. Cordboard는 계속
+  `0.1.0b1`이며 아래 RS-1/2/5는 그 버전의 검증 이력이다. HEAD의 추가 탐지 수정은
+  unreleased이고, 이번 문서 점검에서 패키지 업그레이드나 관문 재검증은 하지 않았다.
+- `agent-workflow-core`의 observer/event/notification 계약, `git-agent`와 `campaign-agent`의
+  graph factory, Omiologic의 Aegra 조합 경계가 구현됐다. 하지만 entity의
+  `issue_resolution` observer는 현재 no-op이며 topology는 파일 생성까지다.
+  이 구현들을 Cordboard 연결·기록 완료로 바꾸어 읽지 않는다.
+
+ADR-0014·0015의 경계는 유지한다. 위 항목은 연결 거부 조건이 아니며, Cordboard에
+graph policy나 per-graph 설명 파일을 추가할 근거도 아니다.
+
+## 이전 실측 — 0.1.0b3와 cordboard에서 걸리는 곳 (2026-09-12)
 
 [ADR-0014](0014-no-graph-descriptors.md)와 [ADR-0015](0015-never-block-connection.md) 이후
 cordboard는 그래프를 묘사하지 않고, 매니페스트는 뷰어의 선택적 입력이며, 카탈로그 규칙은
@@ -30,7 +54,10 @@ cordboard는 그래프를 묘사하지 않고, 매니페스트는 뷰어의 선�
 
 ## agent-topology
 
-### AT-1 · `depth≥1`에서 부모 노드가 노드 목록에서 사라진다 🔴
+### AT-1 · `depth≥1`에서 부모 노드가 노드 목록에서 사라진다 — beta.3 이력
+
+> **2026-09-15 정정.** 아래 재현은 beta.3 기준이다. beta.4 후보의 부모 보존·자식 참조
+> 계약이 이 문제에 답한다. 배포·Cordboard 채택 여부는 위 현재 상태와 구분한다.
 
 ```
 depth=0   nodes: [__start__, __end__, prep, sub]

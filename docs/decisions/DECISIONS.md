@@ -78,11 +78,18 @@ ADR-0006의 Rust 코어/PyO3 릴리스 선행 조건은 `redact-secret==0.1.0b1`
 우회를 만들지 않는다. 겪은 것은 [업스트림 요구사항 문서](cordboard-upstream-requirements.md)에 모아
 이슈로 올린다. 우회 코드를 만들면 두 번 손해다 — 코드가 남고, 스펙은 그 요구를 못 듣는다.
 
-**현재 상태 (2026-09-12, 0.1.0b3 실측)** — 열려 있는 것은 AT-1(depth≥1에서 부모 노드 소실)과
+**이전 실측 (2026-09-12, 0.1.0b3)** — 당시 열려 있던 것은 AT-1(depth≥1에서 부모 노드 소실)과
 AT-6(LangGraph 지원 범위)이다. AT-2·AT-3은 실험적 확장으로, AT-4는 정의로 답이 왔고, AT-5는 전제가
 틀렸다가 해결됐다. ADR-0014·0015 이후 **어느 항목도 연결을 막지 않고** 뷰어와 경고의 품질에만
 걸린다. 항목별 실측과 cordboard에서 걸리는 곳은 [업스트림 요구사항 문서](cordboard-upstream-requirements.md)의
 상태표를 따른다. RS-1(공개 exporter 통합), RS-2(`block` 호출자 계약), RS-5(릴리스 가용성)는 #5에서 검증됐다.
+
+**현재 소스 점검 (2026-09-15)** — AT-1은 beta.4 후보 소스에서 부모 보존과 `subgraphId`로
+해결됐고 artifact qualification도 기록됐다. 배포는 아직 대기 중이며 AT-6의 지원 범위는
+그대로다. redact-secret beta.2와 entity의 채택도 확인했지만 Cordboard pin은 beta.1이다.
+공통 core, 두 domain library와 Omiologic 배포 경계의 구현 및 남은 관측/발견/재개 연결은
+[여섯 내부 의존성 점검](../internal-dependencies.md)에 기록했다. ADR-0011의 양수 깊이
+설명도 날짜 붙은 정정으로 갱신했다. 새로운 플랫폼 결정이나 통합 완료 선언은 아니다.
 
 **실측된 좋은 신호** — `agent-topology` beta.1 → beta.2에서 같은 그래프의 `structureHash`가
 동일했다(`d0b436…`). 포맷이 두 릴리스를 건너 안정적이었다는 증거다. beta.2 → beta.3에서도
@@ -102,6 +109,10 @@ AT-6(LangGraph 지원 범위)이다. AT-2·AT-3은 실험적 확장으로, AT-4�
 **① R3가 두 번째 타격을 받았다 (0007).** `agent-topology` 0.1은 여러 목적지가 **대안인지 전부 실행되는지 확립하지 않는다.**
 R3은 "병렬 분기 안의 인터럽트"를 찾는 규칙이라 코어 문서만으로 구현할 수 없다.
 → **R3은 LangGraph 전용 규칙**이 되고, 거부 조건 1을 두 군데서 못 넘는다. 예외로 유지하되 선례로 삼지 않는다.
+
+> **현재 해석:** 위 문장은 2026-09-10의 판단 이력이다. ADR-0007의 2026-09-11 정정은
+> 프레임워크 중립 실험적 branch 해석을 반영했고, ADR-0015는 R3을 경고로 바꿨다.
+> `unknown`이면 확인할 수 없음을 표시하며 연결을 거부하지 않는다.
 
 **② 커스텀 detector가 불가능하다 (0006).** 모든 detector는 Rust 코어에서 돌고 바인딩은 새 구현을 만들 수 없다.
 `redaction.extra_patterns` 계획이 폐기됐다. 반면 **기본 정책이 우리가 쓰려던 표와 같아서** cordboard는 정책을 정의하지 않는다.
@@ -252,6 +263,11 @@ Tier 없는 Attempt를 허용하며 질의는 기존 0.2.0도 읽는다.
 
 아직 구현이 아니다. `workbench` 연결 자체가 미착수이고, 이 조정은 아카이브가 굳기 전에
 트리 모양을 맞춰 둔 것이다.
+
+> **2026-09-15 보충:** 위 내용은 당시의 `workbench` 비교 기록이다. 현재 연결 준비는
+> `agent-workflow-core` → domain library → Omiologic Aegra의 실제 경계를 함께 본다.
+> Omiologic의 issue graph는 `NoOpRunObserver`를 주입하므로 공통 observer API가 있다는
+> 사실만으로 Cordboard span 트리 채택을 주장하지 않는다. [현재 근거](../internal-dependencies.md).
 
 
 ## 그래프 단위 설정 폐기 (2026-09-12)

@@ -340,3 +340,18 @@ declared가 틀리면 증상이 즉시 나타난다. derived가 틀리면 조용
 
 위 거부 표의 두 행도 대체된다. "derived 절 없음 — 등록 거부"는 없어지고(매니페스트 부재는 상태),
 "표류 — 기동 거부"는 위 행동으로 바뀐다.
+
+## 정정 — 서브그래프 후보 구현 (2026-09-15)
+
+위 2026-09-12 정정의 AT-1 열림은 배포된 beta.3에 대한 기록이다.
+`agent-topology` beta.4 후보는 부모 node를 유지하고 `subgraphId`로 별도
+`graphs[]` 자식을 참조한다. 결정 6의 `expanded-subgraph-metadata` 갭도
+후보에서는 폐기됐다. 부모 관계를 콜론 분해로 복원하지 않고 공개 참조를 따른다.
+`depth=0`은 유지되지만 양수 깊이의 구조·해시는 바뀌며, materialized child의
+실험적 해석은 revision `"2"`다. 모르는 revision은 불투명하게 취급한다.
+
+이는 업스트림 구현 상태 정정이지 Cordboard 채택 완료가 아니다. 후보 artifact
+qualification과 실제 배포를 구분한다. 생산자는 여전히 graph/entity의 의존성이고
+Cordboard의 spec pin은 소비 코드가 생길 때 정한다. 팩터리 호출과 context 조립도
+entity가 소유한다. `agt`는 팩터리를 호출하지 않으며 import-safe compiled-object
+export가 필요하다. [정확한 revision과 근거](../internal-dependencies.md).

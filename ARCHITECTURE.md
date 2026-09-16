@@ -42,6 +42,12 @@ raises the R3 fan-out/interrupt warning, and tracks a local snapshot to detect
 when a previously fetched document changed (#11). It is a library only: no
 `cord` subcommand calls it yet, and `cord sync`'s CLI wiring remains planned.
 
+The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
+the implemented core/domain libraries and Omiologic Aegra deployment. These are
+now concrete integration inputs, but their existence is not Cordboard integration
+evidence: Omiologic's issue graph still uses a no-op observer, and its topology
+command generates files rather than serving the proposed discovery endpoint.
+
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
 [docs/artifacts/cordboard.html](docs/artifacts/cordboard.html) summarizes the
@@ -52,7 +58,8 @@ either disagrees with an ADR, the ADR wins. The
 [upstream requirements](docs/decisions/cordboard-upstream-requirements.md) record
 integration findings; conflicts with accepted decisions are identified below
 rather than silently resolved. Dependency release statements in those documents
-are dated observations, not a verified current compatibility matrix.
+are dated observations, not a verified current compatibility matrix. The internal
+dependency review separates released versions, candidate source and actual pins.
 
 ## Boundary and ownership
 
@@ -82,6 +89,13 @@ new graph, and a layer that adds nothing over using the underlying tools directl
 
 Cordboard does not own a new orchestration framework, dependency resolver,
 telemetry query engine, evaluation platform, or production deployment system.
+
+In the inspected internal stack, `agent-workflow-core` supplies neutral contracts
+and LangGraph adapters; `git-agent` and `campaign-agent` own domain graphs; and
+Omiologic owns the Aegra deployment, concrete resources and request-context bridge.
+Cordboard connects to that deployment's public API. Those libraries need not be
+installed in Cordboard. Core events/notifications are not automatically OTel spans
+or Cordboard Signals, and entity approval validation remains outside the platform.
 
 ## Intended flow
 
@@ -199,6 +213,15 @@ Subgraphs default to opaque nodes (`depth=0`). Per-graph `completeness.gaps`
 and general `producerLimitations` must both be visible; a producer limitation
 does not itself make every document incomplete. These limitations are warnings.
 
+The published beta.3 baseline loses parents at positive depth. The inspected
+beta.4 candidate addresses this with retained parent nodes and child `graphs[]`
+entries referenced by `subgraphId`; its qualification is recorded, publication
+is pending. Positive-depth hashes change, and materialized graphs use experimental
+interpretation revision `"2"`. Follow references rather than parsing graph IDs;
+unknown interpretation revisions remain opaque. This is an upstream migration
+consideration, not an installed Cordboard feature. See the
+[versioned review](docs/internal-dependencies.md#topology-beta3-baseline-versus-beta4-candidate).
+
 ## Catalog validation
 
 The catalog never refuses to connect a Graph
@@ -261,6 +284,9 @@ public OTel encoder, scans the complete span envelope, and stamps only success.
 A `block` finding suppresses the whole span even when sanitized text is returned;
 RS-1/RS-2 record the verified integration.
 Custom detectors and `redaction.extra_patterns` were abandoned (RS-4).
+Upstream now has a beta.2 release record, and Omiologic pins Python beta.2;
+neither changes Cordboard's beta.1 pin or its recorded verification scope.
+Later detector fixes at upstream HEAD remain unreleased in the inspected snapshot.
 The implemented `archive-check` entrypoint wraps the pinned upstream CLI for
 raw and decoded archive verification; `cord scan-archive` remains planned.
 
@@ -314,15 +340,17 @@ as executable specifications.
 | Finding | Sources and required follow-up |
 | --- | --- |
 | Wire examples span multiple topology revisions | ADR-0007/0011 retain literal `derived` references; ADR-0009/0012 use `structure`, and their Cordboard-extension examples are withdrawn by ADR-0014. ADR-0011 also mixes old source-hash/`derive.xray` text with structure-hash/`derive.depth` corrections. Validate against a pinned upstream schema before implementing. |
-| R3 index summary is stale | The decision index's 2026-09-10 summary calls R3 a LangGraph-only rejection rule; ADR-0007 retracts the LangGraph-only claim on 2026-09-11, and ADR-0015 makes R3 a warning. |
 | ADR-0003 predates ADR-0002's mapping rule | Both HTML artifacts were rebuilt on 2026-09-12 with definitions and mappings instead of banned words. ADR-0003 still retains a banned-word reference; read it through ADR-0002's mapping rule and `cord.cascade.depth`. |
 | ADR-0010 is unwritten | The index labels the DeepAgents template decision Accepted but explicitly says no ADR file exists. The design direction is recorded, but its formal ADR remains pending. |
 
 The [upstream requirements](docs/decisions/cordboard-upstream-requirements.md)
 record each `agent-topology` finding against its measured `0.1.0b3` behavior and
-where Cordboard actually uses it. After ADR-0014 and ADR-0015 none of them can
-block a connection; they affect viewer and warning quality only.
-`agent-topology-spec==0.1.0b3` is pinned as a direct dependency (#11) for
-schema validation and structure-hash comparison; `agent-topology-langgraph`
-(the producer) is not and remains a graph-side choice, since Cordboard only
-consumes published documents and never derives structure itself.
+add the 2026-09-15 candidate-source update; AT-1 is addressed in beta.4
+candidate source, and AT-6's supported range is unchanged. After ADR-0014 and
+ADR-0015 none of them can block a connection; they affect viewer and warning
+quality only. `agent-topology-spec==0.1.0b3` is pinned as a direct dependency
+(#11) for schema validation and structure-hash comparison;
+`agent-topology-langgraph` (the producer) is not and remains a graph-side
+choice, since Cordboard only consumes published documents and never derives
+structure itself. The [internal dependency review](docs/internal-dependencies.md#actual-integration-gaps)
+records the remaining discovery, observer and resume integration gaps.
