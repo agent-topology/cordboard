@@ -459,6 +459,16 @@ def cmd_signal_schedule(args: argparse.Namespace) -> int:
     return _route_and_report(_board_dir(args), signal, args.timeout)
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    from cord_runtime.web import serve
+    try:
+        targets = [_parse_watch_target(raw) for raw in args.watch]
+        return serve(_board_dir(args), args.archive, alias=args.alias,
+                     host=args.host, port=args.port, watch=targets)
+    except (ValueError, OSError) as exc:
+        return _fail(str(exc), EXIT_USAGE)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cord", description=__doc__)
     parser.add_argument("--board", help="Board directory holding .cordboard/ (default: current directory)")
@@ -507,6 +517,14 @@ def build_parser() -> argparse.ArgumentParser:
                       help="Seconds to follow each --watch target before giving up (default: 120)")
     view.add_argument("--json", action="store_true", help="Print the catalog as one JSON object instead of text")
     view.set_defaults(func=cmd_view)
+
+    serve_cmd = sub.add_parser("serve", help="Serve the local read-only browser viewer")
+    serve_cmd.add_argument("alias", nargs="?", default=None)
+    serve_cmd.add_argument("--host", default="127.0.0.1", help="IPv4 loopback address")
+    serve_cmd.add_argument("--port", type=int, default=0)
+    serve_cmd.add_argument("--archive", type=Path, action="append", default=[])
+    serve_cmd.add_argument("--watch", action="append", default=[], metavar="ALIAS:THREAD_ID:RUN_ID")
+    serve_cmd.set_defaults(func=cmd_serve)
 
     run = sub.add_parser("run", help="Invoke a graph on a registered deployment")
     run.add_argument("alias")

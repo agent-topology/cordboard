@@ -1,8 +1,8 @@
 # ADR-0018: 브라우저 관측 표면 — 서버/프론트엔드 스택, 공개 read/update 라우트, 접근성 시각 상태 확정
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-09-16
-**Deciders:** 사용자 검토 대기 — #48 readiness gate
+**Deciders:** 사용자 — 2026-09-16 명시적 승인
 **관련:** ADR-0016 (control plane/Testbed 경계), ADR-0013·0014·0015 (교환원 경계, 그래프
 비묘사, 연결 비차단), ADR-0006 (마스킹 강제 지점), ADR-0009·0011 (topology 문서/드리프트),
 ADR-0012 (topology spec 분리), ADR-0017 (identity/status 계약, 이 ADR과 동일한
@@ -234,17 +234,41 @@ already covers한다).
 
 ## Action Items
 
-1. [ ] 사용자 검토 후 Status를 Accepted로 변경하고 Deciders를 채운다
-2. [ ] DECISIONS.md 색인에 0018 등록 (본 변경에 포함)
+1. [x] 사용자 승인에 따라 Status를 Accepted로 변경하고 Deciders를 기록 (2026-09-16)
+2. [x] DECISIONS.md 색인에 0018 등록 (본 변경에 포함)
 3. [ ] #48 본문/코멘트에 이 ADR을 연결하고 `planning:backlog` → `planning:ready` 전환
-4. [ ] 구현 PR: `src/cord_runtime/web/`(라우터, `http.server` 핸들러, Jinja2 템플릿,
+4. [x] 구현 PR: `src/cord_runtime/web/`(라우터, `http.server` 핸들러, Jinja2 템플릿,
    정적 CSS/JS, 레이어드 DAG SVG 렌더러)
-5. [ ] 구현 PR: `cli.py`에 `cord serve` 서브커맨드(§7 시그니처)
-6. [ ] 구현 PR: `pyproject.toml`에 `jinja2` 의존성, `web-test` dependency-group
+5. [x] 구현 PR: `cli.py`에 `cord serve` 서브커맨드(§7 시그니처)
+6. [x] 구현 PR: `pyproject.toml`에 `jinja2` 의존성, `web-test` dependency-group
    (`playwright`) 추가
-7. [ ] 구현 PR: §6의 로컬 스모크 테스트(DOM assertion + 좁은 뷰포트 스크린샷, 최소
+7. [x] 구현 PR: §6의 로컬 스모크 테스트(DOM assertion + 좁은 뷰포트 스크린샷, 최소
    success/retry/interrupt 각 1개 픽스처)
 8. [ ] 후속 이슈(이번 범위 아님): 승인/뮤테이션 controls를 §3의 action slot에 실제로
    연결하는 작업
 9. [ ] 후속 이슈(이번 범위 아님): loopback 밖 원격 노출이 필요해질 경우의 인증/전송
    경계
+
+
+## 구현 확인과 계약 구체화 (2026-09-16, #48)
+
+사용자가 Status 변경을 승인했다. 본문 Context의 미구현 진술은 ADR 작성 시점의
+이력이며, 현재 구현과 검증 범위는 [브라우저 뷰어](../browser-viewer.md)를 따른다.
+
+구현 점검에서 기존 catalog가 노드 ID와 시간 없는 Subject 요약만 노출한다는 점을
+확인했다. 공유 모델 자체에 전체 `runs`와 검증된 `topology_structure`를 추가해
+CLI/웹이 같은 데이터를 읽는다. 별도 웹 상관 규칙은 만들지 않는다.
+아카이브는 기존 `read_active_spans` → `read_spans` 경로로 읽어 첫 실행 전 빈
+디렉터리와 쓰기 중인 마지막 줄을 구분한다.
+
+SSE는 `snapshot` 이벤트로 Run/source/diagnostics를 보내고, 재접속은
+`Last-Event-ID` 다음 번호의 최신 전체 스냅샷을 받는다. 중간 이벤트의 영구 이력
+재생을 보장하지 않는다. 기록 전이는 `recorded`, 소실은 `unavailable`로 명시한다.
+정상 GET polling은 새 기록과 연결 변경도 발견하며, SSE tick은 catalog를 재계산하지
+않고 archive 파일 변경 시에만 tree를 다시 읽는다. 프로세스 수명 동안 continuity
+store와 backend identity/status API로 실행을 관측하며 graph state는 읽지 않는다.
+
+§7의 원격 노출은 후속 인증/전송 경계 작업으로 남긴다. 이번 구현은
+IPv4 loopback만 허용하며 외부 바인딩 플래그를 제공하지 않는다.
+알 수 없는 action-slot Thread/interrupt 식별자는 빈 값으로 두고 controls 작업이
+공개 inbox에서 해소해야 한다. span ID를 interrupt ID로 추정하지 않는다.

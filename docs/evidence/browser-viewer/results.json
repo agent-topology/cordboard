@@ -1,0 +1,133 @@
+{
+  "commands": [
+    {
+      "command": [
+        "/tmp/cordboard-browser-acceptance/.venv/bin/cord",
+        "--board",
+        "/tmp/cordboard-browser-acceptance/.artifacts/web-check-2/board",
+        "add",
+        "minimal",
+        "http://127.0.0.1:52026"
+      ],
+      "returncode": 0,
+      "stdout": "added 'minimal' -> http://127.0.0.1:52026\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/cordboard-browser-acceptance/.venv/bin/cord",
+        "--board",
+        "/tmp/cordboard-browser-acceptance/.artifacts/web-check-2/board",
+        "add",
+        "idle-a",
+        "http://127.0.0.1:65159"
+      ],
+      "returncode": 0,
+      "stdout": "added 'idle-a' -> http://127.0.0.1:65159\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/cordboard-browser-acceptance/.venv/bin/cord",
+        "--board",
+        "/tmp/cordboard-browser-acceptance/.artifacts/web-check-2/board",
+        "add",
+        "idle-b",
+        "http://127.0.0.1:65159"
+      ],
+      "returncode": 0,
+      "stdout": "added 'idle-b' -> http://127.0.0.1:65159\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/cordboard-browser-acceptance/.venv/bin/cord",
+        "--board",
+        "/tmp/cordboard-browser-acceptance/.artifacts/web-check-2/board",
+        "run",
+        "minimal",
+        "deterministic",
+        "browser-success",
+        "/tmp/cordboard-browser-acceptance/.artifacts/web-check-2/success.json",
+        "--timeout",
+        "10"
+      ],
+      "returncode": 0,
+      "stdout": "{\"run_id\": \"fa987596-056f-4945-b365-77a2c86ae015\", \"thread_id\": \"5e2b2bdf-55b0-432f-b98a-e0ac6b6ecb13\", \"status\": \"success\", \"values\": {\"value\": 1, \"result\": 2, \"scenario\": \"success\"}}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/cordboard-browser-acceptance/.venv/bin/cord",
+        "--board",
+        "/tmp/cordboard-browser-acceptance/.artifacts/web-check-2/board",
+        "run",
+        "minimal",
+        "deterministic",
+        "browser-retry",
+        "/tmp/cordboard-browser-acceptance/.artifacts/web-check-2/retry.json",
+        "--timeout",
+        "10"
+      ],
+      "returncode": 0,
+      "stdout": "{\"run_id\": \"42c0e570-6cb2-44f5-a06e-334375469ca5\", \"thread_id\": \"67ba7e48-bcb4-42d9-8e84-fc0eb86c71a9\", \"status\": \"success\", \"values\": {\"value\": 1, \"result\": 2, \"scenario\": \"retry\", \"outcome\": \"passed\"}}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/cordboard-browser-acceptance/.venv/bin/cord",
+        "--board",
+        "/tmp/cordboard-browser-acceptance/.artifacts/web-check-2/board",
+        "run",
+        "minimal",
+        "interrupt",
+        "browser-interrupt",
+        "/tmp/cordboard-browser-acceptance/.artifacts/web-check-2/interrupt.json",
+        "--timeout",
+        "10"
+      ],
+      "returncode": 1,
+      "stdout": "{\"run_id\": \"d4ff521a-e595-4e87-b457-a16c0707227f\", \"thread_id\": \"4fcd1486-b75b-4ff1-a4c9-72e7f5040ee2\", \"status\": \"waiting\"}\n",
+      "stderr": ""
+    }
+  ],
+  "serve_command": [
+    "/tmp/cordboard-browser-acceptance/.venv/bin/cord",
+    "--board",
+    "/tmp/cordboard-browser-acceptance/.artifacts/web-check-2/board",
+    "serve",
+    "--archive",
+    "/tmp/cordboard-browser-acceptance/.artifacts/browser-48/archive"
+  ],
+  "runs": {
+    "success": {
+      "run_id": "fa987596-056f-4945-b365-77a2c86ae015",
+      "thread_id": "5e2b2bdf-55b0-432f-b98a-e0ac6b6ecb13",
+      "status": "success",
+      "values": {
+        "value": 1,
+        "result": 2,
+        "scenario": "success"
+      }
+    },
+    "retry": {
+      "run_id": "42c0e570-6cb2-44f5-a06e-334375469ca5",
+      "thread_id": "67ba7e48-bcb4-42d9-8e84-fc0eb86c71a9",
+      "status": "success",
+      "values": {
+        "value": 1,
+        "result": 2,
+        "scenario": "retry",
+        "outcome": "passed"
+      }
+    },
+    "interrupt": {
+      "run_id": "d4ff521a-e595-4e87-b457-a16c0707227f",
+      "thread_id": "4fcd1486-b75b-4ff1-a4c9-72e7f5040ee2",
+      "status": "waiting"
+    }
+  },
+  "browser_errors": [],
+  "result": "passed",
+  "scope": "Installed wheel; real Testbed Aegra/Postgres/Collector; independent idle publisher. Interrupt fixture has no telemetry: live interrupted/ingestion pending, no invented timing."
+}

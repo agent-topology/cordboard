@@ -204,3 +204,10 @@ The approval inbox (#14), graph editing, and detailed subgraph expansion at
 positive depth. `cord view` reads through `check_freshness`, never
 `cord sync`; the explicit refresh/snapshot path remains a separate,
 still-unwired command (#11's CLI gap).
+
+
+## Browser surface (#48)
+
+`cord serve` exposes this same model as installed, read-only HTML/JSON and SSE.
+See [the browser guide](browser-viewer.md) for startup, stable routes, additive
+catalog fields, accessible states and installed-wheel verification.
