@@ -650,6 +650,32 @@ def test_cmd_signal_file_missing_file_exit_two(tmp_path):
     assert code == cli.EXIT_USAGE
 
 
+# --- cli.py: cmd_signal_sweep_pending (#50) ---------------------------------
+
+def test_cmd_signal_sweep_pending_reports_nothing_to_resolve(tmp_path, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    code = cli.main(["--board", str(tmp_path), "signal", "sweep-pending"])
+    assert code == cli.EXIT_OK
+    assert "no pending completions resolved" in capsys.readouterr().out
+
+
+def test_cmd_signal_sweep_pending_finalizes_a_completed_invocation(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    from cord_runtime.pending_completions import record_pending
+    record_pending(tmp_path, "aegra-local", "t-1", "r-1", assistant="triage-graph", subject="urn:demo",
+                    cascade_depth=0, concurrency_held=False, deployment_held=False, now=1_000.0)
+
+    def fake_status_check(endpoint, thread_id, invocation_id):
+        return "success"
+
+    monkeypatch.setattr("cord_runtime.router._default_status_check", fake_status_check)
+    code = cli.main(["--board", str(tmp_path), "signal", "sweep-pending"])
+    assert code == cli.EXIT_OK
+    outcome = json.loads(capsys.readouterr().out.strip())
+    assert outcome == {"deployment": "aegra-local", "thread_id": "t-1", "status": "success",
+                        "cascade": {"status": "unmatched", "signal_id": "run.finished:r-1"}}
+
+
 # --- cli.py: cmd_view --watch (#20) -----------------------------------------
 
 def test_cmd_view_watch_unknown_alias_exit_two(tmp_path):

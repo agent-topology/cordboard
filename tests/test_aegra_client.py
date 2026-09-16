@@ -69,7 +69,8 @@ def test_execute_interrupted_is_waiting_not_success_or_failure(monkeypatch):
         "/threads/t-2/runs/r-2": FakeResponse(200, {"status": "interrupted"}),
     })
     result = execute(ENDPOINT, "minimal-graph", "subject-2", {}, timeout=5)
-    assert result == {"run_id": "r-2", "thread_id": "t-2", "status": "waiting"}
+    assert result == {"run_id": "r-2", "thread_id": "t-2", "status": "waiting",
+                      "waiting_reason": "interrupted"}
 
 
 def test_execute_wait_budget_elapsed_is_waiting_not_an_exception(monkeypatch):
@@ -79,7 +80,8 @@ def test_execute_wait_budget_elapsed_is_waiting_not_an_exception(monkeypatch):
         "/threads/t-3/runs/r-3": FakeResponse(200, {"status": "running"}),
     })
     result = execute(ENDPOINT, "minimal-graph", "subject-3", {}, timeout=0)
-    assert result == {"run_id": "r-3", "thread_id": "t-3", "status": "waiting"}
+    assert result == {"run_id": "r-3", "thread_id": "t-3", "status": "waiting",
+                      "waiting_reason": "deadline"}
 
 
 def test_execute_error_status_raises_without_identities_leaking_payload(monkeypatch):
@@ -169,7 +171,8 @@ def test_resume_interrupted_again_is_waiting(monkeypatch):
         "/threads/t-8/runs/r-8b": FakeResponse(200, {"status": "interrupted"}),
     })
     result = resume(ENDPOINT, "t-8", "opaque-graph", "next-answer", timeout=5)
-    assert result == {"run_id": "r-8b", "thread_id": "t-8", "status": "waiting"}
+    assert result == {"run_id": "r-8b", "thread_id": "t-8", "status": "waiting",
+                      "waiting_reason": "interrupted"}
 
 
 def test_resume_missing_thread_id_fails_before_any_request(monkeypatch):

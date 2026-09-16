@@ -29,7 +29,7 @@ from cord_runtime.connections import (
 )
 from cord_runtime.deployment_lifecycle import stop_idle
 from cord_runtime.live_reconciliation import LiveRun, await_convergence, reconcile
-from cord_runtime.router import route_signal
+from cord_runtime.router import route_signal, sweep_pending
 from cord_runtime.rules import InvalidRule, SIGNAL_TYPES, add_rule
 from cord_runtime.run_continuity import UnknownThread, logical_run, record_submission
 from cord_runtime.signals import InvalidSignal, file_signal, manual_signal, schedule_signal
@@ -463,6 +463,16 @@ def cmd_signal_file(args: argparse.Namespace) -> int:
     return _route_and_report(_board_dir(args), signal, args.timeout)
 
 
+def cmd_signal_sweep_pending(args: argparse.Namespace) -> int:
+    outcomes = sweep_pending(_board_dir(args), timeout=args.timeout)
+    if not outcomes:
+        print("no pending completions resolved")
+        return EXIT_OK
+    for outcome in outcomes:
+        print(json.dumps(outcome))
+    return EXIT_OK
+
+
 def cmd_signal_schedule(args: argparse.Namespace) -> int:
     try:
         at = datetime.fromisoformat(args.at)
@@ -602,6 +612,12 @@ def build_parser() -> argparse.ArgumentParser:
     signal_schedule.add_argument("at", help="ISO 8601 timestamp for this schedule tick")
     signal_schedule.add_argument("--timeout", type=float, default=120.0, help="Seconds to wait for completion")
     signal_schedule.set_defaults(func=cmd_signal_schedule)
+
+    signal_sweep = signal_sub.add_parser(
+        "sweep-pending", help="Re-observe Runs that outlived their submitting call and finish routing them (#50)")
+    signal_sweep.add_argument("--timeout", type=float, default=120.0,
+                              help="Seconds to wait for a resulting cascade child's completion")
+    signal_sweep.set_defaults(func=cmd_signal_sweep_pending)
 
     return parser
 

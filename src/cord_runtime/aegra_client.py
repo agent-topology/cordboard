@@ -28,11 +28,13 @@ def _poll_until_settled(request, path, run_id, thread_id, timeout):
             values = request("GET", path + "/state")["values"]
             return {"run_id": run_id, "thread_id": thread_id, "status": "success", "values": values}
         if status == "interrupted":
-            return {"run_id": run_id, "thread_id": thread_id, "status": "waiting"}
+            return {"run_id": run_id, "thread_id": thread_id, "status": "waiting",
+                    "waiting_reason": "interrupted"}
         if status not in ("pending", "running"):
             raise RuntimeError("Aegra execution did not succeed; inspect metadata and archive")
         if time.monotonic() >= deadline:
-            return {"run_id": run_id, "thread_id": thread_id, "status": "waiting"}
+            return {"run_id": run_id, "thread_id": thread_id, "status": "waiting",
+                    "waiting_reason": "deadline"}
         time.sleep(.1)
 
 
@@ -49,7 +51,12 @@ def execute(endpoint: str, assistant: str, subject: str, graph_input: dict, *,
     The returned ``status`` is one of ``"success"`` (``values`` present),
     ``"waiting"`` (an interrupted Run, or the wait budget elapsed while it was
     still pending/running; the Run may still be active — poll or resume with
-    the returned identities), or an exception for a genuine failure.
+    the returned identities), or an exception for a genuine failure. A
+    ``"waiting"`` result also carries ``waiting_reason``: ``"interrupted"``
+    for an actual pause, or ``"deadline"`` when the Run was still
+    pending/running when the wait budget elapsed -- deliberately distinct
+    (#50) so a caller never mistakes a still-executing Run for a paused one
+    when deciding whether it is safe to release a claim on it.
     ``request_context`` is transported unread as the API's top-level
     ``context``, distinct from ``config.configurable``.
 

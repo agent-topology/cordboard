@@ -214,14 +214,60 @@ generic path:
   `route_signal` outcome for that Run's `run.finished` Signal, typically
   `"unmatched"` when no cascade Rule applies to it.
 
+## Completion routing across a Run that outlives the call (#50)
+
+`execute()`/`resume()` wait synchronously for up to their own `timeout`. A
+Run that is still queued/running when that budget elapses (`waiting_reason:
+"deadline"`) or one an `interrupt()` paused (`waiting_reason: "interrupted"`)
+is not resolved inside that call, so `route_signal` decides its claim
+disposition from which one it is instead of releasing unconditionally:
+
+- **`"deadline"`** (genuinely still executing): both the (Assistant,
+  Subject) concurrency claim and the managed Deployment's activity claim are
+  retained -- releasing either would let a second arrival for the same
+  Subject race a Run that is still actually running, or let `cord deployment
+  sweep` stop the Deployment out from under it. The Run's identity
+  (`connection`, `assistant`, `subject`, `cascade_depth`) is recorded in
+  `.cordboard/pending_completions.json`. A retained concurrency claim is
+  renewed on every sweep that still finds the Run active, so it cannot go
+  stale under `concurrency`'s own crash-recovery window while genuinely
+  still running.
+- **`"interrupted"`** (an actual pause): both claims release immediately,
+  exactly as before -- the graph itself has stopped executing, so a managed
+  Deployment may legitimately go idle while an approval is outstanding.
+  `approval_inbox.submit_response` calls `ensure_started` again before
+  resuming, and itself now reads the resume's own outcome the same way,
+  keeping the claim held across a further `"deadline"` wait or releasing it
+  again on a further `"interrupted"`/terminal failure.
+
+Either way, once the Run actually reaches terminal state -- observed by
+`cord signal sweep-pending` re-polling a still-running invocation, or by a
+resume that completes inside `submit_response`'s own wait -- it starts
+exactly one matching child through this same `route_signal` path, inheriting
+the same #18 cascade/depth/self-loop guards and #17 Signal-ID dedupe as an
+immediate synchronous success. A terminal failure or cancellation releases
+whichever claims were held with no cascade, the same documented disposition
+`"execution_failed"` already has for a failure caught inside the
+synchronous call.
+
+```sh
+$ cord signal sweep-pending
+```
+
+Prints one JSON line per tracked invocation actually observed this sweep and
+exits `0`; an unreachable connection's entries are left pending for a later
+sweep rather than raised. Like `cord deployment sweep`, this is meant to be
+invoked by an operator's own cron -- `cord` runs no background scheduler.
+
 ## Out of scope here
 
 HTTP/webhook adapters, and production scheduler infrastructure beyond `cord
-deployment sweep` (an operator's own cron/inotify/CI step invokes both it and
-`cord signal ...`). `cord signal schedule` records one tick you name
-explicitly; it does not run a background scheduler. Interpreting Signal
-payload meaning to pick or substitute a target, or requiring model/provider
-configuration to route, is out of scope by design
+deployment sweep`/`cord signal sweep-pending` (an operator's own
+cron/inotify/CI step invokes both, and `cord signal ...`). `cord signal
+schedule` records one tick you name explicitly; it does not run a background
+scheduler. Interpreting Signal payload meaning to pick or substitute a
+target, or requiring model/provider configuration to route, is out of scope
+by design
 ([ADR-0013](decisions/0013-switchboard-boundary.md)). Declared concurrency
 policies other than "skip" are not implemented. Synchronous cross-graph
 composition, distributed transactions, and platform selection of
