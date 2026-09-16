@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Submit execution · {{ graph.graph_id }} · Cordboard</title>
+<link rel="stylesheet" href="/static/viewer.css"></head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header><a class="brand" href="/">cordboard<span> / observation</span></a><nav aria-label="Sections" class="top-nav"><a href="/approvals">Approvals</a></nav><span class="badge">Execution submission</span></header>
+<div class="shell">
+<nav aria-label="Deployments"><h2>Deployments &amp; graphs</h2>
+{% for item in catalog.graphs %}
+<a class="graph-link {% if graph.graph_id == item.graph_id and graph.deployment_alias == item.deployment_alias %}selected{% endif %}" href="{{ graph_url(item) }}">
+<small>{{ item.deployment_alias if item.deployment_alias is not none else item.topology_status }}</small>
+<strong>{{ item.graph_id }}</strong></a>
+{% else %}<p>No connections or recorded graphs.</p>{% endfor %}
+</nav>
+<main id="main" tabindex="-1">
+<a href="{{ graph_url(graph) }}">← Back to {{ graph.graph_id }}</a>
+<h1>Submit execution</h1>
+<p class="intro">{{ graph.deployment_alias }} · {{ graph.graph_id }}</p>
+{% for message in diagnostics %}<p role="alert">{{ message }}</p>{% endfor %}
+{% if message %}<p role="alert">{{ message }}</p>{% endif %}
+{% if not assistants %}<p class="notice">No registered Assistants were reported by this deployment. Check
+the deployment is reachable, then reload this page.</p>
+{% else %}
+<form class="stacked" method="post" action="{{ execute_url(graph) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="nonce" value="{{ nonce }}">
+<label>Assistant
+<select name="assistant" required>
+{% for assistant in assistants %}<option value="{{ assistant.assistant_id }}">{{ assistant.name or assistant.assistant_id }}{% if assistant.graph_id %} ({{ assistant.graph_id }}){% endif %}</option>{% endfor %}
+</select></label>
+<label>Subject <input name="subject" required placeholder="Opaque Subject identifier"></label>
+<label>Input (JSON) <textarea name="input" required placeholder="{}">{}</textarea></label>
+<label>Context (JSON, optional) <textarea name="context" placeholder="Public request context, e.g. {}"></textarea></label>
+<button type="submit">Submit execution</button>
+</form>
+<p>Submitting creates a new Thread and Run immediately. Do not resubmit after a page reload; reload this
+page first to get a fresh submission token, then check the deployment or the Run list before retrying.</p>
+{% endif %}
+</main>
+</div>
+<footer>cordboard · connects graphs, records runs</footer>
+</body></html>

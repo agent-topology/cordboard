@@ -20,7 +20,13 @@ import requests
 from cord_runtime.aegra_client import execute
 from cord_runtime.archive_query import ArchiveError, read_spans
 from cord_runtime.backends.aegra import AegraExecutionBackend
-from cord_runtime.connections import InvalidConnection, add_connection, load_connections, set_graph_map
+from cord_runtime.connections import (
+    InvalidConnection,
+    add_connection,
+    load_connections,
+    set_auth_endpoint,
+    set_graph_map,
+)
 from cord_runtime.deployment_lifecycle import stop_idle
 from cord_runtime.live_reconciliation import LiveRun, await_convergence, reconcile
 from cord_runtime.router import route_signal
@@ -64,11 +70,21 @@ def cmd_add(args: argparse.Namespace) -> int:
     launch = shlex.split(args.launch) if args.launch else None
     try:
         add_connection(_board_dir(args), args.alias, args.endpoint,
-                       launch=launch, idle_after=args.idle_after, replace=args.replace)
+                       launch=launch, idle_after=args.idle_after,
+                       auth_endpoint=args.auth_endpoint, replace=args.replace)
     except InvalidConnection as exc:
         return _fail(str(exc), EXIT_USAGE)
     suffix = " (managed)" if launch else ""
     print(f"added '{args.alias}' -> {args.endpoint}{suffix}")
+    return EXIT_OK
+
+
+def cmd_auth_endpoint(args: argparse.Namespace) -> int:
+    try:
+        set_auth_endpoint(_board_dir(args), args.alias, args.auth_endpoint)
+    except InvalidConnection as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    print(f"set auth_endpoint for '{args.alias}' -> {args.auth_endpoint}")
     return EXIT_OK
 
 
@@ -464,7 +480,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
     try:
         targets = [_parse_watch_target(raw) for raw in args.watch]
         return serve(_board_dir(args), args.archive, alias=args.alias,
-                     host=args.host, port=args.port, watch=targets)
+                     host=args.host, port=args.port, watch=targets,
+                     reminder_after=args.reminder_after, timeout_after=args.timeout_after)
     except (ValueError, OSError) as exc:
         return _fail(str(exc), EXIT_USAGE)
 
@@ -482,8 +499,16 @@ def build_parser() -> argparse.ArgumentParser:
                           "presence opts the Deployment into managed startup/idle shutdown (#17)")
     add.add_argument("--idle-after", type=float, default=None, dest="idle_after",
                      help="Seconds of no active claim before a managed Deployment is stopped (default: 600)")
+    add.add_argument("--auth-endpoint", default=None, dest="auth_endpoint",
+                     help="Entity-owned HTTP port asked for approval-response authorization decisions (#49)")
     add.add_argument("--replace", action="store_true", help="Replace an existing alias")
     add.set_defaults(func=cmd_add)
+
+    auth_endpoint_cmd = sub.add_parser(
+        "auth-endpoint", help="Set an already-registered alias's approval-authorization HTTP port (#49)")
+    auth_endpoint_cmd.add_argument("alias")
+    auth_endpoint_cmd.add_argument("auth_endpoint", help="Entity-owned HTTP port base URL (http/https, no userinfo)")
+    auth_endpoint_cmd.set_defaults(func=cmd_auth_endpoint)
 
     deployment = sub.add_parser("deployment", help="Manage managed Deployment lifecycle")
     deployment_sub = deployment.add_subparsers(dest="deployment_command", required=True)
@@ -524,6 +549,10 @@ def build_parser() -> argparse.ArgumentParser:
     serve_cmd.add_argument("--port", type=int, default=0)
     serve_cmd.add_argument("--archive", type=Path, action="append", default=[])
     serve_cmd.add_argument("--watch", action="append", default=[], metavar="ALIAS:THREAD_ID:RUN_ID")
+    serve_cmd.add_argument("--reminder-after", type=float, default=300.0, dest="reminder_after",
+                           help="Seconds before a waiting approval is flagged for a reminder (default: 300)")
+    serve_cmd.add_argument("--timeout-after", type=float, default=3600.0, dest="timeout_after",
+                           help="Seconds before a waiting approval is flagged as timed out (default: 3600)")
     serve_cmd.set_defaults(func=cmd_serve)
 
     run = sub.add_parser("run", help="Invoke a graph on a registered deployment")

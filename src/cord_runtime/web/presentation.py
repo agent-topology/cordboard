@@ -24,6 +24,14 @@ def run_url(graph, run):
     return graph_url(graph) + "/runs/" + quote(run["run_id"], safe="")
 
 
+def execute_url(graph):
+    return graph_url(graph) + "/execute"
+
+
+def approval_url(alias, thread_id, interrupt_id):
+    return "/approvals/" + "/".join(quote(part, safe="") for part in (alias, thread_id, interrupt_id))
+
+
 def layout(structure):
     if not structure:
         return None

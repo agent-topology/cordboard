@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Approval · {{ thread_id }} · Cordboard</title>
+<link rel="stylesheet" href="/static/viewer.css"></head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header><a class="brand" href="/">cordboard<span> / observation</span></a><span class="badge">Approval detail</span></header>
+<div class="shell">
+<nav aria-label="Deployments"><h2>Deployments &amp; graphs</h2>
+{% for item in catalog.graphs %}
+<a class="graph-link" href="{{ graph_url(item) }}">
+<small>{{ item.deployment_alias if item.deployment_alias is not none else item.topology_status }}</small>
+<strong>{{ item.graph_id }}</strong></a>
+{% else %}<p>No connections or recorded graphs.</p>{% endfor %}
+</nav>
+<main id="main" tabindex="-1">
+<a href="/approvals">← All waiting approvals</a>
+<h1>Approval</h1>
+<p class="intro">{{ alias }} · Thread {{ thread_id }} · Interrupt {{ interrupt_id }}</p>
+{% if message %}<p role="alert">{{ message }}</p>{% endif %}
+{% if not waiting %}
+<p>This interrupt is no longer waiting — it may already have been answered, resumed elsewhere, or expired.
+Return to the <a href="/approvals">inbox</a> for the current list.</p>
+{% elif not has_authority %}
+<p class="notice">No approval authority is configured for '{{ alias }}'. Approval is refused by default
+until an <code>auth_endpoint</code> is set for this connection.</p>
+{% else %}
+<section><h2>Request</h2>
+<p>Assistant: {{ waiting.assistant or 'Unknown' }} · Subject: {{ waiting.subject or 'Unknown' }} ·
+Logical Run: {{ waiting.logical_run_id }}</p>
+<pre>{{ waiting.value | tojson(indent=2) }}</pre>
+</section>
+<form class="stacked" method="post" action="{{ approval_url(alias, thread_id, interrupt_id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="revision" value="{{ waiting.revision or '' }}">
+<label>Approver <input name="approver" required placeholder="Your operator identity (a claim, not authority)"></label>
+<label>Response (JSON) <textarea name="response_value" required placeholder="true">true</textarea></label>
+<button type="submit">Submit response</button>
+</form>
+<p>The submitted approver is only a claim; the connection's <code>auth_endpoint</code> decides whether it is
+accepted. A response is durably claimed once submitted and is never silently retried.</p>
+{% endif %}
+</main>
+</div>
+<footer>cordboard · connects graphs, records runs</footer>
+</body></html>

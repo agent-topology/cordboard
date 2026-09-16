@@ -75,6 +75,33 @@ def _interrupts_of(state: dict) -> list[dict]:
     return found
 
 
+def _discover_thread(board_dir: Path, deployment: str, connection: dict, thread_id: str, record: dict, *,
+                      reminder_after: float, timeout_after: float, now: float,
+                      backend_factory) -> list[WaitingInterrupt]:
+    backend = backend_factory(connection["endpoint"], board_dir=board_dir, deployment=deployment)
+    latest_invocation = record["api_run_ids"][-1]
+    try:
+        status = backend.status(thread_id, latest_invocation)
+        if status is not RuntimeStatus.INTERRUPTED:
+            return []
+        run_info = backend.get_run(thread_id, latest_invocation)
+        state = backend.get_state(thread_id)
+    except RuntimeError:
+        return []
+    interrupts = _interrupts_of(state)
+    if not interrupts:
+        return []
+    record_waiting(board_dir, deployment, thread_id, record["run_id"],
+                    now=now, reminder_after=reminder_after, timeout_after=timeout_after)
+    revision = _revision_of(state)
+    return [WaitingInterrupt(
+        deployment=deployment, assistant=run_info.get("assistant_id"),
+        subject=run_info.get("subject"), logical_run_id=record["run_id"],
+        thread_id=thread_id, interrupt_id=interrupt["id"], value=interrupt.get("value"),
+        revision=revision,
+    ) for interrupt in interrupts]
+
+
 def discover_waiting(board_dir: Path, *, reminder_after: float, timeout_after: float,
                       now: float, backend_factory=AegraExecutionBackend) -> list[WaitingInterrupt]:
     """Scan every registered Deployment for pending runtime interrupts.
@@ -99,31 +126,32 @@ def discover_waiting(board_dir: Path, *, reminder_after: float, timeout_after: f
         connection = connections.get(deployment)
         if connection is None:
             continue
-        backend = backend_factory(connection["endpoint"], board_dir=board_dir, deployment=deployment)
         for thread_id, record in threads.items():
-            latest_invocation = record["api_run_ids"][-1]
-            try:
-                status = backend.status(thread_id, latest_invocation)
-                if status is not RuntimeStatus.INTERRUPTED:
-                    continue
-                run_info = backend.get_run(thread_id, latest_invocation)
-                state = backend.get_state(thread_id)
-            except RuntimeError:
-                continue
-            interrupts = _interrupts_of(state)
-            if not interrupts:
-                continue
-            record_waiting(board_dir, deployment, thread_id, record["run_id"],
-                            now=now, reminder_after=reminder_after, timeout_after=timeout_after)
-            revision = _revision_of(state)
-            for interrupt in interrupts:
-                waiting.append(WaitingInterrupt(
-                    deployment=deployment, assistant=run_info.get("assistant_id"),
-                    subject=run_info.get("subject"), logical_run_id=record["run_id"],
-                    thread_id=thread_id, interrupt_id=interrupt["id"], value=interrupt.get("value"),
-                    revision=revision,
-                ))
+            waiting.extend(_discover_thread(
+                board_dir, deployment, connection, thread_id, record,
+                reminder_after=reminder_after, timeout_after=timeout_after, now=now,
+                backend_factory=backend_factory))
     return waiting
+
+
+def discover_waiting_for_thread(board_dir: Path, deployment: str, thread_id: str, *,
+                                 reminder_after: float, timeout_after: float, now: float,
+                                 backend_factory=AegraExecutionBackend) -> list[WaitingInterrupt]:
+    """The single-(Deployment, Thread) case of `discover_waiting`, for a Run
+    detail page's action slot (#49): a full board-wide scan is too expensive
+    to repeat on every page render/poll (ADR-0018 SS4's "separate what is
+    actually expensive from what actually changes often"), so this resolves
+    exactly one Thread's waiting interrupts without touching any other.
+    """
+    connection = load_connections(board_dir).get(deployment)
+    if connection is None:
+        return []
+    record = run_continuity.load_run_continuity(board_dir).get(deployment, {}).get(thread_id)
+    if record is None:
+        return []
+    return _discover_thread(board_dir, deployment, connection, thread_id, record,
+                            reminder_after=reminder_after, timeout_after=timeout_after, now=now,
+                            backend_factory=backend_factory)
 
 
 def submit_response(board_dir: Path, *, deployment: str, thread_id: str, interrupt_id: str,

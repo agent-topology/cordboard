@@ -14,6 +14,12 @@ describe. No launch command implies no recreation of the entity's process
 factories, auth, or database management -- only reuse of what the operator
 already runs.
 
+A record also optionally carries ``auth_endpoint`` (#49): an entity-owned HTTP
+port Cordboard asks for approval-response authorization decisions
+(`cord_runtime.entity_auth.HttpEntityAuthBoundary`). This describes the
+connection, not the graph (ADR-0014) -- it is never inferred from ``endpoint``
+and never implies an implicit-allow boundary when absent.
+
 A record also optionally carries ``graph_map`` (#43): an explicit
 ``{document_graph_id: cord_graph_id}`` association from a topology document's
 local ``graphs[].id`` (never itself an execution identity, ADR-0014) to the
@@ -122,17 +128,20 @@ def _write_atomic(path: Path, data: dict) -> None:
 
 def add_connection(board_dir: Path, alias: str, endpoint: str, *,
                     launch: list[str] | None = None, idle_after: float | None = None,
-                    replace: bool = False) -> None:
+                    auth_endpoint: str | None = None, replace: bool = False) -> None:
     """Register or replace a Deployment alias. Raises InvalidConnection on invalid input.
 
     ``launch`` is an optional operator-supplied command that starts this
     Deployment's own existing entrypoint; its presence opts the Deployment
     into managed startup/idle shutdown (#17). ``idle_after`` only applies to
-    a managed Deployment and is ignored (not stored) otherwise.
+    a managed Deployment and is ignored (not stored) otherwise. ``auth_endpoint``
+    is an optional entity-owned HTTP port for approval-response authorization
+    (#49); see the module docstring.
     """
     alias = _validate_alias(alias)
     endpoint = validate_endpoint(endpoint)
     launch = _validate_launch(launch)
+    auth_endpoint = validate_endpoint(auth_endpoint) if auth_endpoint is not None else None
     data = load_connections(board_dir)
     if alias in data and not replace:
         raise InvalidConnection(f"alias '{alias}' already exists; pass --replace to overwrite it")
@@ -140,6 +149,22 @@ def add_connection(board_dir: Path, alias: str, endpoint: str, *,
     if launch is not None:
         record["launch"] = launch
         record["idle_after"] = _validate_idle_after(idle_after)
+    if auth_endpoint is not None:
+        record["auth_endpoint"] = auth_endpoint
+    data[alias] = record
+    _write_atomic(connections_path(board_dir), data)
+
+
+def set_auth_endpoint(board_dir: Path, alias: str, auth_endpoint: str) -> None:
+    """Set or replace an already-registered alias's ``auth_endpoint`` (#49),
+    the same way `set_graph_map` adds its own optional field after the fact.
+    """
+    auth_endpoint = validate_endpoint(auth_endpoint)
+    data = load_connections(board_dir)
+    if alias not in data:
+        raise InvalidConnection(f"unknown alias '{alias}'")
+    record = dict(data[alias])
+    record["auth_endpoint"] = auth_endpoint
     data[alias] = record
     _write_atomic(connections_path(board_dir), data)
 

@@ -101,3 +101,15 @@ def logical_run(board_dir: Path, deployment: str, thread_id: str) -> dict:
         return data[deployment][thread_id]
     except KeyError:
         raise UnknownThread(f"no recorded submission for {deployment}/{thread_id}") from None
+
+
+def thread_for_run(board_dir: Path, deployment: str, run_id: str) -> str | None:
+    """The inverse of `logical_run`: which Thread a *recorded* logical Run id
+    belongs to, or ``None`` when this board never recorded a submission for
+    it (#49 -- a recorded Run/Step tree carries no ``thread_id`` of its own,
+    only `run_continuity` does).
+    """
+    for thread_id, record in load_run_continuity(board_dir).get(deployment, {}).items():
+        if record["run_id"] == run_id:
+            return thread_id
+    return None

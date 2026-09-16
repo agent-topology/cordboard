@@ -1,7 +1,10 @@
-# Local browser viewer (#48)
+# Local browser viewer (#48, #49)
 
-ADR-0018 is Accepted. The installed wheel includes a read-only Python HTTP server,
-Jinja2 templates, CSS and JavaScript; there is no frontend build or model setup.
+ADR-0018 and ADR-0019 are Accepted. The installed wheel includes a Python HTTP
+server, Jinja2 templates, CSS and JavaScript; there is no frontend build or
+model setup. The observation routes (this file's original scope) stay
+read-only; execution submission and approval response live on a separate
+`/execute`/`/approvals` surface (#49, next section).
 
 ## Start
 
@@ -14,8 +17,15 @@ uv run --locked cord --board /path/to/board serve personal \
 ```
 
 The command prints its actual URL (port 0 chooses a free port). Ctrl-C stops the
-server. Only IPv4 loopback addresses are accepted in this slice. Remote serving,
-authentication and mutation controls remain follow-ups.
+server. Only IPv4 loopback addresses are accepted in this slice. Remote serving
+and authentication remain follow-ups; `--reminder-after`/`--timeout-after`
+(default `300`/`3600` seconds) control the approval-expiry clock the
+`/approvals` surface starts for each newly discovered waiting interrupt.
+
+`cord add --auth-endpoint <url>` (or `cord auth-endpoint <alias> <url>` for an
+already-registered connection) names the entity-owned HTTP port `/approvals`
+consults for authorization; without it, that connection's approvals are always
+rejected -- see "Execution submission and approval controls" below.
 
 Runs submitted through Cordboard are discovered from its board-level continuity
 store. One independent observer per invocation reads the backend's identity/status
@@ -39,6 +49,9 @@ second archive parser. A recorded Run replaces its live counterpart.
 | `/graphs/{graph_id}/ambiguous` | Execution that cannot be attributed to one deployment |
 | Any Graph URL + `/runs/{run_id}` | Run / Step / Attempt tree and timeline |
 | Any Run URL + `/events` | SSE snapshots of that Run and its delivery diagnostics |
+| Any Graph URL + `/execute` (GET/POST) | Explicit-input execution submission form (#49) |
+| `/approvals` | Waiting-interrupt inbox across every registered connection (#49) |
+| `/approvals/{alias}/{thread_id}/{interrupt_id}` (GET/POST) | One interrupt's bounded content and response form (#49) |
 
 Identifiers are percent-encoded as individual path segments, including embedded
 slashes. Connection aliases do not compete with reserved names. Even when
@@ -87,10 +100,46 @@ live updates use aria-live and errors use alerts. The 700px breakpoint puts
 navigation, forms and timeline rows in one column.
 
 `.cord-action-slot[data-run-id][data-thread-id][data-interrupt-id]` is the
-stable empty insertion point beside waiting Steps/live interruptions. Unknown
-Thread or interrupt IDs are empty strings, never invented from span IDs.
-The controls task must resolve identity through the authorized inbox before
-using a slot. There are no action buttons or mutation handlers here.
+stable insertion point beside waiting Steps/live interruptions. Unknown Thread
+or interrupt IDs are empty strings, never invented from span IDs. The slot now
+resolves identity through the authorized inbox (below) at render time: a
+single matching waiting interrupt becomes a link into `/approvals/...`; more
+than one on the same Thread, or no approval authority configured for the
+connection, is shown as bounded explanatory text instead of a guess. The
+observation page markup itself carries no mutation form or JS handler.
+
+## Execution submission and approval controls (#49, ADR-0019)
+
+`GET/POST /connections/{alias}/graphs/{graph_id}/execute` renders and accepts
+an explicit-input execution form: a registered Assistant (populated from the
+deployment's own `GET /assistants`, never free text), Subject, and JSON
+input/context. Submission delegates to `aegra_client.execute` -- the same
+function the CLI would use -- and durably records the submission via
+`run_continuity.record_submission`. A fresh, server-tracked single-use nonce
+is embedded per page render; a second POST with the same or a missing nonce
+is rejected (`409`) without a second execution attempt, so a double-click or
+network retry cannot silently duplicate a Run. An `execute()` transport
+failure that leaves the outcome ambiguous is reported as `unknown` and never
+retried automatically.
+
+`GET /approvals` lists every waiting runtime interrupt across registered
+connections (`approval_inbox.discover_waiting`); `GET/POST
+/approvals/{alias}/{thread_id}/{interrupt_id}` shows one interrupt's bounded
+business content and accepts a response, delegating to
+`approval_inbox.submit_response` unchanged. The submitted `approver` field is
+only ever a claim -- authorization is decided by the connection's optional
+`auth_endpoint` (`cord add --auth-endpoint ...` / `cord auth-endpoint`), an
+entity-owned HTTP port reached through the new
+`entity_auth.HttpEntityAuthBoundary`. No `auth_endpoint` configured, or the
+port unreachable/returning an invalid response, is always a rejection --
+never an implicit allow.
+
+Every mutation POST requires a matching `Origin` header and a double-submit
+`cord_csrf` cookie/form-token pair (`hmac.compare_digest`); a mismatch or
+missing pair is rejected (`403`) before any domain function runs. Interrupt
+values and response payloads live only for the request/response render, never
+written to the board beyond the existing identifier-only `response_dedupe`/
+`run_continuity` records, and the server never logs a request body.
 
 ## Verification
 
@@ -110,6 +159,17 @@ loopback binding, responsive DOM, keyboard focus and polling fallback.
 The browser test writes desktop/narrow screenshots to pytest's temporary folder.
 It needs the optional web-test group; absent Playwright is an explicit skip,
 not browser acceptance.
+
+`tests/test_web_controls.py` (#49) exercises the execution/approval surface
+against a real `cord serve` process and a real browser, with only the
+upstream Aegra and `auth_endpoint` HTTP calls scripted (the same
+`requests.Session.request` monkeypatch `tests/test_aegra_client.py` already
+uses): submit -> pause -> authorized resume -> resumed disposition; a
+rejected response never reaching `backend.resume`; an ambiguous resume
+transport failure surfacing as `unknown`, not a guessed success; a
+same-nonce double submission creating exactly one Thread; and cross-origin
+or missing/invalid-CSRF-token POSTs rejected (`403`) before any domain
+function runs. It needs the same optional web-test group.
 
 `scripts/verify-browser-artifact.py` is a black-box consumer: it invokes the
 installed CLI and uses HTTP and Playwright, never imports Cordboard internals.

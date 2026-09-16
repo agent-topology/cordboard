@@ -173,10 +173,20 @@ exposes that shared model through loopback-only `cord serve`, deployment-scoped
 read routes, server-rendered topology/tree/timeline pages, SSE delivery diagnostics
 and polling fallback. The shared catalog adds full `runs` and validated
 `topology_structure` to its existing summary. Empty and in-progress archives
-use the existing active-file reader. The viewer never submits executions or
-reads graph business state; approval controls (#49) remain unimplemented.
-Browser and installed-wheel evidence, including its interrupt-fixture limitation,
-is recorded in the viewer guide.
+use the existing active-file reader. The viewer's observation routes stay
+read-only and never read graph business state.
+Execution submission and approval controls (#49, ADR-0019) now exist on a
+separate `/execute` and `/approvals` surface: a double-submit-cookie + Origin
+CSRF guard and a per-submission nonce protect the mutation POST routes, which
+delegate to the same `aegra_client.execute`/`approval_inbox.submit_response`/
+`discover_waiting` domain functions the CLI would use. Approval authorization
+is delegated to a new optional per-connection `auth_endpoint` HTTP port
+(`entity_auth.HttpEntityAuthBoundary`) that defaults to reject when unset or
+unreachable; a browser-submitted `approver` is only ever a claim, never
+authority on its own. See [the viewer guide](docs/browser-viewer.md) for the
+route table and local browser-test evidence.
+Browser and installed-wheel evidence, including the #48 interrupt-fixture
+limitation, is recorded in the viewer guide.
 
 The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
 the implemented core/domain libraries and Omiologic Aegra deployment. These are
@@ -333,8 +343,10 @@ HTTP 422 on a resume submission that omits it (#40,
 docs/decisions/0016-control-plane-and-testbed.md), and this is a caller-facing
 signature change from the previous two-positional-argument form. `cord_runtime.run_continuity` durably groups that new
 ID under the Thread's first API Run ID (#14, partial): this is the mapping
-piece of the ADR-0003 correction, keyed on Deployment/Thread, not yet wired
-into `cord view`, the CLI, or any graph. `cord_runtime.approval_expiry`
+piece of the ADR-0003 correction, keyed on Deployment/Thread; `cord serve`'s
+execution-submission route now writes it via this same durable helper (#49),
+not yet wired into `cord view`, the CLI's own commands, or any graph.
+`cord_runtime.approval_expiry`
 applies reminder/timeout/halt policy to one already-known waiting
 (Deployment, Thread) pair keyed on that same logical `run_id`, and
 `cord_runtime.aegra_client.cancel` adds the halt action itself (#15). The full
@@ -343,8 +355,12 @@ submission boundary, plus cross-process dedupe of concurrent/stale
 *responses* (distinct from #15's repeated-*execution* evidence in the
 viewer, which is span-based) — is implemented by `cord_runtime.approval_inbox`,
 `cord_runtime.entity_auth`, and `cord_runtime.response_dedupe` (#44,
-docs/approval-inbox.md). It is still not wired into `cord view` or the CLI;
-that remains a later "web controls" slice.
+docs/approval-inbox.md). `cord serve`'s `/approvals` inbox and detail routes
+(#49, ADR-0019) are now its first caller, delegating to `discover_waiting`/
+`submit_response` unchanged and reaching entity authorization decisions
+through a new `entity_auth.HttpEntityAuthBoundary` over an optional
+per-connection `auth_endpoint` port. It is still not wired into `cord view`
+or the CLI's own commands.
 Subject groups executions without
 sharing checkpoint state and maps to Langfuse `session_id`. A conversational
 graph may manage Thread reuse internally; the platform still groups by Subject.
