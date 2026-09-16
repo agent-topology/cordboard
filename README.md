@@ -81,6 +81,10 @@ replacement orchestration framework are outside the design's scope.
 
 ## Explore the design
 
+The [Slice 1–5 retrospective](docs/slice1-5-retrospective.md) records implementation
+gaps and the [Testbed/web-viewer follow-up milestone](https://github.com/agent-topology/cordboard/milestone/8),
+including Collector delivery evidence and optional workflow-core integration.
+
 | Document | Purpose |
 | --- | --- |
 | [Architecture](ARCHITECTURE.md) | Intended components, ownership, contracts, and unresolved design conflicts |

@@ -2,6 +2,13 @@
 
 ## Status and source of truth
 
+The [Slice 1–5 retrospective](docs/slice1-5-retrospective.md) separates delivered
+components from unfinished end-to-end contracts and links the
+[Retrospect & Testbed milestone](https://github.com/agent-topology/cordboard/milestone/8).
+It prioritizes an artifact-installed synthetic execution/Collector/web-viewer
+path independent of Omiologic availability. These follow-ups are planned, not
+additional implemented capabilities.
+
 Cordboard has a [minimal executable graph](docs/minimal-graph.md) with
 in-memory execution records (#4), plus a separate archive integration (#5):
 `cord-runtime`, OTel instrumentation, redaction, and Collector persistence.
