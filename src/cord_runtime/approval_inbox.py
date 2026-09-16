@@ -92,6 +92,9 @@ def _revision_of(state: dict) -> str | None:
 def _interrupts_of(state: dict) -> list[dict]:
     found = []
     for task in state.get("tasks") or []:
+        # Aegra retains a completed branch's interrupt alongside its result.
+        if task.get("result") is not None:
+            continue
         for interrupt in task.get("interrupts") or []:
             found.append(interrupt)
     return found
@@ -267,7 +270,8 @@ def submit_response(board_dir: Path, *, deployment: str, thread_id: str, interru
             subject = pending["subject"]
 
         try:
-            result = backend.resume(thread_id, assistant, response_value, timeout=timeout)
+            # Authorization and dedupe cover one interrupt, even on a parallel pause.
+            result = backend.resume(thread_id, assistant, {interrupt_id: response_value}, timeout=timeout)
         except RuntimeError:
             response_dedupe.record_outcome(board_dir, deployment, thread_id, interrupt_id,
                                             response_dedupe.UNKNOWN, now=now)

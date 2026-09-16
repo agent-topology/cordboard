@@ -120,6 +120,28 @@ def test_discover_waiting_excludes_threads_that_are_not_interrupted(tmp_path):
     assert found == []
 
 
+@pytest.mark.parametrize("completed_result", [{"left": True}, {}, False])
+def test_completed_branch_interrupt_is_neither_waiting_nor_resumable(tmp_path, completed_result):
+    alias, thread_id = _seed(tmp_path)
+    backend = FakeBackend(state={
+        "tasks": [
+            {"interrupts": [{"id": "interrupt-a"}], "result": completed_result},
+            {"interrupts": [{"id": "interrupt-b"}], "result": None},
+        ],
+        "checkpoint": {"checkpoint_id": "chk-1"},
+    })
+    factory = _factory({alias: backend})
+    found = discover_waiting(tmp_path, reminder_after=60, timeout_after=300, now=NOW,
+                             backend_factory=factory)
+    assert [entry.interrupt_id for entry in found] == ["interrupt-b"]
+    response = submit_response(tmp_path, deployment=alias, thread_id=thread_id,
+                               interrupt_id="interrupt-a", approver="alice", response_value=True,
+                               revision="chk-1", auth_boundary=SyntheticEntityAuthBoundary(GRANTS),
+                               now=NOW, backend_factory=factory)
+    assert response.status == "rejected" and "stale" in response.reason
+    assert backend.resume_calls == []
+
+
 def test_discover_waiting_starts_the_approval_expiry_clock(tmp_path):
     alias, thread_id = _seed(tmp_path)
     backend = FakeBackend()
@@ -176,7 +198,7 @@ def test_authorized_response_resumes_and_records_disposition(tmp_path):
                               approver="alice", response_value=True, revision="chk-1",
                               auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
     assert result.status == "resumed"
-    assert backend.resume_calls == [(thread_id, "triage-graph", True)]
+    assert backend.resume_calls == [(thread_id, "triage-graph", {"interrupt-a": True})]
     claim = response_dedupe.get_claim(tmp_path, alias, thread_id, "interrupt-a")
     assert claim["outcome"] == response_dedupe.RESUMED
 
@@ -191,6 +213,22 @@ def test_unauthorized_approver_is_rejected_and_never_reaches_resume(tmp_path):
     assert result.status == "rejected"
     assert backend.resume_calls == []
     assert response_dedupe.get_claim(tmp_path, alias, thread_id, "interrupt-a")["outcome"] == response_dedupe.REJECTED
+
+
+@pytest.mark.parametrize("value", [True, False, None, {"interrupt-b": True}])
+def test_response_targets_only_the_authorized_interrupt(tmp_path, value):
+    alias, thread_id = _seed(tmp_path)
+    backend = FakeBackend(state={
+        "tasks": [{"interrupts": [{"id": "interrupt-a"}, {"id": "interrupt-b"}]}],
+        "checkpoint": {"checkpoint_id": "chk-1"},
+    }, resume_status=RuntimeStatus.INTERRUPTED)
+    result = submit_response(tmp_path, deployment=alias, thread_id=thread_id,
+                             interrupt_id="interrupt-a", approver="alice", response_value=value,
+                             revision="chk-1", auth_boundary=SyntheticEntityAuthBoundary(GRANTS),
+                             now=NOW, backend_factory=_factory({alias: backend}))
+    assert result.status == "resumed"
+    assert backend.resume_calls == [(thread_id, "triage-graph", {"interrupt-a": value})]
+    assert response_dedupe.get_claim(tmp_path, alias, thread_id, "interrupt-b") is None
 
 
 def test_a_ui_supplied_identity_alone_is_never_treated_as_authority(tmp_path):
@@ -297,7 +335,7 @@ def test_resume_starts_the_managed_deployment_before_resuming(tmp_path, monkeypa
                               approver="alice", response_value=True, revision="chk-1",
                               auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
     assert result.status == "resumed"
-    assert backend.resume_calls == [(thread_id, "triage-graph", True)]
+    assert backend.resume_calls == [(thread_id, "triage-graph", {"interrupt-a": True})]
     # A genuine terminal success releases the claim `ensure_started` took.
     assert load_lifecycle(tmp_path)[alias]["active_runs"] == 0
 

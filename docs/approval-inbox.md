@@ -31,6 +31,10 @@ LangGraph seam, not just the pinned source.
   change. A Deployment or Thread that raises a transport error while being
   probed is skipped, never raised -- one unreachable Deployment cannot hide
   every other Deployment's waiting interrupts.
+  Aegra can retain an old interrupt on a task that already has a non-null
+  `result` while another branch waits. That completed task is excluded from
+  both discovery and the submission-time pending check; its history does not
+  make it a new approval request.
 - `submit_response(board_dir, deployment=, thread_id=, interrupt_id=,
   approver=, response_value=, revision=, auth_boundary=, now=, timeout=)`
   routes one operator's answer to the exact interrupt it targets, in order:
@@ -49,6 +53,12 @@ LangGraph seam, not just the pinned source.
   3. `backend.resume` -- an ambiguous-transport `RuntimeError` is recorded as
      `UNKNOWN`, never retried automatically; a clean resume is recorded
      `RESUMED` and, best-effort, closes the Thread's `approval_expiry` wait.
+
+     The transport receives `{interrupt_id: response_value}`, including for a
+     single pending interrupt. The value stays opaque, even when it is itself
+     an object. A response authorized for one interrupt must not be interpreted
+     as an answer for another parallel branch. This is covered by the external
+     Testbed #51 two-interrupt regression as well as the local transport tests.
 
   The resumed outcome now decides the Deployment activity claim `ensure_started`
   took, instead of it being discarded (#50): genuine terminal success releases
