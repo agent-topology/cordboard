@@ -14,10 +14,13 @@ import sys
 import requests
 
 from cord_runtime.aegra_client import execute
+from cord_runtime.archive_query import ArchiveError, read_spans
 from cord_runtime.connections import InvalidConnection, add_connection, load_connections
 from cord_runtime.router import route_signal
 from cord_runtime.rules import InvalidRule, SIGNAL_TYPES, add_rule
 from cord_runtime.signals import InvalidSignal, file_signal, manual_signal, schedule_signal
+from cord_runtime.topology import check_freshness
+from cord_runtime.viewer import build_catalog, format_catalog_text
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
@@ -96,6 +99,35 @@ def cmd_list(args: argparse.Namespace) -> int:
         graphs = ", ".join(status["graphs"]) if status["graphs"] else "-"
         print(f"{alias}\t{endpoint}\t{reachability}\tgraphs={graphs}")
     return EXIT_OK if all_reachable else EXIT_FAILURE
+
+
+def cmd_view(args: argparse.Namespace) -> int:
+    board_dir = _board_dir(args)
+    try:
+        connections = load_connections(board_dir)
+    except InvalidConnection as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    if args.alias is not None:
+        if args.alias not in connections:
+            return _fail(f"unknown alias '{args.alias}'", EXIT_USAGE)
+        connections = {args.alias: connections[args.alias]}
+
+    probed = {}
+    topology = {}
+    for alias, info in connections.items():
+        endpoint = info["endpoint"]
+        status = _probe(endpoint)
+        probed[alias] = {"endpoint": endpoint, "reachable": status["reachable"], "graphs": status["graphs"]}
+        topology[endpoint] = check_freshness(board_dir, endpoint, timeout=_PROBE_TIMEOUT)
+
+    try:
+        spans = read_spans(args.archive) if args.archive else {}
+        catalog = build_catalog(probed, topology, spans)
+    except ArchiveError as exc:
+        return _fail(str(exc), EXIT_USAGE)
+
+    print(json.dumps(catalog) if args.json else format_catalog_text(catalog))
+    return EXIT_OK
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -220,6 +252,13 @@ def build_parser() -> argparse.ArgumentParser:
     list_cmd = sub.add_parser("list", help="Show reachability and graphs for registered deployments")
     list_cmd.add_argument("alias", nargs="?", default=None)
     list_cmd.set_defaults(func=cmd_list)
+
+    view = sub.add_parser("view", help="Show the catalog: Graphs, topology, and recorded execution")
+    view.add_argument("alias", nargs="?", default=None)
+    view.add_argument("--archive", type=Path, action="append", default=[],
+                      help="Archive directory or *.otlp.jsonl[.gz] file to read recorded execution from (repeatable)")
+    view.add_argument("--json", action="store_true", help="Print the catalog as one JSON object instead of text")
+    view.set_defaults(func=cmd_view)
 
     run = sub.add_parser("run", help="Invoke a graph on a registered deployment")
     run.add_argument("alias")

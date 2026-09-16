@@ -116,33 +116,41 @@ def query(paths: list[Path], *, reference: int, top: int = 10) -> list[dict]:
     return query_spans(read_spans(paths), reference=reference, top=top)
 
 
+def role(span):
+    """Classify one normalized span as a Run, Step, or Attempt, or None for an
+    ordinary (non-Cordboard) span. Shared by every reader of the archive
+    contract; do not reimplement this classification elsewhere (#13)."""
+    attrs = span["attributes"]
+    name = span.get("name", "")
+    require(isinstance(name, str), "invalid span name")
+    if name == "attempt" or "cord.step.attempt" in attrs:
+        return "attempt"
+    if name.startswith("step:") or "cord.node.name" in attrs:
+        return "step"
+    if name == "run" or "cord.semconv.version" in attrs:
+        return "run"
+    require("cord.outcome" not in attrs, "unclassified Cordboard outcome span")
+    return None  # ordinary proxy/model spans are not Attempts
+
+
+def parent(spans, span, expected):
+    """`span`'s validated immediate parent, which must have role `expected`
+    and share `IDENTITY` with it. Shared by every reader of the archive
+    contract (#13)."""
+    entry = spans.get(span.get("parentSpanId"))
+    require(entry is not None, f"{expected} parent is missing; supply complete Run trees")
+    result = entry[0]
+    require(role(result) == expected and result["traceId"] == span["traceId"],
+            f"invalid {expected} parent hierarchy")
+    require(all(span["attributes"].get(k) == result["attributes"].get(k) for k in IDENTITY),
+            "parent identity mismatch")
+    return result
+
+
 def query_spans(spans: dict, *, reference: int, top: int = 10) -> list[dict]:
     """Apply the archive contract to normalized, deduplicated complete trees."""
     require(type(top) is int and top > 0, "top must be a positive integer")
     counts = Counter()
-
-    def role(span):
-        attrs = span["attributes"]
-        name = span.get("name", "")
-        require(isinstance(name, str), "invalid span name")
-        if name == "attempt" or "cord.step.attempt" in attrs:
-            return "attempt"
-        if name.startswith("step:") or "cord.node.name" in attrs:
-            return "step"
-        if name == "run" or "cord.semconv.version" in attrs:
-            return "run"
-        require("cord.outcome" not in attrs, "unclassified Cordboard outcome span")
-        return None  # ordinary proxy/model spans are not Attempts
-
-    def parent(span, expected):
-        entry = spans.get(span.get("parentSpanId"))
-        require(entry is not None, f"{expected} parent is missing; supply complete Run trees")
-        result = entry[0]
-        require(role(result) == expected and result["traceId"] == span["traceId"],
-                f"invalid {expected} parent hierarchy")
-        require(all(span["attributes"].get(k) == result["attributes"].get(k) for k in IDENTITY),
-                "parent identity mismatch")
-        return result
 
     for span, location in spans.values():
         try:
@@ -161,13 +169,13 @@ def query_spans(spans: dict, *, reference: int, top: int = 10) -> list[dict]:
                     "missing Node identity")
             if kind == "step":
                 require(attrs.get("cord.outcome") in tuple(x.value for x in StepOutcome), "invalid Step outcome")
-                parent(span, "run")
+                parent(spans, span, "run")
                 continue
             require(type(attrs.get("cord.step.attempt")) is int and attrs["cord.step.attempt"] > 0,
                     "Attempt requires a positive attempt number")
             require(attrs.get("cord.outcome") in tuple(x.value for x in AttemptOutcome), "invalid Attempt outcome")
-            step = parent(span, "step")
-            root = parent(step, "run")
+            step = parent(spans, span, "step")
+            root = parent(spans, step, "run")
             # Historical 0.2 records required Tier. New graphs need not use or
             # disclose models; any supplied Tier remains an opaque annotation.
             if root["attributes"].get("cord.semconv.version") == "0.2.0" or "cord.tier" in attrs:
