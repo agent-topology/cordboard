@@ -67,15 +67,23 @@ def timestamp(value):
     return value
 
 
-def read_spans(paths):
-    """Read all partitions before joining parents; exporter order is arbitrary."""
-    indexed = {}
+def scan(paths):
+    """Resolve `paths` (directories or individual files) to the ordered list
+    of archive files `read_spans` would read. Shared with `archive_health`
+    (#45) so tail tolerance sees the exact same file set/order."""
     files = []
     for path in paths:
         entries = (sorted(path.glob("*.otlp.jsonl")) + sorted(path.glob("*.otlp.jsonl.gz"))
                    if path.is_dir() else [path])
         require(entries, "archive directory has no input files")
         files.extend(entries)
+    return files
+
+
+def read_spans(paths):
+    """Read all partitions before joining parents; exporter order is arbitrary."""
+    indexed = {}
+    files = scan(paths)
     for file_number, path in enumerate(files, 1):
         line_number = 0
         try:

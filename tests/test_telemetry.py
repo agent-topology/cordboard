@@ -1,15 +1,27 @@
 from unittest.mock import Mock
 
 from google.protobuf.json_format import MessageToJson
-from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
+from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
+    ExportTraceServiceRequest,
+    ExportTraceServiceResponse,
+)
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 import pytest
 import redact_secret
+import requests
 
 from cord_runtime.execution import AttemptOutcome, StepOutcome, run
-from cord_runtime.telemetry import RedactingOTLPExporter, redact_request
+from cord_runtime.telemetry import (
+    HTTP_ERROR,
+    PROCESSING_FAILED,
+    REJECTED_SPANS,
+    UNREACHABLE,
+    ExportOutcome,
+    RedactingOTLPExporter,
+    redact_request,
+)
 from conftest import CREDENTIAL, PRIVATE_KEY
 
 
@@ -140,9 +152,44 @@ def test_export_failure_is_value_free(caplog):
         pass
     assert exporter.export(captured.spans) == SpanExportResult.FAILURE
     assert CREDENTIAL not in caplog.text
+    assert exporter.last_export == ExportOutcome(delivered=False, reason=PROCESSING_FAILED)
     provider.shutdown()
     exporter.shutdown()
 
+
+def test_export_outcome_reports_delivery_loss_without_inventing_counts():
+    """#45 AC2: each failure reason is distinguishable, and a rejected-span
+    count is only ever the Collector's own explicit report."""
+    provider = TracerProvider(resource=Resource({}))
+    captured = Capture()
+    provider.add_span_processor(SimpleSpanProcessor(captured))
+    with provider.get_tracer("test").start_as_current_span("test"):
+        pass
+    spans = captured.spans
+    provider.shutdown()
+
+    exporter = RedactingOTLPExporter()
+    try:
+        exporter.session.post = Mock(side_effect=requests.ConnectionError("boom"))
+        assert exporter.export(spans) == SpanExportResult.FAILURE
+        assert exporter.last_export == ExportOutcome(delivered=False, reason=UNREACHABLE)
+
+        exporter.session.post = Mock(return_value=Mock(status_code=500, content=b""))
+        assert exporter.export(spans) == SpanExportResult.FAILURE
+        assert exporter.last_export == ExportOutcome(delivered=False, reason=HTTP_ERROR)
+
+        rejecting = ExportTraceServiceResponse()
+        rejecting.partial_success.rejected_spans = 3
+        exporter.session.post = Mock(return_value=Mock(status_code=200, content=rejecting.SerializeToString()))
+        assert exporter.export(spans) == SpanExportResult.FAILURE
+        assert exporter.last_export == ExportOutcome(delivered=False, reason=REJECTED_SPANS, rejected_spans=3)
+
+        accepted = ExportTraceServiceResponse()
+        exporter.session.post = Mock(return_value=Mock(status_code=200, content=accepted.SerializeToString()))
+        assert exporter.export(spans) == SpanExportResult.SUCCESS
+        assert exporter.last_export == ExportOutcome(delivered=True)
+    finally:
+        exporter.shutdown()
 
 
 @pytest.mark.parametrize("graph_id", [None, "", "   "])

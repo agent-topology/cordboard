@@ -5,6 +5,9 @@ receivers:
     protocols:
       http:
         endpoint: ${env:CORD_OTLP_ENDPOINT:-127.0.0.1:4318}
+extensions:
+  health_check:
+    endpoint: ${env:CORD_HEALTH_ENDPOINT:-127.0.0.1:13133}
 processors:
   filter/redacted:
     error_mode: propagate
@@ -27,6 +30,7 @@ exporters:
       resource_attribute: cord.archive.date
       max_open_files: 2
 service:
+  extensions: [health_check]
   telemetry:
     logs:
       level: warn
