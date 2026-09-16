@@ -16,9 +16,11 @@ from cord_runtime.connections import (
     add_connection,
     connections_path,
     get_connection,
+    is_managed,
     load_connections,
     validate_endpoint,
 )
+from cord_runtime.deployment_lifecycle import load_lifecycle
 from cord_runtime.rules import load_rules
 from cord_runtime.topology import ABSENT, FreshnessCheck, TopologyReading
 
@@ -81,6 +83,46 @@ def test_stored_record_carries_no_extra_fields(tmp_path):
     assert raw == {"aegra-local": {"endpoint": "http://127.0.0.1:2026"}}
 
 
+# --- connections.py: managed Deployment opt-in (#17) ------------------------
+
+def test_unmanaged_connection_has_no_launch_and_is_not_managed(tmp_path):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    assert is_managed(load_connections(tmp_path)["aegra-local"]) is False
+
+
+def test_connection_with_launch_is_managed_with_default_idle_after(tmp_path):
+    add_connection(tmp_path, "local", "http://127.0.0.1:2026", launch=["true"])
+    record = load_connections(tmp_path)["local"]
+    assert is_managed(record) is True
+    assert record["launch"] == ["true"]
+    assert record["idle_after"] == 600.0
+
+
+def test_connection_with_launch_accepts_explicit_idle_after(tmp_path):
+    add_connection(tmp_path, "local", "http://127.0.0.1:2026", launch=["true"], idle_after=30.0)
+    assert load_connections(tmp_path)["local"]["idle_after"] == 30.0
+
+
+def test_idle_after_without_launch_is_silently_ignored(tmp_path):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026", idle_after=30.0)
+    raw = json.loads(connections_path(tmp_path).read_text(encoding="utf-8"))
+    assert raw == {"aegra-local": {"endpoint": "http://127.0.0.1:2026"}}
+
+
+@pytest.mark.parametrize("launch", [[], ["", "x"], "not-a-list", None])
+def test_add_rejects_invalid_launch(tmp_path, launch):
+    if launch is None:
+        add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026", launch=None)
+        return
+    with pytest.raises(InvalidConnection):
+        add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026", launch=launch)
+
+
+def test_add_rejects_non_positive_idle_after(tmp_path):
+    with pytest.raises(InvalidConnection, match="idle_after"):
+        add_connection(tmp_path, "local", "http://127.0.0.1:2026", launch=["true"], idle_after=0)
+
+
 # --- cli.py: cmd_add -----------------------------------------------------
 
 def test_cmd_add_success_exit_zero(tmp_path, capsys):
@@ -93,6 +135,40 @@ def test_cmd_add_invalid_endpoint_exit_two(tmp_path, capsys):
     code = cli.main(["--board", str(tmp_path), "add", "aegra-local", "not-a-url"])
     assert code == cli.EXIT_USAGE
     assert "cord:" in capsys.readouterr().err
+
+
+def test_cmd_add_with_launch_registers_a_managed_connection(tmp_path, capsys):
+    code = cli.main(["--board", str(tmp_path), "add", "local", "http://127.0.0.1:2026",
+                     "--launch", "aegra serve --port 2026", "--idle-after", "30"])
+    assert code == cli.EXIT_OK
+    assert "managed" in capsys.readouterr().out
+    record = load_connections(tmp_path)["local"]
+    assert record["launch"] == ["aegra", "serve", "--port", "2026"]
+    assert record["idle_after"] == 30.0
+
+
+# --- cli.py: cmd_deployment_sweep (#17) -------------------------------------
+
+def test_cmd_deployment_sweep_reports_no_idle_deployments(tmp_path, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    code = cli.main(["--board", str(tmp_path), "deployment", "sweep"])
+    assert code == cli.EXIT_OK
+    assert "no idle managed deployments" in capsys.readouterr().out
+
+
+def test_cmd_deployment_sweep_stops_an_idle_managed_deployment(tmp_path, capsys):
+    from cord_runtime.deployment_lifecycle import ensure_started, release_active
+
+    add_connection(tmp_path, "local", "http://127.0.0.1:2026", launch=["true"], idle_after=1.0)
+    connection = load_connections(tmp_path)["local"]
+    ensure_started(tmp_path, "local", connection, now=1_000.0,
+                    launch=lambda alias, launch: 1234, health_check=lambda endpoint: True)
+    release_active(tmp_path, "local", connection, now=1_000.0)
+    code = cli.main(["--board", str(tmp_path), "deployment", "sweep"])
+    assert code == cli.EXIT_OK
+    # cmd_deployment_sweep uses the real wall clock; idle_after=1s has certainly elapsed.
+    assert "stopped: local" in capsys.readouterr().out
+    assert load_lifecycle(tmp_path)["local"]["status"] == "stopped"
 
 
 # --- cli.py: cmd_list ------------------------------------------------------

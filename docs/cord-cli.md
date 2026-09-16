@@ -9,8 +9,10 @@ settings, or graph-specific platform code
 describe the graph it connects to; a connection record names only where a
 Deployment lives. `cord view` (#13) is the generic catalog/topology/recorded-
 execution viewer; see [viewer.md](viewer.md) for its full contract. `cord
-new`, `cord up`'s manifest/drift handling, and other lifecycle commands
-remain planned (#17, #11, #16).
+deployment sweep` stops idle managed Deployments (#17;
+[signal-routing.md](signal-routing.md) has the full dedupe/concurrency/
+lazy-startup contract). `cord new` and `cord up`'s manifest/drift handling
+remain planned (#11, #16).
 
 ## Storage
 
@@ -19,9 +21,17 @@ Connections are stored per board (default: the current directory) at
 
 ```json
 {
-  "aegra-local": { "endpoint": "http://127.0.0.1:2026" }
+  "aegra-local": { "endpoint": "http://127.0.0.1:2026" },
+  "local": { "endpoint": "http://127.0.0.1:2027",
+             "launch": ["aegra", "serve", "--port", "2027"], "idle_after": 600.0 }
 }
 ```
+
+`launch`/`idle_after` are optional and only present when the connection was
+registered with `--launch`. Their presence is what makes a Deployment
+"managed" (#17): Cordboard may start it on demand and stop it once idle.
+Their absence keeps a Deployment "external" — only ever contacted, never
+started or stopped, exactly as in the first slices.
 
 Writes are atomic (write to a temp file, then `os.replace`). The endpoint must
 be an `http`/`https` URL with a host and **no userinfo** (`user:pass@host` is
@@ -34,7 +44,7 @@ current directory.
 
 ## Commands
 
-### `cord add <alias> <endpoint> [--replace]`
+### `cord add <alias> <endpoint> [--launch "<command>"] [--idle-after <seconds>] [--replace]`
 
 Registers a Deployment's address under `alias`. Does not contact the
 Deployment or require it to be reachable.
@@ -42,6 +52,34 @@ Deployment or require it to be reachable.
 ```sh
 $ cord add aegra-local http://127.0.0.1:2026
 added 'aegra-local' -> http://127.0.0.1:2026
+```
+
+`--launch` opts the Deployment into managed startup/idle shutdown (#17): an
+operator-supplied command (parsed like a shell command line) that starts this
+Deployment's own existing entrypoint. Reuse the entity's existing Aegra
+entrypoint, dependency environment, and health check — this never recreates
+its graph factories, auth, or Postgres management. `--idle-after` (seconds,
+default 600) only applies with `--launch`.
+
+```sh
+$ cord add local http://127.0.0.1:2027 --launch "aegra serve --port 2027" --idle-after 300
+added 'local' -> http://127.0.0.1:2027 (managed)
+```
+
+### `cord deployment sweep`
+
+Stops every managed Deployment (one registered with `--launch`) that is
+currently idle — no active claim from a Signal it started for — beyond its
+declared `idle_after`. External Deployments, and a Deployment any Graph it
+hosts is still actively using, are left untouched. Meant to be invoked by an
+operator's own cron, the same way a Signal's own trigger invokes `cord
+signal ...`; `cord` runs no background scheduler itself.
+
+```sh
+$ cord deployment sweep
+stopped: local
+$ cord deployment sweep
+no idle managed deployments
 ```
 
 ### `cord list [alias]`
