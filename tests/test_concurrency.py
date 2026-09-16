@@ -4,6 +4,8 @@ Controlled ids and an injected clock exercise concurrent arrival, release,
 and stale-claim recovery after a crashed holder without any real waiting.
 """
 
+import threading
+
 import pytest
 
 from cord_runtime.concurrency import ConcurrencyError, release, try_claim
@@ -52,3 +54,34 @@ def test_empty_assistant_or_subject_is_rejected(tmp_path):
         try_claim(tmp_path, "", "github:issue/1", now=NOW, stale_after=180)
     with pytest.raises(ConcurrencyError):
         try_claim(tmp_path, "triage-graph", "", now=NOW, stale_after=180)
+
+
+# --- #19: a bare read-then-write let two real concurrent arrivals both win --
+
+def test_real_concurrent_arrivals_for_the_same_pair_never_both_claim(tmp_path):
+    """`try_claim` is a check-and-set: `load_concurrency` followed later by
+    `_write_atomic` is two separate file operations, so without a lock
+    spanning both, two threads (or processes) can each read "unclaimed"
+    before either writes and both return `True` for the same pair --
+    silently violating the "skip" policy every other test in this file
+    exercises only sequentially. A `threading.Barrier` forces every worker to
+    call `try_claim` at the same instant so the race is deterministic rather
+    than timing-dependent.
+    """
+    barrier = threading.Barrier(8)
+    results: list[bool] = []
+    lock = threading.Lock()
+
+    def worker():
+        barrier.wait(timeout=5)
+        claimed = try_claim(tmp_path, "triage-graph", "github:issue/1", now=NOW, stale_after=180)
+        with lock:
+            results.append(claimed)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert results.count(True) == 1

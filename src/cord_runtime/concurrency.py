@@ -21,6 +21,7 @@ treated as abandoned and silently reclaimed by the next arrival. Callers pick
 """
 
 import contextlib
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -28,6 +29,7 @@ import tempfile
 
 CONCURRENCY_DIRNAME = ".cordboard"
 CONCURRENCY_FILENAME = "concurrency.json"
+_LOCK_FILENAME = CONCURRENCY_FILENAME + ".lock"
 
 
 class ConcurrencyError(ValueError):
@@ -65,6 +67,27 @@ def _write_atomic(path: Path, data: dict) -> None:
         raise
 
 
+@contextlib.contextmanager
+def _locked(board_dir: Path):
+    """Hold an exclusive OS file lock across one check-and-set.
+
+    `load_concurrency` + `_write_atomic` alone is a read-then-write: two
+    processes (or threads) can both read "unclaimed" before either writes,
+    and both then return ``True`` for the same (Assistant, Subject) pair --
+    silently breaking the "skip" guarantee this module exists to provide
+    (#19). `flock` serializes the whole check-and-set across processes, not
+    just within one interpreter, matching this module's own docstring.
+    """
+    lock_path = Path(board_dir) / CONCURRENCY_DIRNAME / _LOCK_FILENAME
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def _key(assistant: str, subject: str) -> str:
     if not isinstance(assistant, str) or not assistant.strip():
         raise ConcurrencyError("assistant must be a non-empty string")
@@ -81,19 +104,21 @@ def try_claim(board_dir: Path, assistant: str, subject: str, *, now: float, stal
     (the caller's declared "skip" behavior applies).
     """
     key = _key(assistant, subject)
-    data = load_concurrency(board_dir)
-    existing = data.get(key)
-    if existing is not None and now - existing["claimed_at"] < stale_after:
-        return False
-    data[key] = {"claimed_at": now}
-    _write_atomic(concurrency_path(board_dir), data)
-    return True
+    with _locked(board_dir):
+        data = load_concurrency(board_dir)
+        existing = data.get(key)
+        if existing is not None and now - existing["claimed_at"] < stale_after:
+            return False
+        data[key] = {"claimed_at": now}
+        _write_atomic(concurrency_path(board_dir), data)
+        return True
 
 
 def release(board_dir: Path, assistant: str, subject: str) -> None:
     """Release a held (Assistant, Subject) claim. A no-op if none is held."""
     key = _key(assistant, subject)
-    data = load_concurrency(board_dir)
-    if key in data:
-        del data[key]
-        _write_atomic(concurrency_path(board_dir), data)
+    with _locked(board_dir):
+        data = load_concurrency(board_dir)
+        if key in data:
+            del data[key]
+            _write_atomic(concurrency_path(board_dir), data)

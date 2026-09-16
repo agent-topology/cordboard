@@ -7,7 +7,7 @@ signals are recorded without the payload. Uses a fixed clock and fake
 `execute()` -- no live Aegra service.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import socket
 
@@ -336,6 +336,39 @@ def test_different_subjects_execute_concurrently_without_conflict(board, fake_ex
     outcome_b = router.route_signal(board, signal_b, now=FIXED_NOW)
     assert outcome_a["status"] == "routed"
     assert outcome_b["status"] == "routed"
+
+
+# --- #19: one same-Subject pair covers both the skip policy and restart reclaim
+
+def test_same_subject_pair_covers_conflict_skip_and_restart_claim_reclaim(board, fake_execute):
+    """A single (Assistant, Subject) pair exercises both declared behaviors
+    together: a live claim still turns away a new arrival right after a
+    router restart, and once that claim ages past its own stale window the
+    same pair is safely reclaimed rather than locked out forever.
+
+    `stale_after` for this call is `timeout(10) + _HEALTH_TIMEOUT(30) +
+    _STALE_CLAIM_BUFFER(30) = 70`. Seeding the claim 50s before `now` lands
+    inside that window for the first check and past it for the second,
+    without any real waiting.
+    """
+    _add_rule(board, "manual")
+    from cord_runtime.concurrency import try_claim
+
+    # A prior holder crashed before its `finally` released the claim.
+    try_claim(board, "triage-graph", "manual:demo", now=FIXED_NOW.timestamp() - 50, stale_after=70)
+
+    signal = manual_signal({"subject": "manual:demo", "body": "hi"}, signal_id="after-restart", now=FIXED_NOW)
+
+    # A router restarting immediately after the crash still honors the live claim.
+    still_conflicted = router.route_signal(board, signal, now=FIXED_NOW, timeout=10)
+    assert still_conflicted == {"status": "concurrency_skipped", "signal_id": "after-restart", "rule": "manual-rule"}
+    assert fake_execute == []
+
+    # Once the crashed claim ages past stale_after, the same pair is reclaimed.
+    later = FIXED_NOW + timedelta(seconds=25)
+    reclaimed = router.route_signal(board, signal, now=later, timeout=10)
+    assert reclaimed["status"] == "routed"
+    assert fake_execute[0]["subject"] == "manual:demo"
 
 
 # --- #17 AC4/AC5: managed Deployment startup, health failure stays visible -

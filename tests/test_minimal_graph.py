@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 import socket
+import threading
 
 import pytest
 
@@ -133,6 +134,64 @@ def test_concurrent_runs_share_no_execution_state():
         results = list(executor.map(lambda subject: run(graph, subject=subject), subjects))
     assert [result.subject for result in results] == subjects
     assert all(sequence(result) == [("fast", "failed"), ("fast", "passed")] for result in results)
+
+
+# --- #19: two Subjects with deterministic overlap, and retry isolation ----
+
+def test_two_subjects_execute_with_barrier_controlled_overlap_and_isolated_state():
+    """A `threading.Barrier(2)` forces both Runs to be mid-Attempt at the same
+    instant -- deterministic overlap, not a timing-dependent race -- while a
+    per-Subject call ledger proves neither Run's Attempt is ever recorded
+    under the other's Subject.
+    """
+    barrier = threading.Barrier(2)
+    calls: dict[str, list] = {"first": [], "second": []}
+
+    def model(source, tier, attempt):
+        barrier.wait(timeout=5)
+        calls[source].append((tier, attempt))
+        return source  # an exact echo of this Run's own fixture source passes validation
+
+    graph = build_graph(model)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(run, graph, subject="manual:first", source="first")
+        second = executor.submit(run, graph, subject="manual:second", source="second")
+        result_first, result_second = first.result(timeout=5), second.result(timeout=5)
+
+    assert result_first.subject == "manual:first" and result_first.output == "first"
+    assert result_second.subject == "manual:second" and result_second.output == "second"
+    assert calls == {"first": [(Tier.FAST, 1)], "second": [(Tier.FAST, 1)]}
+
+
+def test_retry_in_one_subject_leaves_the_concurrent_subjects_state_and_counters_unchanged():
+    """One Subject retries (fails once, then passes at the same tier) while,
+    with deterministic first-Attempt overlap via the barrier, a second
+    Subject passes immediately. The extra Attempt belongs only to the
+    retrying Subject's own ledger and result.
+    """
+    entry_barrier = threading.Barrier(2)
+    calls: dict[str, list] = {"retrying": [], "passing": []}
+
+    def model(source, tier, attempt):
+        if attempt == 1:
+            entry_barrier.wait(timeout=5)
+        calls[source].append((tier, attempt))
+        return "wrong" if source == "retrying" and attempt < 2 else source
+
+    graph = build_graph(model)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        retrying = executor.submit(run, graph, subject="manual:retrying", source="retrying")
+        passing = executor.submit(run, graph, subject="manual:passing", source="passing")
+        retrying_result, passing_result = retrying.result(timeout=5), passing.result(timeout=5)
+
+    assert calls["retrying"] == [(Tier.FAST, 1), (Tier.FAST, 2)]
+    assert calls["passing"] == [(Tier.FAST, 1)]
+    assert retrying_result.subject == "manual:retrying"
+    assert passing_result.subject == "manual:passing"
+    assert sequence(retrying_result) == [("fast", "failed"), ("fast", "passed")]
+    assert sequence(passing_result) == [("fast", "passed")]
+    assert retrying_result.output == "retrying"
+    assert passing_result.output == "passing"
 
 
 @pytest.mark.parametrize("subject", [None, "", "   ", 4])
