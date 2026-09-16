@@ -30,6 +30,25 @@
 | **0015** | **연결을 막지 않는다 — 매니페스트는 선택이고, 카탈로그 규칙은 경고다** | **Accepted** | **[0015-never-block-connection.md](0015-never-block-connection.md)** |
 | **0016** | **Deterministic control plane과 외부 Testbed 경계** | **Accepted** | **[0016-control-plane-and-testbed.md](0016-control-plane-and-testbed.md)** |
 | **0017** | **ExecutionBackend 식별자·상태·결과 계약 확정** | **Accepted** | **[0017-execution-backend-contract.md](0017-execution-backend-contract.md)** |
+| **0018** | **브라우저 관측 표면 — 서버/프론트엔드 스택, 공개 read/update 라우트, 접근성 시각 상태 확정** | **Proposed** | **[0018-browser-viewer-contract.md](0018-browser-viewer-contract.md)** |
+
+---
+
+## 브라우저 관측 표면 계약 초안, #48 readiness gate (2026-09-16)
+
+**0018 · Proposed · [브라우저 관측 표면 계약](0018-browser-viewer-contract.md)**
+
+[#48](https://github.com/agent-topology/cordboard/issues/48)은 `planning:backlog`이고
+본문이 "Before ready, settle the frontend/server choice, public read/update shapes and
+accessible visual states in this Task"를 명시한다 — #42가 ADR-0017 없이는
+`planning:ready`로 전환될 수 없었던 것과 같은 패턴이다. 의존 이슈 #43/#46은 이미
+머지됐으므로 남은 선행 조건은 이 계약 자체뿐이다. 초안은 새 웹 프레임워크 없이 표준
+라이브러리 HTTP 서버 + Jinja2, 빌드 스텝 없는 다중 페이지 프론트엔드, `cord_runtime.
+viewer.build_catalog`의 entry 모델을 그대로 노출하는 read 라우트, 라이브 reconciliation
+상태만 분리해 미는 SSE, 그리고 8가지 `topology_status`를 각각 구분되는 접근성 있는
+배지로 렌더하는 것을 제안한다. 사용자 검토 후 Accepted로 확정되면 #48은
+`planning:ready`로 전환하고, 코드 구현은 이 ADR에 포함되지 않는다 — 후속 구현 PR이
+맡는다(ADR-0017과 동일한 분리).
 
 ---
 
