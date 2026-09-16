@@ -112,7 +112,7 @@ observation page markup itself carries no mutation form or JS handler.
 
 `GET/POST /connections/{alias}/graphs/{graph_id}/execute` renders and accepts
 an explicit-input execution form: a registered Assistant (populated from the
-deployment's own `GET /assistants`, never free text), Subject, and JSON
+deployment's own `GET /assistants`, filtered to the selected Graph), Subject, and JSON
 input/context. Submission delegates to `aegra_client.execute` -- the same
 function the CLI would use -- and durably records the submission via
 `run_continuity.record_submission`. A fresh, server-tracked single-use nonce
@@ -139,13 +139,20 @@ same way any other non-`resumed` disposition does, before any response-dedupe
 claim is taken.
 
 Every mutation POST requires a matching `Origin` header and a double-submit
-`cord_csrf` cookie/form-token pair (`hmac.compare_digest`); a mismatch or
+`cord_csrf` cookie/form-token pair matching the server's secret
+(`hmac.compare_digest`); a mismatch or
 missing pair is rejected (`403`) before any domain function runs. Interrupt
 values and response payloads live only for the request/response render, never
 written to the board beyond the existing identifier-only `response_dedupe`/
 `run_continuity` records, and the server never logs a request body.
 
 ## Verification
+
+Milestone 8 review (2026-09-16): the service-free suite with `proxy` and
+`web-test` enabled passed **611 tests**, with 36 external-integration tests
+deselected. The wheel build, isolated installation and browser asset/template
+checks passed. `actionlint` passed for the new CI workflow. These are local
+results; a hosted Actions run and external stack checks were not executed.
 
 Local commands:
 
@@ -209,7 +216,9 @@ shared-model and local DOM tests.
   remain separate and are not passed evidence.
 - Local Markdown reference checks and `git diff --check` passed.
   This Python repository has no npm CI script or Rust crate; npm/cargo checks
-  are inapplicable. Hosted CI and external Testbed suite migration remain unrun.
+  are inapplicable. [CI](../.github/workflows/ci.yml) now configures the service-free
+  suite including Chromium, wheel build, and installed asset checks. A hosted run
+  and external Testbed suite migration are not claimed by this local evidence.
 
 Reproduction after the external Testbed's documented candidate installation and
 `scripts/start-environment`:

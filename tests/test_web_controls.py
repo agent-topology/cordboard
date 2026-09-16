@@ -209,14 +209,15 @@ def test_execute_double_submit_does_not_duplicate_thread(tmp_path, monkeypatch):
     assert len(thread_posts) == 1  # exactly one Thread was ever created
 
 
-def test_cross_origin_and_missing_csrf_post_rejected(tmp_path, monkeypatch):
+@pytest.mark.parametrize("wrong_token", ["not-the-cookie-value", "\u2603"])
+def test_cross_origin_and_missing_csrf_post_rejected(tmp_path, monkeypatch, wrong_token):
     add_connection(tmp_path, "demo", ENDPOINT)
     calls = _install(monkeypatch, _base_script())
     observation = Observation(tmp_path)
     with running(observation) as base:
         with requests.Session() as session:
             session.get(base + "/")  # establishes the cord_csrf cookie
-            body = {"csrf_token": "not-the-cookie-value", "nonce": "irrelevant",
+            body = {"csrf_token": wrong_token, "nonce": "irrelevant",
                     "assistant": "demo-assistant", "subject": "sub-1", "input": "{}"}
             wrong_csrf = session.post(base + "/connections/demo/graphs/g/execute", data=body,
                                       headers={"Origin": base})
@@ -233,3 +234,39 @@ def test_cross_origin_and_missing_csrf_post_rejected(tmp_path, monkeypatch):
     observation.close()
     # No execute() call ever reached the backend: no /threads POST at all.
     assert not any(c["url"].endswith("/threads") and c["method"] == "POST" for c in calls)
+
+
+@pytest.mark.parametrize("token", ["forged-token", "\u2603"])
+def test_forged_matching_csrf_tokens_rejected(tmp_path, monkeypatch, token):
+    add_connection(tmp_path, "demo", ENDPOINT)
+    calls = _install(monkeypatch, _base_script())
+    observation = Observation(tmp_path)
+    with running(observation) as base:
+        response = requests.post(base + "/connections/demo/graphs/g/execute",
+                                 headers={"Origin": base, "Cookie": "cord_csrf=forged-token"},
+                                 data={"csrf_token": token})
+        assert response.status_code == 403
+    observation.close()
+    assert not calls
+
+
+def test_execute_rejects_assistant_from_another_graph(tmp_path, monkeypatch):
+    add_connection(tmp_path, "demo", ENDPOINT)
+    script = _base_script()
+    script["/assistants"] = FakeResponse(200, {"assistants": [
+        {"assistant_id": "demo-assistant", "graph_id": "g", "name": "Demo"},
+        {"assistant_id": "other-assistant", "graph_id": "other", "name": "Other"}]})
+    calls = _install(monkeypatch, script)
+    observation = Observation(tmp_path)
+    with running(observation) as base, requests.Session() as session:
+        headers, cookie = _origin_and_cookies(session, base)
+        path = base + "/connections/demo/graphs/g/execute"
+        html = session.get(path).text
+        assert 'value="other-assistant"' not in html
+        nonce = html.split('name="nonce" value="')[1].split('"')[0]
+        response = session.post(path, headers=headers, data={
+            "csrf_token": cookie, "nonce": nonce, "assistant": "other-assistant",
+            "subject": "sub-1", "input": "{}"})
+        assert response.status_code == 400
+    observation.close()
+    assert not any(c["method"] == "POST" for c in calls)

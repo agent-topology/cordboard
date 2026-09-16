@@ -116,5 +116,6 @@ uv run --locked pytest -q
 
 ADR-0004 and ADR-0008 now record this sequence in Korean, including why a
 same-tier retry is not an escalation. Root summaries and the decision index
-link to the implemented contract. There is no CI workflow, npm project, or Rust
-crate in this slice; no npm or cargo checks are claimed.
+link to the implemented contract. The current [CI workflow](../.github/workflows/ci.yml)
+runs Python and browser checks. There is no npm project or Rust crate;
+no npm or cargo checks are claimed.

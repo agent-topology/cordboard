@@ -1,14 +1,9 @@
-"""The synthetic entity authorization boundary (#44).
+"""Synthetic grants and validation of entity-owned HTTP authorization responses."""
 
-`SyntheticEntityAuthBoundary` is the only in-repo `EntityAuthBoundary`
-implementation, and only for tests -- a real entity's production
-authorization stays entity-owned (#14's own decision, preserved as #44's Out
-of scope). Each check below isolates exactly one failure reason so a
-submission that fails for one cause is never misreported as failing for
-another.
-"""
+import pytest
+import requests
 
-from cord_runtime.entity_auth import AuthSubmission, SyntheticEntityAuthBoundary
+from cord_runtime.entity_auth import AuthSubmission, HttpEntityAuthBoundary, SyntheticEntityAuthBoundary
 
 GRANTS = {("aegra-local", "triage-graph"): frozenset({"alice"})}
 
@@ -24,6 +19,22 @@ def test_authorized_matching_submission_is_accepted():
     boundary = SyntheticEntityAuthBoundary(GRANTS)
     decision = boundary.authorize(_submission(), current_revision="chk-1", still_pending=True)
     assert decision.accepted is True
+
+
+@pytest.mark.parametrize("payload", [None, [], "accepted", 1, True, {},
+                                   {"accepted": "true"}, {"accepted": True, "reason": []}])
+def test_http_authority_rejects_invalid_response(monkeypatch, payload):
+    def fake_post(self, url, **kwargs):
+        response = requests.Response()
+        response.status_code = 200
+        response.json = lambda: payload
+        return response
+
+    monkeypatch.setattr(requests.Session, "post", fake_post)
+    decision = HttpEntityAuthBoundary("http://authority.test").authorize(
+        _submission(), current_revision="chk-1", still_pending=True)
+    assert decision.accepted is False
+    assert "invalid response" in decision.reason
 
 
 def test_stale_interrupt_is_rejected_even_for_a_granted_approver():

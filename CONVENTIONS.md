@@ -11,7 +11,7 @@ in `uv.lock`.
 
 Run `uv sync --locked --python 3.12` and
 `uv run --locked python -m examples.minimal_graph` from the repository root.
-Service-free tests use `uv run --locked pytest -q -m "not collector"`.
+Service-free tests use `uv run --locked pytest -q -m "not collector and not aegra and not langfuse"`.
 The complete suite uses `uv run --locked --group proxy pytest -q` after installing the pinned
 binaries in [Archive setup](docs/archive.md), synchronizing the separate
 `aegra` project and preparing Docker/Postgres per [Aegra setup](docs/aegra.md).
@@ -25,15 +25,18 @@ See also the
 [graph execution contract](docs/minimal-graph.md).
 
 Keep graph-specific logic under `examples/`; do not promote it into generic
-platform infrastructure. There is no npm build, Rust crate, formatter, or CI
-workflow here. [`cord add`/`cord list`/`cord run`](docs/cord-cli.md) are
+platform infrastructure. There is no npm build, Rust crate, or configured formatter.
+[CI](.github/workflows/ci.yml) installs the `proxy` and `web-test` groups and
+Chromium, runs service-free tests, builds a wheel, and checks installed assets.
+Collector, Aegra and Langfuse integration tests remain environment-dependent.
+[`cord add`/`cord list`/`cord run`](docs/cord-cli.md) are
 executable (#12), as are [`cord rule add`/`cord signal
 manual|file|schedule`](docs/signal-routing.md) (#16), `cord add
 --launch`/`cord deployment sweep` (#17), and the platform-emitted
 [`run.finished` cascade](docs/signal-routing.md#chaining-run-completions-runfinished-18)
-`route_signal` chains automatically (#18); remaining platform components and
-lifecycle commands (`cord new`, `cord up`, `cord sync`) are planned unless
-explicitly documented as executable.
+`route_signal` chains automatically (#18). `cord sync`, `cord view`, and
+[`cord serve`](docs/browser-viewer.md) are also executable; `cord new` and
+`cord up` remain planned.
 
 ## Documentation and decisions
 

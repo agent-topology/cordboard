@@ -258,10 +258,21 @@ nonce가 서버 재시작에 살아남지 않는 대가는, 재시작 전에 열
 1. [x] 사용자 승인에 따라 Status를 Accepted로 변경하고 Deciders/날짜 기록 (2026-09-16)
 2. [x] DECISIONS.md 색인에 0019 등록, 상태를 Accepted로 갱신
 3. [x] #49 본문/코멘트에 이 ADR을 연결하고 `planning:backlog` → `planning:ready` 전환
-4. [ ] 구현 PR: `connections.py`(`auth_endpoint`), `entity_auth.py`/`web/auth.py`
+4. [x] 구현 확인 (2026-09-16): `connections.py`(`auth_endpoint`), `entity_auth.py`
    (`HttpEntityAuthBoundary`), `web/server.py`(CSRF/nonce 가드 + §3 라우트), `web/templates/`
    (execute 폼, approvals 목록/상세, action slot 채움), `cli.py`(`cord serve` §8 플래그)
-5. [ ] 구현 PR: §9의 로컬 스모크 테스트 5개 시나리오, 기존 `test_aegra_client.py` 모킹 패턴 재사용
-6. [ ] 구현 PR: `docs/browser-viewer.md`/`ARCHITECTURE.md` 갱신 — #49 "remain unimplemented" 문구
+5. [x] 구현 확인 (2026-09-16): `tests/test_web_controls.py`의 §9 로컬 스모크 테스트 5개 시나리오
+6. [x] 구현 확인 (2026-09-16): `docs/browser-viewer.md`/`ARCHITECTURE.md` 갱신 — #49 "remain unimplemented" 문구
    교체, 새 라우트/플래그 문서화
 7. [ ] 후속 이슈(이번 범위 아님): 원격 노출 인증 경계
+
+## 구현 점검 보완 (2026-09-16, milestone 8)
+
+Context의 미구현 진술은 결정 당시의 이력이다. 현재 구현과 실행 증거는
+[브라우저 뷰어](../browser-viewer.md)를 따른다.
+
+§1의 쿠키와 폼 토큰은 서로 일치할 뿐 아니라 서버가 발급한 시크릿과도 일치해야 한다.
+임의의 동일한 토큰 쌍과 비 ASCII 토큰은 403으로 거부한다. §3의 Assistant 목록은
+URL의 Graph로 필터링하고 POST에서도 같은 관계를 확인한다. §4의 권한 응답이 JSON
+객체가 아닌 경우도 계약 위반으로 거부한다. 이 조건은 웹 controls와 entity auth
+회귀 테스트로 검증한다.

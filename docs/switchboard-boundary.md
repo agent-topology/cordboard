@@ -108,4 +108,5 @@ final full run above passed. Historical 0.2.0 archive fixtures remain unchanged
 and continue to pass their separate compatibility checks.
 
 The actual-provider smoke remains **not run**. No paid model request was made.
-No npm/Cargo/CI workflow exists in this repository.
+The current [CI workflow](../.github/workflows/ci.yml) runs service-free Python
+and browser checks. No npm or Cargo project exists in this repository.

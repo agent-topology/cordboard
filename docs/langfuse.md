@@ -206,7 +206,8 @@ Actual verification on 2026-09-11 (macOS arm64, Docker 28.3.3):
 
 The verification stack used the isolated Compose project `cordboard-issue10`;
 other Docker projects were left untouched. No provider smoke, v4 compatibility,
-production load test or hosted CI run is claimed. This repository has no CI workflow.
+production load test or hosted CI run is claimed by this historical evidence.
+The current [CI workflow](../.github/workflows/ci.yml) excludes Langfuse integration tests.
 
 Implementation entrypoints: [public reader/comparator](../src/cord_runtime/langfuse_query.py),
 [shared archive query](../src/cord_runtime/archive_query.py),

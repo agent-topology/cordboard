@@ -1,7 +1,4 @@
-"""HTTP router: read-only observation plus validated execution/approval
-mutation (#49). Every mutation delegates to an existing domain function
-(`aegra_client.execute`, `approval_inbox.submit_response`/`discover_waiting*`)
--- no new validation or authorization logic lives here (ADR-0019)."""
+"""Browser observation and controls, delegating execution and approval to domain APIs."""
 import hmac
 import http.cookies
 import ipaddress
@@ -170,7 +167,8 @@ def make_server(observation, host="127.0.0.1", port=0, *, reminder_after=300.0, 
                 self.reply(json.dumps({"error": message} if message else {}), "application/json", status)
                 return
             try:
-                assistants = AegraExecutionBackend(connection["endpoint"]).list_assistants()
+                assistants = [item for item in AegraExecutionBackend(connection["endpoint"]).list_assistants()
+                              if item.get("graph_id") == graph_id]
             except RuntimeError:
                 assistants = []
             self.reply(ENV.get_template("execute.html").render(
@@ -262,10 +260,15 @@ def make_server(observation, host="127.0.0.1", port=0, *, reminder_after=300.0, 
             if self.headers.get("Origin") != f"http://{host}:{port}":
                 return False
             cookies = http.cookies.SimpleCookie()
-            cookies.load(self.headers.get("Cookie", ""))
+            try:
+                cookies.load(self.headers.get("Cookie", ""))
+            except http.cookies.CookieError:
+                return False
             cookie_token = cookies["cord_csrf"].value if "cord_csrf" in cookies else ""
             form_token = form.get("csrf_token", "")
-            return bool(cookie_token) and bool(form_token) and hmac.compare_digest(cookie_token, form_token)
+            return (bool(cookie_token) and bool(form_token)
+                    and hmac.compare_digest(cookie_token.encode(), csrf_token.encode())
+                    and hmac.compare_digest(form_token.encode(), csrf_token.encode()))
 
         def _handle_execute_post(self, target, form, as_json):
             alias, graph_id = target
@@ -277,6 +280,12 @@ def make_server(observation, host="127.0.0.1", port=0, *, reminder_after=300.0, 
                 self._render_execute(alias, graph_id, as_json, status=409,
                                      message="Already submitted, or this form expired. "
                                              "Reload the page to get a fresh submission token.")
+                return
+            assistants = AegraExecutionBackend(connection["endpoint"]).list_assistants()
+            if not any(item.get("assistant_id") == form.get("assistant")
+                       and item.get("graph_id") == graph_id for item in assistants):
+                self._render_execute(alias, graph_id, as_json, status=400,
+                                     message="Select an Assistant belonging to this graph")
                 return
             try:
                 graph_input = json.loads(form.get("input") or "{}")

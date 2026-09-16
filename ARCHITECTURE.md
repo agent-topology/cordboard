@@ -60,7 +60,8 @@ recording exactly one of `resumed`/`rejected`/`unknown` per interrupt. The
 transport wraps the opaque response value under
 the authorized runtime interrupt ID, so parallel pauses remain independently
 addressed (#51 regression).
-No `cord` CLI or web surface is added by this slice; that is still planned.
+This slice added no CLI or web surface. Browser approval controls now call it
+as described below in the #49 implementation status.
 `submit_response` now also calls `ensure_started` before resuming and reads
 the resumed outcome instead of discarding it (#50, below).
 [Signal/Rule routing](docs/signal-routing.md) adds `cord rule add` and

@@ -244,8 +244,8 @@ already covers한다).
    (`playwright`) 추가
 7. [x] 구현 PR: §6의 로컬 스모크 테스트(DOM assertion + 좁은 뷰포트 스크린샷, 최소
    success/retry/interrupt 각 1개 픽스처)
-8. [ ] 후속 이슈(이번 범위 아님): 승인/뮤테이션 controls를 §3의 action slot에 실제로
-   연결하는 작업
+8. [x] #49, ADR-0019에서 승인/뮤테이션 controls를 §3의 action slot에 연결
+   (2026-09-16 구현 확인, `web/server.py`와 `tests/test_web_controls.py`)
 9. [ ] 후속 이슈(이번 범위 아님): loopback 밖 원격 노출이 필요해질 경우의 인증/전송
    경계
 

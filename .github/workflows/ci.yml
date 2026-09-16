@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python and browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --locked --group proxy --group web-test
+      - name: Install Chromium
+        run: uv run --locked --group proxy --group web-test playwright install --with-deps chromium
+      - name: Run service-free suite
+        run: uv run --locked --group proxy --group web-test pytest -q -m 'not collector and not aegra and not langfuse'
+      - name: Build wheel
+        run: uv build --wheel
+      - name: Verify installed browser assets
+        shell: bash
+        run: |
+          uv venv /tmp/cordboard-ci-wheel
+          uv pip install --python /tmp/cordboard-ci-wheel/bin/python dist/*.whl
+          cd /tmp
+          /tmp/cordboard-ci-wheel/bin/cord --help
+          /tmp/cordboard-ci-wheel/bin/python - <<'PY'
+          from importlib.resources import files
+          from cord_runtime.web.server import ENV
+
+          root = files('cord_runtime.web')
+          for asset in ('viewer.css', 'viewer.js'):
+              assert (root / 'static' / asset).read_bytes(), asset
+          for template in ('page.html', 'execute.html', 'approvals.html', 'approval_detail.html'):
+              ENV.get_template(template)
+          PY

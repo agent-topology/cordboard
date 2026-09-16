@@ -553,7 +553,7 @@ def build_parser() -> argparse.ArgumentParser:
     view.add_argument("--json", action="store_true", help="Print the catalog as one JSON object instead of text")
     view.set_defaults(func=cmd_view)
 
-    serve_cmd = sub.add_parser("serve", help="Serve the local read-only browser viewer")
+    serve_cmd = sub.add_parser("serve", help="Serve the local browser viewer and execution/approval controls")
     serve_cmd.add_argument("alias", nargs="?", default=None)
     serve_cmd.add_argument("--host", default="127.0.0.1", help="IPv4 loopback address")
     serve_cmd.add_argument("--port", type=int, default=0)

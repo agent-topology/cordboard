@@ -123,6 +123,8 @@ class HttpEntityAuthBoundary:
                 if response.status_code != 200:
                     raise ValueError
                 payload = response.json()
+            if not isinstance(payload, dict):
+                raise ValueError
             accepted = payload["accepted"]
             reason = payload.get("reason", "")
             if not isinstance(accepted, bool) or not isinstance(reason, str):

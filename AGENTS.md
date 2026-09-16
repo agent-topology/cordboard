@@ -22,9 +22,9 @@ markers declared in `pyproject.toml`.
 [ARCHITECTURE.md](ARCHITECTURE.md#status-and-source-of-truth) states what is
 implemented, what is verified, and what is still planned. Read it instead of
 inferring status from the design documents, and keep it current when a slice
-lands. Design material describes target interfaces — the `cord` lifecycle
-commands in particular do not exist yet — so do not cite it as evidence that
-something works, and do not record an unrun check as passed.
+lands. Design material describes target interfaces, including the still-planned
+`cord new` and `cord up` commands. Use implementation status and executed checks
+as evidence that something works, and do not record an unrun check as passed.
 
 - The platform consumes manifests, execution APIs, and spans; graph business
   logic and graph-specific state stay inside the graph.

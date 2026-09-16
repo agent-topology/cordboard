@@ -58,6 +58,10 @@ execute 1회용 nonce와 기존 `response_dedupe` 재사용(respond 중복 방�
 [#49](https://github.com/agent-topology/cordboard/issues/49)의 구현 계약이다. 읽기 페이지의
 `.cord-action-slot`은 링크만 심고, 실제 뮤테이션은 별도 `/approvals` 표면으로 분리한다.
 
+2026-09-16 milestone 8 점검에서 0018/0019의 완료된 구현 항목을 갱신했다.
+0019에 서버 시크릿과의 CSRF 비교, Graph별 Assistant 검증, 비객체 권한 응답 거부의
+구현 보완을 기록했다.
+
 ---
 
 ## ExecutionBackend 계약 확정, #42 ready 전환 (2026-09-16)

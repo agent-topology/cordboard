@@ -2,13 +2,14 @@
 
 **The switchboard operator for your agent graphs.**
 
-Cordboard is a planned local tool for connecting independently developed agent
+Cordboard is a local tool for connecting independently developed agent
 graphs and keeping a common record of their execution. Like the operators at a
 manual cord board, it connects and records. The caller chooses the graph; each
 graph owns its business logic, models, credentials and tools. Cordboard does not
 need to know which models a graph uses, or whether it uses a model at all.
 The command is `cord`; [`cord add`/`cord list`/`cord run`](docs/cord-cli.md)
-connect and invoke an existing Deployment. The rest of its lifecycle is planned.
+connect and invoke an existing Deployment. `cord sync` refreshes topology;
+`cord view` and [`cord serve`](docs/browser-viewer.md) inspect execution.
 
 ## Status
 
@@ -29,8 +30,9 @@ An optional [LiteLLM example](docs/model-proxy.md) connects one graph and archiv
 with deterministic proxy tests requiring no provider credentials. Real-provider
 compatibility remains an unrun example check, not a platform prerequisite.
 [`cord add`/`cord list`/`cord run`](docs/cord-cli.md) connect and invoke an
-existing Deployment without a manifest or model settings. The remaining
-platform, including `cord up`, is still planned.
+existing Deployment without a manifest or model settings. The browser viewer
+supports execution submission and approval responses through entity-owned
+authorization. `cord new` and `cord up` remain planned.
 
 The [internal dependency review (2026-09-15)](docs/internal-dependencies.md)
 documents the implemented workflow core, campaign/Git graphs and Omiologic Aegra
@@ -40,7 +42,7 @@ separate work; the review identifies the concrete remaining gaps.
 ```sh
 uv sync --locked --python 3.12
 uv run --locked python -m examples.minimal_graph
-uv run --locked pytest -q -m "not collector"
+uv run --locked pytest -q -m "not collector and not aegra and not langfuse"
 ```
 
 See [the minimal graph contract](docs/minimal-graph.md) for graph fixtures and
@@ -54,22 +56,23 @@ The project is intended for a single operator on a local laptop. Its design
 aims to make the platform usable without a hosted platform account or paid
 platform tier. Model-provider access is a separate integration concern.
 
-## What it is intended to do
+## What it does
 
-- Discover graphs through generated manifests and show their topology before
-  any execution has occurred.
+- Connect deployments through their execution APIs and display optional published
+  topology before execution.
 - Route external signals to configured graphs and coordinate human approvals.
 - Record Runs, Steps, Attempts, and graph-declared outcomes in a common vocabulary.
 - Keep an append-only OTLP archive as the record of origin, with Langfuse as an
   additional interface for exploration.
-- Register deployments and manage local startup through operator-supplied
-  connection lifecycle commands; entities own their runtime and dependencies.
+- Register deployments with optional operator-supplied launch commands;
+  entities own their runtime and dependencies.
 
 The central test is whether an unrelated second graph can be registered, run,
 and inspected without changing platform code. Another is whether one query can
 answer: “Across all graphs in the last eight weeks, which ten Nodes escalated
 model Tier most often?” The archive query now verifies the latter with fixed-time
-fixtures and a real Collector capture. Registration remains planned.
+fixtures and a real Collector capture. Registration and execution through existing
+deployments are implemented without graph-specific platform code.
 
 Cordboard builds around execution APIs, OpenTelemetry, and uv, with Aegra and
 LangGraph as the current execution integration. LiteLLM is an optional graph
@@ -82,7 +85,7 @@ replacement orchestration framework are outside the design's scope.
 ## Explore the design
 
 The [Slice 1–5 retrospective](docs/slice1-5-retrospective.md) records implementation
-gaps and the [Testbed/web-viewer follow-up milestone](https://github.com/agent-topology/cordboard/milestone/8),
+gaps that informed the completed [Testbed/web-viewer milestone](https://github.com/agent-topology/cordboard/milestone/8),
 including Collector delivery evidence and optional workflow-core integration.
 
 | Document | Purpose |
@@ -99,14 +102,15 @@ Open either HTML file directly in a browser. They need no application server.
 Some examples and terminology in these artifacts predate later ADR corrections;
 the architecture document identifies the material differences.
 
-## First implementation milestone
+## Implementation history
 
 Slice 0 is a small end-to-end experiment: graphs, Run/Step/Attempt spans, an
 OTel Collector, an archive, and a query with a known answer. Aegra exercises
 the process boundary; the LiteLLM example exercises an optional model path.
 Slice 0.5 adds the verified Langfuse export and comparison. Slice 1 begins with
 [connecting and running an existing Deployment through `cord`](docs/cord-cli.md)
-(#12); the catalog, custom viewer, and the rest of the CLI lifecycle remain planned.
+(#12). Later slices add the catalog, routing, run continuity, topology sync,
+and the packaged browser viewer with execution and approval controls.
 
 Issue #4 establishes the graph contract and corrects the escalation examples.
 Issue #5 verifies redaction release availability and the archive gate with a
@@ -118,4 +122,7 @@ removes model configuration from the platform contract. A separate graph execute
 without models or a proxy through the same client and archive.
 [Boundary verification and acceptance changes](docs/switchboard-boundary.md)
 record the current scope; real-provider compatibility is still unverified.
-The existing slice descriptions are plans, not evidence that work has shipped.
+See [Architecture](ARCHITECTURE.md#status-and-source-of-truth) for current status.
+[CI](.github/workflows/ci.yml) runs the service-free Python, proxy and Chromium
+tests, builds a wheel, and checks its installed browser assets. External
+Collector, Aegra and Langfuse checks require their documented environments.
