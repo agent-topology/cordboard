@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Approvals · Cordboard</title>
+<link rel="stylesheet" href="/static/viewer.css"></head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header><a class="brand" href="/">cordboard<span> / observation</span></a><span class="badge">Approval inbox</span></header>
+<div class="shell">
+<nav aria-label="Deployments"><h2>Deployments &amp; graphs</h2>
+{% for item in catalog.graphs %}
+<a class="graph-link" href="{{ graph_url(item) }}">
+<small>{{ item.deployment_alias if item.deployment_alias is not none else item.topology_status }}</small>
+<strong>{{ item.graph_id }}</strong></a>
+{% else %}<p>No connections or recorded graphs.</p>{% endfor %}
+</nav>
+<main id="main" tabindex="-1">
+<h1>Approval inbox</h1>
+<p class="intro">Runtime interrupts currently waiting on a response, across every registered deployment.</p>
+{% for message in diagnostics %}<p role="alert">{{ message }}</p>{% endfor %}
+{% if not waiting %}<p>No waiting interrupts right now.</p>
+{% else %}
+<ul class="waiting-list">
+{% for item in waiting %}
+<li><p class="badge">{{ item.deployment }}</p>
+<p>Assistant: {{ item.assistant or 'Unknown' }} · Subject: {{ item.subject or 'Unknown' }}</p>
+<p>Logical Run: {{ item.logical_run_id }} · Thread: {{ item.thread_id }}</p>
+<p><a href="{{ approval_url(item.deployment, item.thread_id, item.interrupt_id) }}">Review and respond</a></p>
+</li>
+{% endfor %}
+</ul>
+{% endif %}
+</main>
+</div>
+<footer>cordboard · connects graphs, records runs</footer>
+</body></html>

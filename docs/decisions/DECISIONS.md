@@ -31,6 +31,7 @@
 | **0016** | **Deterministic control plane과 외부 Testbed 경계** | **Accepted** | **[0016-control-plane-and-testbed.md](0016-control-plane-and-testbed.md)** |
 | **0017** | **ExecutionBackend 식별자·상태·결과 계약 확정** | **Accepted** | **[0017-execution-backend-contract.md](0017-execution-backend-contract.md)** |
 | **0018** | **브라우저 관측 표면 — 서버/프론트엔드 스택, 공개 read/update 라우트, 접근성 시각 상태 확정** | **Accepted** | **[0018-browser-viewer-contract.md](0018-browser-viewer-contract.md)** |
+| **0019** | **브라우저 실행 제출/승인 controls — 세션·CSRF 경계, entity 권한 포트, POST 라우트, 중복 제출 방지 확정** | **Accepted** | **[0019-web-execution-and-approval-controls.md](0019-web-execution-and-approval-controls.md)** |
 
 ---
 
@@ -42,6 +43,20 @@
 Jinja2, 빌드 없는 다중 페이지 화면, 공유 read model과 SSE, 접근성 시각 상태가
 [#48](https://github.com/agent-topology/cordboard/issues/48)의 구현 계약이다.
 구현·설치 artifact·브라우저 검증 결과는 [브라우저 뷰어](../browser-viewer.md)에 기록한다.
+
+---
+
+## 브라우저 실행 제출/승인 controls 계약 승인, #49 readiness gate (2026-09-16)
+
+**0019 · Accepted · [브라우저 실행 제출/승인 controls 계약](0019-web-execution-and-approval-controls.md)**
+
+사용자가 2026-09-16 ADR-0019를 명시적으로 승인했다. 더블서밋 쿠키+Origin 검사(CSRF),
+execute 1회용 nonce와 기존 `response_dedupe` 재사용(respond 중복 방지), 기존 도메인 함수
+(`aegra_client.execute`/`approval_inbox.submit_response`/`discover_waiting`/
+`backends.aegra.list_assistants`)만 호출하는 POST 라우트, 신규 `auth_endpoint` connection
+필드와 HTTP 기반 `EntityAuthBoundary`(미설정/불통 시 항상 거부)가
+[#49](https://github.com/agent-topology/cordboard/issues/49)의 구현 계약이다. 읽기 페이지의
+`.cord-action-slot`은 링크만 심고, 실제 뮤테이션은 별도 `/approvals` 표면으로 분리한다.
 
 ---
 

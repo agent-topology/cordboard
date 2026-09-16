@@ -98,7 +98,8 @@ def test_tree_timeline_filters_and_read_only():
         assert "Awaiting resume" in page and 'class="cord-action-slot"' in page
         assert "Timeline incomplete" in page
         assert "Attempt 1" in page
-        assert requests.post(base + path, json={}).status_code == 501
+        # Observation routes reject POST outright; only /execute and /approvals/... accept it (#49).
+        assert requests.post(base + path, json={}).status_code == 404
         assert requests.get(base + "/static/../server.py").status_code == 404
         assert requests.get(base + path, headers={"Accept": "application/json"}).json()["runs"]
 

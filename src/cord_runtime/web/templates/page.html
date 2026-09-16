@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="/static/viewer.css"><script defer src="/static/viewer.js"></script></head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header><a class="brand" href="/">cordboard<span> / observation</span></a><span class="readonly">Read only</span></header>
+<header><a class="brand" href="/">cordboard<span> / observation</span></a><nav aria-label="Sections" class="top-nav"><a href="/approvals">Approvals</a></nav><span class="readonly">Read only</span></header>
 <div class="shell">
 <nav aria-label="Deployments"><h2>Deployments &amp; graphs</h2>
 {% for item in catalog.graphs %}
@@ -59,6 +59,7 @@
 {% else %}<p>Topology unavailable for correlation. Execution records remain visible.</p>{% endif %}
 </section>
 <section><h2>Executions</h2>
+<p><a href="{{ execute_url(graph) }}">Submit new execution</a></p>
 <form method="get"><label>Subject <input name="subject" value="{{ subject }}" placeholder="Filter by Subject"></label>
 <label>Status / declared outcome <input name="status" value="{{ status }}" list="statuses" placeholder="All statuses"></label>
 <datalist id="statuses">{% for value in ['pending','running','interrupted','success','error','timeout','passed','repaired','failed','awaiting_approval','halted','escalated'] %}<option value="{{ value }}">{% endfor %}</datalist><button>Apply filters</button></form>
@@ -86,11 +87,21 @@
 <p>{{ (step.end_ns-step.start_ns)|duration }}{% if step.repeated_execution %} · Repeated execution evidence{% endif %}</p>
 {% if step.awaiting_resume %}<p class="notice">Awaiting resume — open approval wait, duration unknown.</p>{% endif %}
 {% if step.resumed_from %}<p>Resumed from {{ step.resumed_from }} · Approval wait: {{ step.approval_wait_ns|duration }}</p>{% endif %}
-{% if step.outcome == 'awaiting_approval' %}<div class="cord-action-slot" data-run-id="{{ run.run_id }}" data-thread-id="" data-interrupt-id=""></div>{% endif %}
+{% if step.outcome == 'awaiting_approval' %}<div class="cord-action-slot" data-run-id="{{ run.run_id }}" data-thread-id="{{ action_slot.thread_id if action_slot else '' }}" data-interrupt-id="{{ action_slot.interrupt_id if action_slot and action_slot.status == 'ready' else '' }}">
+{% if action_slot and action_slot.status == 'ready' %}<p><a href="{{ action_slot.url }}">Respond to this approval</a></p>
+{% elif action_slot and action_slot.status == 'ambiguous' %}<p>Multiple pending interrupts on this Thread — <a href="/approvals">resolve from the inbox</a>.</p>
+{% elif action_slot and action_slot.status == 'no_authority' %}<p class="notice">No approval authority configured for this deployment.</p>
+{% else %}<p>No waiting interrupt currently matches.</p>{% endif %}
+</div>{% endif %}
 <ol>{% for attempt in step.attempts %}<li>Attempt {{ attempt.number }} · {{ attempt.outcome }} · {{ (attempt.end_ns-attempt.start_ns)|duration }}{% if attempt.tier %} · Tier {{ attempt.tier }}{% endif %}</li>{% else %}<li>No recorded Attempts.</li>{% endfor %}</ol></details>
 {% else %}<p>No recorded Steps.</p>{% endfor %}</details></section>
 {% else %}<p>Live identity and status only. Run / Step / Attempt timing will appear when the archive arrives.</p>
-{% if run.aegra_status == 'interrupted' %}<div class="cord-action-slot" data-run-id="{{ run.run_id }}" data-thread-id="{{ run.thread_id }}" data-interrupt-id=""></div>{% endif %}
+{% if run.aegra_status == 'interrupted' %}<div class="cord-action-slot" data-run-id="{{ run.run_id }}" data-thread-id="{{ action_slot.thread_id if action_slot else run.thread_id }}" data-interrupt-id="{{ action_slot.interrupt_id if action_slot and action_slot.status == 'ready' else '' }}">
+{% if action_slot and action_slot.status == 'ready' %}<p><a href="{{ action_slot.url }}">Respond to this approval</a></p>
+{% elif action_slot and action_slot.status == 'ambiguous' %}<p>Multiple pending interrupts on this Thread — <a href="/approvals">resolve from the inbox</a>.</p>
+{% elif action_slot and action_slot.status == 'no_authority' %}<p class="notice">No approval authority configured for this deployment.</p>
+{% else %}<p>No waiting interrupt currently matches.</p>{% endif %}
+</div>{% endif %}
 {% endif %}
 {% endif %}
 {% endif %}
