@@ -31,9 +31,11 @@ def board(tmp_path):
 def fake_execute(monkeypatch):
     calls = []
 
-    def _execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120):
+    def _execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120,
+                 caused_by_run_id=None, cascade_depth=0):
         calls.append(dict(endpoint=endpoint, assistant=assistant, subject=subject,
-                           graph_input=graph_input, timeout=timeout))
+                           graph_input=graph_input, timeout=timeout,
+                           caused_by_run_id=caused_by_run_id, cascade_depth=cascade_depth))
         return {"run_id": "r-1", "thread_id": "t-1", "status": "success", "values": {}}
 
     monkeypatch.setattr(router, "execute", _execute)

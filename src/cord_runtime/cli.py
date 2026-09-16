@@ -207,9 +207,12 @@ def cmd_rule_add(args: argparse.Namespace) -> int:
             "connection": args.connection,
             "assistant": args.assistant,
             "subject": args.subject,
-            "match": _parse_match_kv(args.match),
             "input": _parse_input_kv(args.input),
         }
+        if args.signal_type == "run.finished":
+            rule["when"] = _parse_match_kv(args.when)
+        else:
+            rule["match"] = _parse_match_kv(args.match)
         add_rule(_board_dir(args), rule, replace=args.replace)
     except InvalidRule as exc:
         return _fail(str(exc), EXIT_USAGE)
@@ -308,6 +311,8 @@ def build_parser() -> argparse.ArgumentParser:
     rule_add.add_argument("subject", help="Dot-path into the Signal payload for the required Subject")
     rule_add.add_argument("--match", action="append", default=[],
                           help="KEY=VALUE equality filter on the Signal payload (repeatable)")
+    rule_add.add_argument("--when", action="append", default=[],
+                          help="KEY=VALUE required condition for a run.finished rule (repeatable)")
     rule_add.add_argument("--input", action="append", default=[],
                           help="DEST=PATH mapping into the Assistant input (repeatable)")
     rule_add.add_argument("--replace", action="store_true", help="Replace an existing rule of the same name")

@@ -146,3 +146,39 @@ def test_resumed_from_must_be_a_non_empty_string(traced, resumed_from):
         with pytest.raises(ValueError, match="resumed_from"):
             with execution.step("approve", StepOutcome.PASSED, resumed_from=resumed_from):
                 pass
+
+
+# --- cascade identity on the Run root span (#18) ----------------------------
+
+def test_a_root_run_defaults_cascade_depth_to_zero_with_no_caused_by(traced):
+    tracer, captured = traced
+    with run(tracer, "urn:test:18", "fixture", graph_id="graph-a"):
+        pass
+    root, = named(captured, "run")
+    assert root.attributes["cord.cascade.depth"] == 0
+    assert "cord.caused_by.run_id" not in root.attributes
+
+
+def test_a_cascade_child_run_stamps_caused_by_and_depth_on_its_new_trace(traced):
+    tracer, captured = traced
+    with run(tracer, "urn:test:18", "fixture", graph_id="graph-b",
+             run_id="child-run", caused_by_run_id="parent-run", cascade_depth=1):
+        pass
+    parent_root, = named(captured, "run")
+    assert parent_root.attributes["cord.caused_by.run_id"] == "parent-run"
+    assert parent_root.attributes["cord.cascade.depth"] == 1
+    assert parent_root.attributes["cord.run.id"] == "child-run"
+
+
+def test_run_rejects_blank_caused_by_run_id(traced):
+    tracer, _captured = traced
+    with pytest.raises(ValueError, match="caused_by_run_id"):
+        with run(tracer, "urn:test:18", "fixture", graph_id="graph-b", caused_by_run_id="   "):
+            pass
+
+
+def test_run_rejects_negative_cascade_depth(traced):
+    tracer, _captured = traced
+    with pytest.raises(ValueError, match="cascade_depth"):
+        with run(tracer, "urn:test:18", "fixture", graph_id="graph-b", cascade_depth=-1):
+            pass

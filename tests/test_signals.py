@@ -1,11 +1,14 @@
-"""Signal construction (#16): deterministic identity per source, no payload interpretation."""
+"""Signal construction (#16): deterministic identity per source, no payload
+interpretation. Also covers the platform-emitted run.finished source (#18)."""
 
 from datetime import datetime, timezone
 import json
 
 import pytest
 
-from cord_runtime.signals import InvalidSignal, file_signal, manual_signal, schedule_signal
+from cord_runtime.signals import (
+    InvalidSignal, file_signal, manual_signal, run_finished_signal, schedule_signal,
+)
 
 
 # --- manual_signal -----------------------------------------------------
@@ -101,3 +104,42 @@ def test_schedule_signal_merges_extra_payload():
 def test_schedule_signal_rejects_blank_name():
     with pytest.raises(InvalidSignal):
         schedule_signal("  ", datetime.now(timezone.utc))
+
+
+# --- run_finished_signal (#18) ---------------------------------------------
+
+def test_run_finished_signal_id_is_deterministic_on_run_id_alone():
+    first = run_finished_signal(run_id="r-1", subject="urn:demo", connection="aegra-local",
+                                 assistant="graph-a", status="success")
+    second = run_finished_signal(run_id="r-1", subject="urn:demo", connection="aegra-local",
+                                  assistant="graph-a", status="success")
+    assert first == second
+    assert first["id"] == "run.finished:r-1"
+    assert first["type"] == "run.finished"
+
+
+def test_run_finished_signal_carries_source_identity_and_depth():
+    signal = run_finished_signal(run_id="r-9", subject="urn:demo", connection="aegra-local",
+                                  assistant="graph-a", status="success", cascade_depth=2)
+    assert signal["payload"] == {
+        "run_id": "r-9", "subject": "urn:demo", "connection": "aegra-local",
+        "assistant": "graph-a", "status": "success", "cascade_depth": 2,
+    }
+
+
+def test_run_finished_signal_defaults_to_depth_zero():
+    signal = run_finished_signal(run_id="r-1", subject="urn:demo", connection="aegra-local",
+                                  assistant="graph-a", status="success")
+    assert signal["payload"]["cascade_depth"] == 0
+
+
+def test_run_finished_signal_rejects_blank_run_id():
+    with pytest.raises(InvalidSignal):
+        run_finished_signal(run_id="  ", subject="urn:demo", connection="aegra-local",
+                             assistant="graph-a", status="success")
+
+
+def test_run_finished_signal_rejects_negative_depth():
+    with pytest.raises(InvalidSignal):
+        run_finished_signal(run_id="r-1", subject="urn:demo", connection="aegra-local",
+                             assistant="graph-a", status="success", cascade_depth=-1)

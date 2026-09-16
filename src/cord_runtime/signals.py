@@ -1,10 +1,15 @@
-"""Signal construction for the three declared sources (#16): manual, file, schedule.
+"""Signal construction for the three caller-declared sources (#16): manual,
+file, schedule -- plus the platform-emitted ``run.finished`` source (#18).
 
 A Signal is an external event (ADR-0002); the platform never interprets its
 meaning, only the fields a Rule declares (see ``router.py``). Signal identity
-is deterministic per source so a later retention/dedup layer (#17) can be
-added without changing this contract: the same file content or the same
-schedule tick yields the same id.
+is deterministic per source so the retention/dedup layer (#17) keys its
+durable claim on it without changing this contract: the same file content,
+the same schedule tick, or the same completed Run yields the same id.
+
+``run.finished`` is not caller-supplied like the other three: ``router.py``
+constructs it itself from a Run's own logical terminal state (`execute()`/
+`resume()` settling as ``"success"``), never from interpreted payload content.
 """
 
 from datetime import datetime, timezone
@@ -12,7 +17,7 @@ import hashlib
 import json
 from pathlib import Path
 
-SIGNAL_TYPES = ("manual", "file", "schedule")
+SIGNAL_TYPES = ("manual", "file", "schedule", "run.finished")
 
 
 class InvalidSignal(ValueError):
@@ -61,3 +66,24 @@ def schedule_signal(name: str, at: datetime, payload: dict | None = None) -> dic
     at_iso = at.isoformat()
     merged = {"schedule": name, "at": at_iso, **(payload or {})}
     return {"type": "schedule", "id": f"schedule:{name}:{at_iso}", "payload": merged}
+
+
+def run_finished_signal(*, run_id: str, subject: str, connection: str, assistant: str,
+                         status: str, cascade_depth: int = 0) -> dict:
+    """A Signal for one Run's logical terminal state (#18).
+
+    Id is deterministic on ``run_id`` alone, so a redelivered or re-derived
+    completion for the same Run shares #17's durable dedupe claim: a cascade
+    never fires twice for one completed Run. ``connection``/``assistant``
+    identify the Run that just finished (the source, not the target), which
+    is what a Rule's self-loop guard compares its own target against.
+    """
+    for label, value in (("run_id", run_id), ("subject", subject), ("connection", connection),
+                          ("assistant", assistant), ("status", status)):
+        if not isinstance(value, str) or not value.strip():
+            raise InvalidSignal(f"run.finished signal '{label}' must be a non-empty string")
+    if not isinstance(cascade_depth, int) or isinstance(cascade_depth, bool) or cascade_depth < 0:
+        raise InvalidSignal("run.finished signal 'cascade_depth' must be a non-negative integer")
+    payload = {"run_id": run_id, "subject": subject, "connection": connection,
+               "assistant": assistant, "status": status, "cascade_depth": cascade_depth}
+    return {"type": "run.finished", "id": f"run.finished:{run_id}", "payload": payload}

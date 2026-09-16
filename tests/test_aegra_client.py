@@ -113,7 +113,30 @@ def test_execute_transports_request_context_unread(monkeypatch):
            request_context=context, timeout=5)
     run_call = next(c for c in calls if c["url"].endswith("/threads/t-6/runs"))
     assert run_call["json"]["context"] == context
-    assert run_call["json"]["config"] == {"configurable": {"cord_subject": "subject-6"}}
+    assert run_call["json"]["config"] == {
+        "configurable": {"cord_subject": "subject-6", "cord_cascade_depth": 0}
+    }
+
+
+def test_execute_transports_cascade_identity_when_declared(monkeypatch):
+    """#18: a cascade child carries its causing Run and its own depth under
+    the same unread `config.configurable` channel as `cord_subject`."""
+    calls = _install(monkeypatch, {
+        "/threads": FakeResponse(200, {"thread_id": "t-7"}),
+        "/threads/t-7/runs": FakeResponse(200, {"run_id": "r-7"}),
+        "/threads/t-7/runs/r-7": FakeResponse(200, {"status": "success"}),
+        "/threads/t-7/state": FakeResponse(200, {"values": {}}),
+    })
+    execute(ENDPOINT, "opaque-graph", "subject-7", {}, timeout=5,
+            caused_by_run_id="run-parent", cascade_depth=2)
+    run_call = next(c for c in calls if c["url"].endswith("/threads/t-7/runs"))
+    assert run_call["json"]["config"] == {
+        "configurable": {
+            "cord_subject": "subject-7",
+            "cord_cascade_depth": 2,
+            "cord_caused_by_run_id": "run-parent",
+        }
+    }
 
 
 def test_resume_reuses_the_thread_and_gets_a_new_api_run_id(monkeypatch):

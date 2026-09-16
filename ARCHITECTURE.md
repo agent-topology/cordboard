@@ -65,6 +65,32 @@ stays external and is never started or stopped, only ever contacted, as
 before. `ensure_started` is written as the shared entry point a future
 approval-resume submission would also call, but no resume orchestration
 exists in this codebase yet to wire it into.
+`route_signal` also chains a Run's completion into starting another,
+independent Run (#18): once a matched Rule's execution reaches logical Run
+terminal state (`execute()`'s own `"success"`, never each Aegra API Run
+completion, so a pause/resume never fabricates a false cascade), the router
+constructs that Run's own `run.finished` Signal (`cord_runtime.signals.
+run_finished_signal`, platform-emitted rather than caller-supplied) and
+routes it again through the same generic path, after this Run's own
+concurrency/Deployment claims are released. A `run.finished` Rule declares a
+required, non-empty `when` in place of the optional `match` the other three
+Signal types use, and its `subject` is optional, defaulting to the completed
+Run's own Subject (inheritance) with an explicit dot-path overriding it.
+`cord_runtime.rules.add_rule` rejects a `run.finished` Rule whose `when`
+statically pins the same (connection, assistant) pair it targets as a
+self-loop; a longer cascade cycle is instead bounded at routing time by
+`cord_runtime.router.MAX_CASCADE_DEPTH` (5) -- a `run.finished` Signal
+already at that depth is blocked before any Rule is evaluated. Each cascade
+child is a fresh `execute()` call (a new Thread/trace, never a `resume()` of
+the Run that caused it) carrying the causing Run's id and the child's own
+cascade depth through `config.configurable`
+(`cord_caused_by_run_id`/`cord_cascade_depth`), so a graph that forwards them
+into `cord_runtime.execution.run(..., caused_by_run_id=...,
+cascade_depth=...)` records `cord.caused_by.run_id`/`cord.cascade.depth` on
+its own new Run root span; a graph that ignores them still runs. Because
+`run_finished_signal`'s id is deterministic on `run_id` alone, a redelivered
+or re-derived completion shares the same #17 Signal-ID dedupe claim, so a
+cascade fires at most once per completed Run.
 [`cord_runtime.topology`](src/cord_runtime/topology.py) reads a Deployment's
 optional published topology over HTTP, classifies it as absent, unreachable,
 invalid, or valid against the pinned `agent-topology-spec==0.1.0b3` schema,
