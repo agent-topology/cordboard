@@ -143,6 +143,30 @@ dependency review separates released versions, candidate source and actual pins.
 
 ## Boundary and ownership
 
+[ADR-0016](docs/decisions/0016-control-plane-and-testbed.md) defines Cordboard
+as a deterministic control plane: an execution switchboard, with no required
+LLM and no production Aegra entity of its own. `aegra/` is an integration
+fixture, pending migration to
+[cordboard-testbed](https://github.com/agent-topology/cordboard-testbed).
+The external testbed installs a versioned package, exact commit or built wheel;
+source-relative and editable Cordboard dependencies are not acceptance evidence.
+Unit and mocked HTTP/SSE contract tests remain in this repository.
+
+The intended `ExecutionBackend` boundary makes Aegra the first adapter, with
+A2A an optional future adapter. This abstraction is not implemented yet.
+Also planned are separate runtime status and client wait outcomes, explicit
+logical Run/invocation/Thread/trace types, and identity/status-only results with
+opt-in state retrieval. Current `aegra_client` behavior still merges interrupted
+and deadline-reached runs into `waiting` and returns full `values` on success.
+These are compatibility changes to implement and verify, not new current API claims.
+
+Entity Deployments own runtime provisioning, graph libraries, credentials,
+authorization, checkpoints, topology publication and execution instrumentation.
+Cordboard consumes their public API and published topology; it never imports
+their domain libraries. The existing `/.well-known/agent-topology.manifest.json`
+discovery path remains unchanged. Optional natural-language operator agents
+must use the same public interface as ordinary clients after user approval.
+
 The platform knows a graph through its manifest, execution API, and spans. It
 does not import graph business logic or understand graph-specific state fields,
 prompts, tools, validation rules, model choices, or provider credentials. The graph's own process may import its code
@@ -157,7 +181,7 @@ new graph, and a layer that adds nothing over using the underlying tools directl
 
 | Owner | Responsibility |
 | --- | --- |
-| Cordboard | Catalog, common execution vocabulary, topology/trace viewer, declarative Signal routing, graph lifecycle, approval inbox and expiry, archive integration |
+| Cordboard | Catalog, common execution vocabulary, topology/trace viewer, declarative Signal routing, connection lifecycle, approval inbox and expiry, archive integration |
 | Graph | Business logic, state, deterministic validation, model selection, credentials, SDK/gateway configuration, retry and escalation decisions, interrupt placement, side-effect behavior |
 | Aegra / LangGraph | Run execution, checkpointing, resume, cancellation, streaming, runtime recovery |
 | Optional graph-owned gateway (e.g. LiteLLM) | Resolve the graph operator's model configuration; not a Cordboard prerequisite |

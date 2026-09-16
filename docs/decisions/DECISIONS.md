@@ -28,8 +28,19 @@
 | **0013** | **Cordboard는 요청한 그래프를 연결하고, 모델 선택은 모른다** | **Accepted** | **[0013-switchboard-boundary.md](0013-switchboard-boundary.md)** |
 | **0014** | **Cordboard는 그래프를 묘사하지 않는다 — 그래프 단위 설정과 매니페스트 확장을 두지 않는다** | **Accepted** | **[0014-no-graph-descriptors.md](0014-no-graph-descriptors.md)** |
 | **0015** | **연결을 막지 않는다 — 매니페스트는 선택이고, 카탈로그 규칙은 경고다** | **Accepted** | **[0015-never-block-connection.md](0015-never-block-connection.md)** |
+| **0016** | **Deterministic control plane과 외부 Testbed 경계** | **Accepted** | **[0016-control-plane-and-testbed.md](0016-control-plane-and-testbed.md)** |
 
 ---
+
+## Control plane과 외부 Testbed (2026-09-16)
+
+**0016 · Accepted · [Control plane과 Testbed 경계](0016-control-plane-and-testbed.md)**
+
+Cordboard는 deterministic execution switchboard이고 production Aegra entity를
+포함하지 않는다. 실제 프로세스 통합은 별도 `cordboard-testbed`로 분리하며 wheel 등
+명시적인 artifact를 설치한다. 기존 `aegra/`의 물리적 이전, backend 추상화와 상태/result
+계약 변경은 후속 구현이다. A2A와 operator agent는 선택 사항이고 topology publication은
+Entity가 소유한다. ADR-0009의 남은 publication 자동 생성 계획을 정정한다.
 
 ## 슬라이스 0에 필요한 것 — 전부 작성됨
 

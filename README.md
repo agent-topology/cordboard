@@ -12,6 +12,16 @@ connect and invoke an existing Deployment. The rest of its lifecycle is planned.
 
 ## Status
 
+Cordboard is a deterministic control plane for external Agent Deployments;
+it does not require an LLM or operate its own production Aegra entity.
+The current `aegra/` directory is a compatibility fixture. Real-process
+integration is being separated into
+[cordboard-testbed](https://github.com/agent-topology/cordboard-testbed), which
+installs a built Cordboard artifact and uses synthetic deployments.
+[ADR-0016](docs/decisions/0016-control-plane-and-testbed.md) records ownership,
+the planned execution-backend boundary, and the migration criteria. Existing
+fixtures remain here until equivalent external checks are verified.
+
 This repository contains a deterministic `fetch → draft → verify` LangGraph
 example and a separate archive fixture with Run/Step/Attempt instrumentation,
 in-process redaction, a Collector gate, and raw OTLP JSONL persistence.
@@ -52,7 +62,8 @@ platform tier. Model-provider access is a separate integration concern.
 - Record Runs, Steps, Attempts, and graph-declared outcomes in a common vocabulary.
 - Keep an append-only OTLP archive as the record of origin, with Langfuse as an
   additional interface for exploration.
-- Manage graph scaffolding, registration, dependencies, and local startup.
+- Register deployments and manage local startup through operator-supplied
+  connection lifecycle commands; entities own their runtime and dependencies.
 
 The central test is whether an unrelated second graph can be registered, run,
 and inspected without changing platform code. Another is whether one query can

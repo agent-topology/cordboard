@@ -1,5 +1,10 @@
 # Aegra integration and Slice 0 exit evidence (#9)
 
+> **Fixture ownership (2026-09-16):** this is a compatibility deployment, not
+> Cordboard's production runtime. [ADR-0016](decisions/0016-control-plane-and-testbed.md)
+> assigns real-process acceptance to the separate cordboard-testbed repository.
+> The files and historical evidence below remain here pending verified migration.
+
 The existing minimal graph executes through Aegra 0.10.4 and one Postgres
 16.10 service, then calls the DB-free LiteLLM proxy from #8. Aegra owns
 execution and checkpoint persistence. The graph owns validation and escalation.

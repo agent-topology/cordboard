@@ -212,7 +212,7 @@ if "graphs" in doc: ... else: ...   # 매번, 모든 소비자에서
 1. [ ] `structure` 절은 `agent-topology`가 정의한다 — cordboard는 스키마를 소유하지 않는다
 1b. [x] ~~`x-cord` 확장 스키마 정의~~ → ADR-0014로 폐기
 2. [ ] Agent Card 생성기 — A2A 스펙 필드만. 우리 필드 0개
-3. [ ] Aegra 설정의 `http.app`으로 두 라우트 마운트하는 것을 `cord up`이 자동 처리
+3. [x] ~~Aegra 설정의 `http.app`으로 두 라우트 마운트하는 것을 `cord up`이 자동 처리~~ → ADR-0016: publication은 Entity 책임
 4. [ ] 카탈로그가 두 문서를 긁는 수집기. ~~`agent-topology.manifest.json`이 없거나 `structure` 절이 없으면 등록 거부~~ → 없으면 "그림 없음" 상태, 스키마 위반이면 경고 (ADR-0015)
 5. [x] ~~`cord.yaml`의 `name`/`version`/`description`을 A2A 대응 필드와 같은 이름으로 정의~~ → ADR-0014로 폐기. 이름은 그래프의 `compile(name=...)`
 6. [ ] Agent Card 스펙 준수 검증 — 우리 카드가 표준 파서에 통과하는지 확인
@@ -246,3 +246,10 @@ Subject·승인·트리거는 그래프 문서의 절이 아니라 연결 설정
 두 문서의 모양, 배열 규약, Agent Card에 cordboard 필드를 넣지 않는다는 결정은 그대로다. 바뀌는
 것은 두 문서가 **있을 때 쓰는 것**이 되었다는 점이다. 매니페스트가 없으면 뷰어는 그림 없이 실행
 기록만 보여주고, 스키마를 어기면 그 문서를 쓰지 않고 경고한다.
+
+## 정정 — publication은 Entity 책임 (2026-09-16)
+
+[ADR-0016](0016-control-plane-and-testbed.md)에 따라 topology 생성·HTTP publication은
+Entity가 소유한다. Cordboard는 Graph를 import하거나 Entity의 HTTP app을 조립하지 않고
+발행된 문서를 읽는다. A2A는 선택적 backend이며 Agent Card는 core의 필수 계약이 아니다.
+기존 topology discovery 경로와 ADR-0015의 선택적 입력 원칙은 유지한다.
