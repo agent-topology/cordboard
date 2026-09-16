@@ -24,6 +24,10 @@ The [`cord` CLI](docs/cord-cli.md) adds `cord add`/`cord list`/`cord run` over
 statuses, and a distinct waiting status for a paused or still-running Run (#12).
 The remaining platform lifecycle commands (`cord new`, `cord up`'s drift
 handling, `cord sync`) are still planned.
+[Interrupt/resume span boundaries](docs/interrupt-resume.md) close a Step as
+`awaiting_approval` when the graph's own `interrupt()` pauses it and open a new,
+linked Step on resume, through LangGraph's public interrupt contract rather
+than any change to `agent-workflow-core` or Omiologic (#28).
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
