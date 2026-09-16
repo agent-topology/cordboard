@@ -8,7 +8,7 @@ import threading
 
 import pytest
 
-from cord_runtime.concurrency import ConcurrencyError, release, try_claim
+from cord_runtime.concurrency import ConcurrencyError, release, renew, try_claim
 
 NOW = 1_800_000_000.0
 
@@ -47,6 +47,24 @@ def test_a_stale_claim_from_a_crashed_holder_is_reclaimed(tmp_path):
     # No release() -- the holder "crashed" before its finally ran.
     assert try_claim(tmp_path, "triage-graph", "github:issue/1", now=NOW + 179, stale_after=180) is False
     assert try_claim(tmp_path, "triage-graph", "github:issue/1", now=NOW + 181, stale_after=180) is True
+
+
+# --- #50: a claim held for a Run that outlives one call renews instead of
+# --- expiring under its own crash-recovery window --------------------------
+
+def test_renew_bumps_claimed_at_so_a_long_held_claim_does_not_go_stale(tmp_path):
+    assert try_claim(tmp_path, "triage-graph", "github:issue/1", now=NOW, stale_after=180) is True
+    # Without a renewal, this claim would already be reclaimable here.
+    renew(tmp_path, "triage-graph", "github:issue/1", now=NOW + 170)
+    assert try_claim(tmp_path, "triage-graph", "github:issue/1", now=NOW + 179, stale_after=180) is False
+    # And it is still live a further 170s after the renewal, well past the
+    # original claim's own stale_after window measured from NOW.
+    assert try_claim(tmp_path, "triage-graph", "github:issue/1", now=NOW + 340, stale_after=180) is False
+
+
+def test_renew_of_an_unheld_pair_is_a_no_op(tmp_path):
+    renew(tmp_path, "triage-graph", "github:issue/1", now=NOW)  # does not raise
+    assert try_claim(tmp_path, "triage-graph", "github:issue/1", now=NOW, stale_after=180) is True
 
 
 def test_empty_assistant_or_subject_is_rejected(tmp_path):

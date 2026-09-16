@@ -58,6 +58,8 @@ authorization stays entity-owned) and `cord_runtime.response_dedupe`'s
 `flock`-guarded cross-process claim before ever calling `backend.resume`,
 recording exactly one of `resumed`/`rejected`/`unknown` per interrupt. No
 `cord` CLI or web surface is added by this slice; that is still planned.
+`submit_response` now also calls `ensure_started` before resuming and reads
+the resumed outcome instead of discarding it (#50, below).
 [Signal/Rule routing](docs/signal-routing.md) adds `cord rule add` and
 `cord signal manual|file|schedule`, one generic router
 (`cord_runtime.router.route_signal`) all three sources call, evaluating only
@@ -83,9 +85,8 @@ stops a sibling Graph's still-active Run; `cord deployment sweep` stops every
 managed Deployment idle beyond its declared `idle_after` (default 600s;
 Signal-ID retention default is 24h). A connection with no `launch` command
 stays external and is never started or stopped, only ever contacted, as
-before. `ensure_started` is written as the shared entry point a future
-approval-resume submission would also call, but no resume orchestration
-exists in this codebase yet to wire it into.
+before. `ensure_started` is the shared entry point both `route_signal` and
+`approval_inbox.submit_response` now call before submission (#50, below).
 `route_signal` also chains a Run's completion into starting another,
 independent Run (#18): once a matched Rule's execution reaches logical Run
 terminal state (`execute()`'s own `"success"`, never each Aegra API Run
@@ -112,6 +113,27 @@ its own new Run root span; a graph that ignores them still runs. Because
 `run_finished_signal`'s id is deterministic on `run_id` alone, a redelivered
 or re-derived completion shares the same #17 Signal-ID dedupe claim, so a
 cascade fires at most once per completed Run.
+Completion routing across a Run that outlives one call (#50) closes the gap
+`execute()`'s own `"success"` chaining above left: `waiting_reason`
+(`aegra_client.execute`/`resume`) now distinguishes a still-running Run past
+its wait budget (`"deadline"`) from an actual pause (`"interrupted"`).
+`route_signal` retains both the (Assistant, Subject) concurrency claim and
+the managed Deployment's activity claim only for `"deadline"` -- releasing
+either would let a conflicting arrival race a Run that is still genuinely
+executing, or let `cord deployment sweep` stop it mid-flight -- and records
+the Run's identity in `cord_runtime.pending_completions`; `"interrupted"`
+still releases both immediately, as before. `cord signal sweep-pending`
+re-polls every tracked invocation and finalizes it once it reaches genuine
+terminal state, through the same `route_signal` path an immediate success
+uses, so the #18 cascade/depth/dedupe guarantees are identical. A retained
+concurrency claim is renewed (`cord_runtime.concurrency.renew`) on every
+sweep that still finds the Run active, so `concurrency`'s own stale-claim
+crash-recovery window cannot reclaim it out from under a Run that is still
+actually running. `approval_inbox.submit_response` composes with the same
+mechanism: it now calls `ensure_started` before resuming and reads the
+resume's own outcome the same way, so a resumed Run that is still
+queued/running, paused again, or reaches terminal state is routed
+identically to the router's own synchronous path.
 [`cord_runtime.topology`](src/cord_runtime/topology.py) reads a Deployment's
 optional published topology over HTTP, classifies it as absent, unreachable,
 invalid, or valid against the pinned `agent-topology-spec==0.1.0b3` schema,
@@ -570,7 +592,10 @@ gets a new trace and records `cord.caused_by.run_id`; cascade depth uses
 subgraphs. Lazy startup landed with routing (#17): a connection that declares
 an operator-supplied `launch` command is started on demand and stopped once
 idle; a connection without one stays external and is only ever contacted, as
-in the first slices. `run.finished` cascades themselves remain planned (#18).
+in the first slices. `run.finished` cascades themselves are implemented
+(#18, "Status and source of truth" above); completion routing across a Run
+that outlives the call that submitted it -- a resumed approval or one still
+running past its wait budget -- is #50, also implemented above.
 
 ## Open documentation issues
 

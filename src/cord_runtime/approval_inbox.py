@@ -17,18 +17,40 @@ already exposes a tuple of tasks each with a tuple of interrupts -- so two
 concurrently pending interrupts on one Thread are already distinguishable
 through Aegra's existing public API. This module is what actually reads
 that shape; it is not a schema change to Aegra or LangGraph.
+
+Managed resume and completion routing (#50): ``submit_response`` now calls
+`cord_runtime.deployment_lifecycle.ensure_started` before ever resuming --
+the same shared entry point `cord_runtime.router.route_signal` calls -- since
+a managed Deployment that went idle while its Run sat interrupted must be
+running again before a resume can reach it. Startup failure is returned
+before the response-dedupe claim is ever taken, so a corrected retry is still
+free to try again, mirroring the router's own ordering. Once resumed, the
+outcome is read rather than discarded: genuine terminal success releases the
+Deployment's activity claim and routes the same Run's own `run.finished`
+Signal through `router.route_signal` (#18's cascade, #50 AC1/AC3); a Run
+still queued/running past this call's own wait budget keeps the claim held
+and its identity tracked in `cord_runtime.pending_completions` for
+`router.sweep_pending` to finish observing later, exactly like the router's
+own synchronous path; an interrupt again releases the claim so it can go
+idle until the next resume restarts it (#50 AC2/AC5).
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from cord_runtime import response_dedupe, run_continuity
+from cord_runtime import pending_completions, response_dedupe, run_continuity
 from cord_runtime.approval_expiry import UnknownWaitingApproval, record_waiting, resolve_approved
 from cord_runtime.backends.aegra import AegraExecutionBackend
-from cord_runtime.backends.base import RuntimeStatus
+from cord_runtime.backends.base import ClientWaitOutcome, RuntimeStatus
 from cord_runtime.connections import load_connections
+from cord_runtime.deployment_lifecycle import ensure_started, release_active
 from cord_runtime.entity_auth import AuthSubmission, EntityAuthBoundary
+from cord_runtime.router import route_signal
+from cord_runtime.signals import run_finished_signal
+
+_HEALTH_TIMEOUT = 30.0
 
 
 class ApprovalInboxError(ValueError):
@@ -156,12 +178,17 @@ def discover_waiting_for_thread(board_dir: Path, deployment: str, thread_id: str
 
 def submit_response(board_dir: Path, *, deployment: str, thread_id: str, interrupt_id: str,
                      approver: str, response_value: Any, revision: str | None,
-                     auth_boundary: EntityAuthBoundary, now: float,
+                     auth_boundary: EntityAuthBoundary, now: float, timeout: float = 120.0,
                      backend_factory=AegraExecutionBackend) -> SubmissionResult:
     """Route one operator's answer to the exact interrupt it targets.
 
     Order matters and each step is durable before the next begins:
 
+    0. `deployment_lifecycle.ensure_started` -- a managed Deployment that went
+       idle while its Run sat interrupted must be running again before a
+       resume can reach it (#50 AC5); a startup failure returns here, before
+       the response-dedupe claim is ever taken, so a corrected retry is still
+       free to try again (mirrors `router.route_signal`'s own ordering).
     1. `response_dedupe.claim` -- a duplicate/racing submission for the same
        interrupt stops here, before authorization or transport.
     2. `auth_boundary.authorize` -- rejected, stale, or revision-mismatched
@@ -171,53 +198,127 @@ def submit_response(board_dir: Path, *, deployment: str, thread_id: str, interru
     3. ``backend.resume`` -- the one call that can create a new invocation;
        its ambiguous-transport failure is recorded as ``UNKNOWN``, never
        retried automatically.
+
+    Once resumed, the outcome decides the Deployment activity claim
+    `ensure_started` just took (#50): genuine terminal success releases it
+    and routes this Run's own `run.finished` Signal through
+    `router.route_signal` (#18's cascade); a Run still queued/running when
+    ``timeout`` elapses, or an ambiguous resume-wait transport failure, keeps
+    the claim held and the Thread tracked in `cord_runtime.
+    pending_completions` for `router.sweep_pending` to finish observing;
+    an interrupt again, or a genuine terminal failure/cancellation, releases
+    the claim -- every other path that took it (duplicate, rejected, an
+    unreadable Thread) also releases it before returning.
     """
     connection = load_connections(board_dir).get(deployment)
     if connection is None:
         raise ApprovalInboxError(f"unknown deployment alias '{deployment}'")
-    if not response_dedupe.claim(board_dir, deployment, thread_id, interrupt_id, now=now):
-        return SubmissionResult("duplicate", "a response to this interrupt was already claimed")
 
-    backend = backend_factory(connection["endpoint"], board_dir=board_dir, deployment=deployment)
+    started = ensure_started(board_dir, deployment, connection, now=now, health_timeout=_HEALTH_TIMEOUT)
+    if started["status"] == "start_failed":
+        return SubmissionResult("deployment_unavailable", started["error"])
+
+    retain_deployment_claim = False
     try:
-        state = backend.get_state(thread_id)
-    except RuntimeError:
-        response_dedupe.record_outcome(board_dir, deployment, thread_id, interrupt_id,
-                                        response_dedupe.UNKNOWN, now=now)
-        return SubmissionResult("unknown", "could not read current Thread state")
+        if not response_dedupe.claim(board_dir, deployment, thread_id, interrupt_id, now=now):
+            return SubmissionResult("duplicate", "a response to this interrupt was already claimed")
 
-    still_pending = interrupt_id in {i["id"] for i in _interrupts_of(state)}
-    current_revision = _revision_of(state)
-    assistant = ""
-    if still_pending:
+        backend = backend_factory(connection["endpoint"], board_dir=board_dir, deployment=deployment)
         try:
-            record = run_continuity.logical_run(board_dir, deployment, thread_id)
-            run_info = backend.get_run(thread_id, record["api_run_ids"][-1])
-            assistant = run_info.get("assistant_id") or ""
-        except (RuntimeError, run_continuity.UnknownThread):
-            assistant = ""
+            state = backend.get_state(thread_id)
+        except RuntimeError:
+            response_dedupe.record_outcome(board_dir, deployment, thread_id, interrupt_id,
+                                            response_dedupe.UNKNOWN, now=now)
+            return SubmissionResult("unknown", "could not read current Thread state")
 
-    submission = AuthSubmission(
-        deployment=deployment, assistant=assistant, thread_id=thread_id, interrupt_id=interrupt_id,
-        approver=approver, response_value=response_value, revision=revision,
-    )
-    decision = auth_boundary.authorize(submission, current_revision=current_revision, still_pending=still_pending)
-    if not decision.accepted:
+        still_pending = interrupt_id in {i["id"] for i in _interrupts_of(state)}
+        current_revision = _revision_of(state)
+        assistant = ""
+        subject = None
+        if still_pending:
+            try:
+                record = run_continuity.logical_run(board_dir, deployment, thread_id)
+                run_info = backend.get_run(thread_id, record["api_run_ids"][-1])
+                assistant = run_info.get("assistant_id") or ""
+                subject = run_info.get("subject")
+            except (RuntimeError, run_continuity.UnknownThread):
+                assistant = ""
+
+        submission = AuthSubmission(
+            deployment=deployment, assistant=assistant, thread_id=thread_id, interrupt_id=interrupt_id,
+            approver=approver, response_value=response_value, revision=revision,
+        )
+        decision = auth_boundary.authorize(submission, current_revision=current_revision,
+                                            still_pending=still_pending)
+        if not decision.accepted:
+            response_dedupe.record_outcome(board_dir, deployment, thread_id, interrupt_id,
+                                            response_dedupe.REJECTED, now=now)
+            return SubmissionResult("rejected", decision.reason)
+
+        # The identity #18's cascade needs once this Run actually finishes
+        # (#50): recovered from the pending-completion this Thread's original
+        # interrupt recorded, since Aegra's own transported config carries no
+        # cascade depth. A Thread `route_signal` never submitted (e.g. a Run
+        # started outside `cord`) has no such entry -- cascade_depth defaults
+        # to 0, the same as any other fresh Signal.
+        pending = pending_completions.get_pending(board_dir, deployment, thread_id)
+        cascade_depth = pending["cascade_depth"] if pending is not None else 0
+        if not subject and pending is not None:
+            subject = pending["subject"]
+
+        try:
+            result = backend.resume(thread_id, assistant, response_value, timeout=timeout)
+        except RuntimeError:
+            response_dedupe.record_outcome(board_dir, deployment, thread_id, interrupt_id,
+                                            response_dedupe.UNKNOWN, now=now)
+            # Ambiguous transport (`backend.resume`'s own contract): the
+            # resume may still have been accepted, so the Deployment's
+            # activity claim is retained rather than released out from under
+            # a Run that might still be executing (#50).
+            retain_deployment_claim = True
+            return SubmissionResult("unknown", "resume submission had an ambiguous transport outcome")
+
         response_dedupe.record_outcome(board_dir, deployment, thread_id, interrupt_id,
-                                        response_dedupe.REJECTED, now=now)
-        return SubmissionResult("rejected", decision.reason)
+                                        response_dedupe.RESUMED, now=now)
+        try:
+            resolve_approved(board_dir, deployment, thread_id, now=now)
+        except UnknownWaitingApproval:
+            pass  # no approval_expiry clock was ever started for this Thread; resume still succeeded.
 
-    try:
-        backend.resume(thread_id, assistant, response_value)
-    except RuntimeError:
-        response_dedupe.record_outcome(board_dir, deployment, thread_id, interrupt_id,
-                                        response_dedupe.UNKNOWN, now=now)
-        return SubmissionResult("unknown", "resume submission had an ambiguous transport outcome")
-
-    response_dedupe.record_outcome(board_dir, deployment, thread_id, interrupt_id,
-                                    response_dedupe.RESUMED, now=now)
-    try:
-        resolve_approved(board_dir, deployment, thread_id, now=now)
-    except UnknownWaitingApproval:
-        pass  # no approval_expiry clock was ever started for this Thread; resume still succeeded.
-    return SubmissionResult("resumed")
+        if result.status is RuntimeStatus.SUCCEEDED:
+            pending_completions.resolve_pending(board_dir, deployment, thread_id)
+            if subject and assistant:
+                finished = run_finished_signal(run_id=result.logical_run_id, subject=subject,
+                                                connection=deployment, assistant=assistant,
+                                                status="success", cascade_depth=cascade_depth)
+                route_signal(board_dir, finished, timeout=timeout,
+                             now=datetime.fromtimestamp(now, tz=timezone.utc))
+        elif result.status is RuntimeStatus.INTERRUPTED:
+            # Paused again: release now, exactly like a fresh execute()'s own
+            # interrupted result, and keep tracking the Thread so the next
+            # resume still has this identity (#50 AC2/AC5).
+            pending_completions.record_pending(
+                board_dir, deployment, thread_id, result.invocation_id,
+                assistant=assistant, subject=subject or "", cascade_depth=cascade_depth,
+                concurrency_held=False, deployment_held=False, now=now)
+        elif result.wait_outcome is ClientWaitOutcome.DEADLINE_REACHED:
+            # Still genuinely queued/running past this call's own wait
+            # budget: never release the claim out from under it (#50 AC1/AC2)
+            # -- `router.sweep_pending` finishes observing it later.
+            retain_deployment_claim = True
+            pending_completions.record_pending(
+                board_dir, deployment, thread_id, result.invocation_id,
+                assistant=assistant, subject=subject or "", cascade_depth=cascade_depth,
+                concurrency_held=False, deployment_held=True, now=now)
+        elif result.wait_outcome is ClientWaitOutcome.TRANSPORT_ERROR:
+            # The resume submission itself succeeded but polling its status
+            # failed: ambiguous, so the claim is retained rather than
+            # released out from under a Run that may still be executing.
+            retain_deployment_claim = True
+        # RuntimeStatus.FAILED/CANCELLED fall through: the claim releases and
+        # no Signal is constructed -- a documented terminal disposition,
+        # matching `route_signal`'s own `"execution_failed"` (#50).
+        return SubmissionResult("resumed")
+    finally:
+        if not retain_deployment_claim:
+            release_active(board_dir, deployment, connection, now=now)

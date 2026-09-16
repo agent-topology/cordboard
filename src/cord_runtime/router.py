@@ -34,18 +34,41 @@ parent's (Assistant, Subject) claim. Recursion is bounded by
 `MAX_CASCADE_DEPTH`; the same #17 Signal-ID dedupe claim (keyed on the
 completed Run's id) makes a redelivered or re-derived completion for one Run
 cascade at most once.
+
+Completion routing across a Run that outlives this call (#50): `execute()`'s
+``"waiting"`` result also carries ``waiting_reason``. ``"interrupted"``
+releases both claims immediately, exactly as before -- the graph itself has
+stopped executing, so nothing is lost if a managed Deployment later goes
+idle, and `approval_inbox.submit_response` starts it again before resuming.
+``"deadline"`` means the Run was still queued/running when the wait budget
+elapsed: releasing either claim then would let a second arrival for the same
+Subject race a Run that is still actually executing, or let `cord deployment
+sweep` stop the Deployment out from under it, so both claims are retained
+instead and the Run's identity is recorded in `cord_runtime.
+pending_completions` for `sweep_pending` to finish observing later. Either
+way, the identity needed for the eventual #18 cascade (`connection`,
+`assistant`, `subject`, `cascade_depth`) is recorded so a Run that finishes
+after this call returned -- whether resumed through `approval_inbox` or
+re-polled by `sweep_pending` -- still starts exactly one matching child
+through this same `route_signal` path, inheriting the same depth/self-loop
+guards and Signal-ID dedupe as an immediate synchronous success.
 """
 
 from datetime import datetime, timezone
 import json
 from pathlib import Path
 
-from cord_runtime.aegra_client import execute
-from cord_runtime.concurrency import release as release_concurrency, try_claim as try_claim_concurrency
-from cord_runtime.connections import InvalidConnection, get_connection
+from cord_runtime import pending_completions
+from cord_runtime.aegra_client import describe_run, execute
+from cord_runtime.concurrency import (
+    release as release_concurrency,
+    renew as renew_concurrency,
+    try_claim as try_claim_concurrency,
+)
+from cord_runtime.connections import InvalidConnection, get_connection, load_connections
 from cord_runtime.deployment_lifecycle import ensure_started, release_active
 from cord_runtime.rules import load_rules
-from cord_runtime.run_continuity import record_submission
+from cord_runtime.run_continuity import UnknownThread, logical_run, record_submission
 from cord_runtime.signal_dedupe import claim as claim_signal
 from cord_runtime.signals import run_finished_signal
 
@@ -172,6 +195,8 @@ def route_signal(board_dir: Path, signal: dict, *, timeout: float = 120.0,
         return {"status": "concurrency_skipped", "signal_id": signal["id"], "rule": rule["name"]}
 
     response = None
+    retain_deployment_claim = False
+    retain_concurrency_claim = False
     try:
         started = ensure_started(board_dir, rule["connection"], connection,
                                   now=now_ts, health_timeout=_HEALTH_TIMEOUT)
@@ -194,9 +219,24 @@ def route_signal(board_dir: Path, signal: dict, *, timeout: float = 120.0,
                 if result.get("thread_id") and result.get("run_id"):
                     record_submission(board_dir, rule["connection"], result["thread_id"], result["run_id"])
                 response = {"status": "routed", "signal_id": signal["id"], "rule": rule["name"], "result": result}
+                if result.get("status") == "waiting" and result.get("thread_id") and result.get("run_id"):
+                    # A genuinely still-running Run (#50 AC1/AC2): never
+                    # release either claim out from under it, and remember
+                    # its identity so `sweep_pending` can finish observing it
+                    # and cascade correctly once it actually completes.
+                    still_running = result.get("waiting_reason") != "interrupted"
+                    retain_deployment_claim = still_running
+                    retain_concurrency_claim = still_running
+                    pending_completions.record_pending(
+                        board_dir, rule["connection"], result["thread_id"], result["run_id"],
+                        assistant=assistant, subject=subject, cascade_depth=child_cascade_depth,
+                        concurrency_held=retain_concurrency_claim, deployment_held=retain_deployment_claim,
+                        now=now_ts)
     finally:
-        release_active(board_dir, rule["connection"], connection, now=now_ts)
-        release_concurrency(board_dir, assistant, subject)
+        if not retain_deployment_claim:
+            release_active(board_dir, rule["connection"], connection, now=now_ts)
+        if not retain_concurrency_claim:
+            release_concurrency(board_dir, assistant, subject)
 
     # Chain (#18) only after this Run's own claims are released, so a cascade
     # Run never contends with its own parent's (Assistant, Subject) claim.
@@ -207,3 +247,90 @@ def route_signal(board_dir: Path, signal: dict, *, timeout: float = 120.0,
                                         status=response["result"]["status"], cascade_depth=child_cascade_depth)
         response["cascade"] = route_signal(board_dir, finished, timeout=timeout, now=now)
     return response
+
+
+def _default_status_check(endpoint: str, thread_id: str, invocation_id: str) -> str:
+    """The raw Aegra status string for one invocation, never mapped or
+    interpreted here -- `sweep_pending` does its own bounded mapping."""
+    return describe_run(endpoint, thread_id, invocation_id)["status"]
+
+
+def sweep_pending(board_dir: Path, *, now: datetime | None = None, timeout: float = 120.0,
+                   status_check=None) -> list[dict]:
+    """Re-observe every invocation `pending_completions` is still tracking
+    and finalize any that reached genuine terminal state since it was last
+    observed (#50 AC1).
+
+    For each tracked (deployment, Thread): still ``pending``/``running`` is
+    left untouched except for renewing any held concurrency claim (so it
+    cannot go stale while the Run is still genuinely active, #50 AC4);
+    ``interrupted`` releases whichever claims this entry still held and
+    downgrades it to unheld, but keeps tracking the Thread so a later
+    `approval_inbox.submit_response` resume still has its identity;
+    ``success`` releases held claims, resolves the entry, and routes the same
+    `run_finished_signal`/`route_signal` path an immediate synchronous
+    success would have, so the cascade/dedupe/depth guarantees are identical;
+    any other terminal status releases held claims and resolves the entry
+    with no cascade -- a documented failure/cancellation disposition, not a
+    fabricated completion (#50 scope). A deployment no longer registered is
+    left pending rather than guessed at.
+
+    Returns one ``{"deployment", "thread_id", "status", ...}`` dict per
+    tracked entry actually observed this sweep (an unreachable deployment's
+    entries are skipped and omitted).
+    """
+    board_dir = Path(board_dir)
+    now = now or datetime.now(timezone.utc)
+    now_ts = now.timestamp()
+    status_check = status_check or _default_status_check
+    connections = load_connections(board_dir)
+
+    observed = []
+    for key, entry in list(pending_completions.load_pending(board_dir).items()):
+        deployment, thread_id = json.loads(key)
+        connection = connections.get(deployment)
+        if connection is None:
+            continue
+        try:
+            raw_status = status_check(connection["endpoint"], thread_id, entry["invocation_id"])
+        except RuntimeError:
+            # Ambiguous transport (the shared client's own contract): the Run
+            # may still be genuinely active, so this entry is left exactly as
+            # it was for a later sweep to re-check, never treated as terminal.
+            continue
+        outcome = {"deployment": deployment, "thread_id": thread_id, "status": raw_status}
+
+        if raw_status in ("pending", "running"):
+            if entry["concurrency_held"]:
+                renew_concurrency(board_dir, entry["assistant"], entry["subject"], now=now_ts)
+            continue
+
+        if raw_status == "interrupted":
+            if entry["deployment_held"]:
+                release_active(board_dir, deployment, connection, now=now_ts)
+            if entry["concurrency_held"]:
+                release_concurrency(board_dir, entry["assistant"], entry["subject"])
+            pending_completions.update_pending(board_dir, deployment, thread_id,
+                                                concurrency_held=False, deployment_held=False, now=now_ts)
+            observed.append(outcome)
+            continue
+
+        # Any other terminal status (success, error, cancelled, or an
+        # unrecognized value): this Thread's outstanding invocation is done.
+        if entry["deployment_held"]:
+            release_active(board_dir, deployment, connection, now=now_ts)
+        if entry["concurrency_held"]:
+            release_concurrency(board_dir, entry["assistant"], entry["subject"])
+        pending_completions.resolve_pending(board_dir, deployment, thread_id)
+
+        if raw_status == "success":
+            try:
+                run_id = logical_run(board_dir, deployment, thread_id)["run_id"]
+            except UnknownThread:
+                run_id = entry["invocation_id"]
+            finished = run_finished_signal(run_id=run_id, subject=entry["subject"], connection=deployment,
+                                            assistant=entry["assistant"], status="success",
+                                            cascade_depth=entry["cascade_depth"])
+            outcome["cascade"] = route_signal(board_dir, finished, timeout=timeout, now=now)
+        observed.append(outcome)
+    return observed

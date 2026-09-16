@@ -122,3 +122,20 @@ def release(board_dir: Path, assistant: str, subject: str) -> None:
         if key in data:
             del data[key]
             _write_atomic(concurrency_path(board_dir), data)
+
+
+def renew(board_dir: Path, assistant: str, subject: str, *, now: float) -> None:
+    """Bump a held claim's ``claimed_at`` so it does not go stale while a Run
+    genuinely still owns it (#50): a Run that outlives its submitting call's
+    own ``timeout`` is re-observed by `router.sweep_pending`, not held by any
+    single process for its whole lifetime, so ``stale_after``'s crash-recovery
+    window would otherwise reclaim this Subject out from under a Run that is
+    still actually running. A no-op if no claim is held (already released or
+    reclaimed by another arrival) -- never fabricates one.
+    """
+    key = _key(assistant, subject)
+    with _locked(board_dir):
+        data = load_concurrency(board_dir)
+        if key in data:
+            data[key]["claimed_at"] = now
+            _write_atomic(concurrency_path(board_dir), data)

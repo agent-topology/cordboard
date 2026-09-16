@@ -8,12 +8,13 @@ modules (`test_deployment_lifecycle.py`, `test_router.py`).
 
 import pytest
 
-from cord_runtime import response_dedupe
+from cord_runtime import pending_completions, response_dedupe
 from cord_runtime.approval_expiry import evaluate as expiry_evaluate
 from cord_runtime.approval_expiry import load_approval_expiry
 from cord_runtime.approval_inbox import ApprovalInboxError, discover_waiting, submit_response
-from cord_runtime.backends.base import RuntimeStatus
+from cord_runtime.backends.base import ClientWaitOutcome, ExecutionResult, RuntimeStatus
 from cord_runtime.connections import add_connection
+from cord_runtime.deployment_lifecycle import load_lifecycle
 from cord_runtime.entity_auth import SyntheticEntityAuthBoundary
 from cord_runtime.run_continuity import record_submission
 
@@ -22,7 +23,9 @@ NOW = 1_800_000_000.0
 
 class FakeBackend:
     def __init__(self, *, status=RuntimeStatus.INTERRUPTED, run_info=None, state=None,
-                 resume_error=None, status_error=None, state_error=None):
+                 resume_error=None, status_error=None, state_error=None,
+                 resume_status=RuntimeStatus.SUCCEEDED, resume_wait_outcome=ClientWaitOutcome.COMPLETED,
+                 resume_invocation_id="run-1-resume", resume_logical_run_id="run-1"):
         self._status = status
         self._run_info = run_info or {"assistant_id": "triage-graph", "subject": "urn:cordboard:fixture:44"}
         self._state = state if state is not None else {
@@ -32,6 +35,10 @@ class FakeBackend:
         self._resume_error = resume_error
         self._status_error = status_error
         self._state_error = state_error
+        self._resume_status = resume_status
+        self._resume_wait_outcome = resume_wait_outcome
+        self._resume_invocation_id = resume_invocation_id
+        self._resume_logical_run_id = resume_logical_run_id
         self.resume_calls = []
 
     def status(self, thread_id, invocation_id):
@@ -47,10 +54,15 @@ class FakeBackend:
             raise self._state_error
         return self._state
 
-    def resume(self, thread_id, assistant, resume_value):
+    def resume(self, thread_id, assistant, resume_value, *, timeout=120):
         self.resume_calls.append((thread_id, assistant, resume_value))
         if self._resume_error:
             raise self._resume_error
+        return ExecutionResult(
+            logical_run_id=self._resume_logical_run_id, invocation_id=self._resume_invocation_id,
+            thread_id=thread_id, assistant_id=assistant,
+            status=self._resume_status, wait_outcome=self._resume_wait_outcome,
+        )
 
 
 def _factory(backends: dict):
@@ -261,3 +273,137 @@ def test_an_unreadable_thread_state_is_recorded_unknown(tmp_path):
                               auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
     assert result.status == "unknown"
     assert backend.resume_calls == []
+
+
+# --- Managed resume and completion routing (#50) ----------------------------
+
+def _seed_managed(board_dir, monkeypatch, alias="aegra-local", thread_id="thread-1", api_run_id="run-1"):
+    """A managed connection whose launch/health-check are faked, so
+    `ensure_started`/`release_active` exercise their real
+    `deployment_lifecycle.json` bookkeeping without spawning a process."""
+    import cord_runtime.deployment_lifecycle as deployment_lifecycle
+    monkeypatch.setattr(deployment_lifecycle, "_default_launch", lambda a, launch: 4242)
+    monkeypatch.setattr(deployment_lifecycle, "_default_health_check", lambda endpoint, *, health_timeout: True)
+    add_connection(board_dir, alias, "http://aegra.example", launch=["true"])
+    record_submission(board_dir, alias, thread_id, api_run_id)
+    return alias, thread_id
+
+
+def test_resume_starts_the_managed_deployment_before_resuming(tmp_path, monkeypatch):
+    alias, thread_id = _seed_managed(tmp_path, monkeypatch)
+    backend = FakeBackend()
+    boundary = SyntheticEntityAuthBoundary(GRANTS)
+    result = submit_response(tmp_path, deployment=alias, thread_id=thread_id, interrupt_id="interrupt-a",
+                              approver="alice", response_value=True, revision="chk-1",
+                              auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
+    assert result.status == "resumed"
+    assert backend.resume_calls == [(thread_id, "triage-graph", True)]
+    # A genuine terminal success releases the claim `ensure_started` took.
+    assert load_lifecycle(tmp_path)[alias]["active_runs"] == 0
+
+
+def test_deployment_startup_failure_returns_before_any_claim_or_transport(tmp_path, monkeypatch):
+    import cord_runtime.deployment_lifecycle as deployment_lifecycle
+    monkeypatch.setattr(deployment_lifecycle, "_default_launch", lambda a, launch: 4242)
+    monkeypatch.setattr(deployment_lifecycle, "_default_health_check", lambda endpoint, *, health_timeout: False)
+    add_connection(tmp_path, "local", "http://aegra.example", launch=["true"])
+    record_submission(tmp_path, "local", "thread-1", "run-1")
+    backend = FakeBackend()
+    boundary = SyntheticEntityAuthBoundary(GRANTS)
+
+    result = submit_response(tmp_path, deployment="local", thread_id="thread-1", interrupt_id="interrupt-a",
+                              approver="alice", response_value=True, revision="chk-1",
+                              auth_boundary=boundary, now=NOW, backend_factory=_factory({"local": backend}))
+    assert result.status == "deployment_unavailable"
+    assert backend.resume_calls == []
+    # Nothing was claimed, so a corrected retry (once the Deployment is
+    # reachable) is still free to try again.
+    assert response_dedupe.get_claim(tmp_path, "local", "thread-1", "interrupt-a") is None
+
+
+def test_resume_still_running_past_the_wait_budget_keeps_the_claim_and_tracks_it(tmp_path, monkeypatch):
+    alias, thread_id = _seed_managed(tmp_path, monkeypatch)
+    backend = FakeBackend(resume_status=RuntimeStatus.RUNNING, resume_wait_outcome=ClientWaitOutcome.DEADLINE_REACHED,
+                          resume_invocation_id="run-2")
+    boundary = SyntheticEntityAuthBoundary(GRANTS)
+    result = submit_response(tmp_path, deployment=alias, thread_id=thread_id, interrupt_id="interrupt-a",
+                              approver="alice", response_value=True, revision="chk-1",
+                              auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
+    assert result.status == "resumed"
+    assert load_lifecycle(tmp_path)[alias]["active_runs"] == 1  # never released while genuinely still running
+    entry = pending_completions.get_pending(tmp_path, alias, thread_id)
+    assert entry["invocation_id"] == "run-2"
+    assert entry["deployment_held"] is True
+    assert entry["assistant"] == "triage-graph"
+    assert entry["subject"] == "urn:cordboard:fixture:44"
+
+
+def test_resume_interrupted_again_releases_the_claim_and_keeps_tracking_identity(tmp_path, monkeypatch):
+    alias, thread_id = _seed_managed(tmp_path, monkeypatch)
+    backend = FakeBackend(resume_status=RuntimeStatus.INTERRUPTED, resume_invocation_id="run-2")
+    boundary = SyntheticEntityAuthBoundary(GRANTS)
+    result = submit_response(tmp_path, deployment=alias, thread_id=thread_id, interrupt_id="interrupt-a",
+                              approver="alice", response_value=True, revision="chk-1",
+                              auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
+    assert result.status == "resumed"
+    assert load_lifecycle(tmp_path)[alias]["active_runs"] == 0
+    entry = pending_completions.get_pending(tmp_path, alias, thread_id)
+    assert entry["invocation_id"] == "run-2"
+    assert entry["deployment_held"] is False
+    assert entry["concurrency_held"] is False
+
+
+def test_resume_terminal_failure_releases_the_claim_with_no_fabricated_cascade(tmp_path, monkeypatch):
+    alias, thread_id = _seed_managed(tmp_path, monkeypatch)
+    backend = FakeBackend(resume_status=RuntimeStatus.FAILED)
+    boundary = SyntheticEntityAuthBoundary(GRANTS)
+    result = submit_response(tmp_path, deployment=alias, thread_id=thread_id, interrupt_id="interrupt-a",
+                              approver="alice", response_value=True, revision="chk-1",
+                              auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
+    assert result.status == "resumed"
+    assert load_lifecycle(tmp_path)[alias]["active_runs"] == 0
+
+
+def test_resume_ambiguous_wait_transport_error_retains_the_claim(tmp_path, monkeypatch):
+    alias, thread_id = _seed_managed(tmp_path, monkeypatch)
+    backend = FakeBackend(resume_status=RuntimeStatus.UNKNOWN, resume_wait_outcome=ClientWaitOutcome.TRANSPORT_ERROR)
+    boundary = SyntheticEntityAuthBoundary(GRANTS)
+    result = submit_response(tmp_path, deployment=alias, thread_id=thread_id, interrupt_id="interrupt-a",
+                              approver="alice", response_value=True, revision="chk-1",
+                              auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
+    assert result.status == "resumed"
+    assert load_lifecycle(tmp_path)[alias]["active_runs"] == 1  # ambiguous: never released
+
+
+def test_resume_success_cascades_through_route_signal_using_tracked_identity(tmp_path, monkeypatch):
+    from cord_runtime.rules import add_rule
+
+    alias, thread_id = _seed_managed(tmp_path, monkeypatch)
+    pending_completions.record_pending(tmp_path, alias, thread_id, "run-1", assistant="triage-graph",
+                                        subject="urn:cordboard:fixture:44", cascade_depth=0,
+                                        concurrency_held=False, deployment_held=False, now=NOW - 10)
+    add_rule(tmp_path, {
+        "name": "cascade", "signal_type": "run.finished", "connection": alias,
+        "assistant": "graph-b", "when": {"assistant": "triage-graph", "status": "success"},
+    })
+    calls = []
+
+    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120,
+                     caused_by_run_id=None, cascade_depth=0):
+        calls.append(dict(assistant=assistant, subject=subject, caused_by_run_id=caused_by_run_id,
+                          cascade_depth=cascade_depth))
+        return {"run_id": "r-child", "thread_id": "t-child", "status": "success", "values": {}}
+
+    import cord_runtime.router as router_module
+    monkeypatch.setattr(router_module, "execute", fake_execute)
+
+    backend = FakeBackend(resume_status=RuntimeStatus.SUCCEEDED, resume_logical_run_id="run-1")
+    boundary = SyntheticEntityAuthBoundary(GRANTS)
+    result = submit_response(tmp_path, deployment=alias, thread_id=thread_id, interrupt_id="interrupt-a",
+                              approver="alice", response_value=True, revision="chk-1",
+                              auth_boundary=boundary, now=NOW, backend_factory=_factory({alias: backend}))
+    assert result.status == "resumed"
+    assert len(calls) == 1
+    assert calls[0]["assistant"] == "graph-b"
+    assert calls[0]["caused_by_run_id"] == "run-1"
+    assert pending_completions.get_pending(tmp_path, alias, thread_id) is None

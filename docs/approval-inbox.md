@@ -32,8 +32,14 @@ LangGraph seam, not just the pinned source.
   probed is skipped, never raised -- one unreachable Deployment cannot hide
   every other Deployment's waiting interrupts.
 - `submit_response(board_dir, deployment=, thread_id=, interrupt_id=,
-  approver=, response_value=, revision=, auth_boundary=, now=)` routes one
-  operator's answer to the exact interrupt it targets, in order:
+  approver=, response_value=, revision=, auth_boundary=, now=, timeout=)`
+  routes one operator's answer to the exact interrupt it targets, in order:
+  0. `cord_runtime.deployment_lifecycle.ensure_started` (#50) -- the same
+     shared entry point `cord_runtime.router.route_signal` calls, since a
+     managed Deployment may have gone idle while its Run sat interrupted. A
+     startup failure returns `"deployment_unavailable"` here, before the
+     response-dedupe claim is ever taken, so a corrected retry can still try
+     again.
   1. `cord_runtime.response_dedupe.claim` -- a duplicate/racing submission
      for the same interrupt stops here, before authorization or transport.
   2. `auth_boundary.authorize` (`cord_runtime.entity_auth.EntityAuthBoundary`)
@@ -43,6 +49,19 @@ LangGraph seam, not just the pinned source.
   3. `backend.resume` -- an ambiguous-transport `RuntimeError` is recorded as
      `UNKNOWN`, never retried automatically; a clean resume is recorded
      `RESUMED` and, best-effort, closes the Thread's `approval_expiry` wait.
+
+  The resumed outcome now decides the Deployment activity claim `ensure_started`
+  took, instead of it being discarded (#50): genuine terminal success releases
+  it and routes the Run's own `run.finished` Signal through
+  `cord_runtime.router.route_signal`, using the (assistant, subject,
+  cascade_depth) identity `cord_runtime.pending_completions` recorded when
+  this Thread first paused; a Run still queued/running past `timeout` (default
+  120s) keeps the claim held and the Thread tracked for `cord_runtime.
+  router.sweep_pending` to finish observing later; an interrupt again releases
+  the claim so the Deployment can go idle until the next resume restarts it;
+  a genuine terminal failure/cancellation releases the claim with no cascade,
+  the same documented disposition `route_signal`'s own `"execution_failed"`
+  already has.
 
 ## `cord_runtime.entity_auth`
 
@@ -91,13 +110,20 @@ and an unreachable Deployment, two distinguishable interrupts on one Thread,
 the authorization boundary's stale/revision-mismatch/unauthorized paths (each
 isolated to its own failure reason), the response-dedupe duplicate-submission
 refusal, an ambiguous resume transport failure recorded `unknown` and never
-retried, and the real LangGraph seam producing two distinct `Interrupt.id`s
-that resume independently via `Command(resume={id: value, ...})`. The second
-command is the full non-Docker, non-pinned-binary suite; it passed at
-504/504 after this change (31 deselected: `collector`/`langfuse`/`aegra`
-markers), confirming no regression to escalation counts, redaction, the
-Collector gate, or the existing interrupt/resume span boundary (#5, #6, #15,
-#28).
+retried, the real LangGraph seam producing two distinct `Interrupt.id`s that
+resume independently via `Command(resume={id: value, ...})`, and (#50) the
+managed-resume/completion-routing additions: `ensure_started` running before
+a resume and its own startup failure staying claim-free, a resumed Run still
+queued/running past its wait budget or hit by an ambiguous wait-transport
+failure keeping the Deployment's activity claim, a further interrupt
+releasing it while still tracking identity, a terminal failure releasing it
+with no fabricated cascade, and a genuine terminal success releasing it and
+routing the tracked (assistant, subject, cascade_depth) through
+`router.route_signal` -- 43/43. The second command is the full non-Docker,
+non-pinned-binary suite; it passed at 587/587 after this change (36
+deselected: `collector`/`langfuse`/`aegra` markers), confirming no regression
+to escalation counts, redaction, the Collector gate, or the existing
+interrupt/resume span boundary (#5, #6, #15, #28).
 
 Real Aegra HTTP/SSE verification of this contract (the actual `/state`
 response shape, real revision/checkpoint field names under load, and a real

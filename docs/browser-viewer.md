@@ -132,7 +132,11 @@ only ever a claim -- authorization is decided by the connection's optional
 entity-owned HTTP port reached through the new
 `entity_auth.HttpEntityAuthBoundary`. No `auth_endpoint` configured, or the
 port unreachable/returning an invalid response, is always a rejection --
-never an implicit allow.
+never an implicit allow. `submit_response` now also starts a managed
+Deployment that went idle while its Run sat interrupted before resuming it
+(#50); a startup failure surfaces as `deployment_unavailable` (`409`) the
+same way any other non-`resumed` disposition does, before any response-dedupe
+claim is taken.
 
 Every mutation POST requires a matching `Origin` header and a double-submit
 `cord_csrf` cookie/form-token pair (`hmac.compare_digest`); a mismatch or
