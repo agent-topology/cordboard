@@ -124,3 +124,34 @@ def reconcile(live_runs: dict[str, LiveRun], recorded_run_ids, *, now: float,
             "seconds_since_completion": seconds,
         }
     return views
+
+
+def await_convergence(live_runs: dict[str, LiveRun], get_recorded_run_ids, *, now_fn, sleep_fn,
+                       poll_interval: float = 1.0,
+                       ingestion_pending_after: float = DEFAULT_INGESTION_PENDING_AFTER,
+                       ingestion_failed_after: float = DEFAULT_INGESTION_FAILED_AFTER):
+    """Re-poll the archive contract until every completed Run in ``live_runs``
+    is replaced by its durable record or reaches the bounded
+    ``ingestion_failed_after`` diagnostic (#46 AC3/AC4), yielding the
+    reconciled view dict after every poll (the first included) so a caller
+    can render convergence progress rather than only a final snapshot.
+
+    ``get_recorded_run_ids`` is called fresh on every poll (the archive is
+    re-read, not read once) and ``now_fn``/``sleep_fn`` are injected so the
+    thresholds above are exercisable with a controlled clock instead of real
+    waiting. A Run that never completed (``completed_at`` is still ``None``
+    when its watch ended, e.g. a `--watch-timeout` gave up while it was still
+    running) is not polled for -- there is nothing to converge toward yet,
+    and #46 never blocks on a Run that is still genuinely live.
+    """
+    while True:
+        views = reconcile(live_runs, get_recorded_run_ids(), now=now_fn(),
+                           ingestion_pending_after=ingestion_pending_after,
+                           ingestion_failed_after=ingestion_failed_after)
+        yield views
+        unresolved = [run_id for run_id, live in live_runs.items()
+                      if live.completed_at is not None and run_id in views
+                      and views[run_id]["source"] != INGESTION_FAILED]
+        if not unresolved:
+            return
+        sleep_fn(poll_interval)

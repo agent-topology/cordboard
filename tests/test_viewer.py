@@ -203,6 +203,69 @@ def test_execution_tree_reuses_archive_contract_validation():
         build_execution_tree(spans)
 
 
+# --- timeline truthfulness: end_ns, approval wait vs. execution (#46 AC5) ---
+
+def test_execution_tree_sets_basic_end_ns_and_execution_ns():
+    spans = _run_tree("fixture-a", "run-1")  # run span start=1000 end=2000, no resume
+    run = build_execution_tree(spans)[0]
+    assert run["end_ns"] == 2000
+    assert run["approval_wait_ns"] == 0
+    assert run["execution_ns"] == 1000
+    assert run["timeline_incomplete"] is False
+    assert run["steps"][0]["approval_wait_ns"] is None
+    assert run["steps"][0]["awaiting_resume"] is False
+
+
+def test_run_end_ns_is_the_max_of_run_and_every_step_attempt_end_not_just_the_run_spans_own():
+    """ADR-0008: the Run span itself closes at the first pause; `resume_run`
+    never reopens it. #46 AC5: the Run's truthful end must not undercount a
+    later Step that only exists because of a resume."""
+    trace_id = "a" * 32
+    run_sid, run_entry = _span("run", span_id=_sid(), parent_id=None, trace_id=trace_id,
+                               graph_id="fixture-a", run_id="run-1", start=1000, end=1500)
+    original_sid, original_entry = _span("step", span_id=_sid(), parent_id=run_sid, trace_id=trace_id,
+                                         graph_id="fixture-a", run_id="run-1", node="approve",
+                                         outcome="awaiting_approval", start=1100, end=1500)
+    resumed_sid, resumed_entry = _span("step", span_id=_sid(), parent_id=run_sid, trace_id=trace_id,
+                                       graph_id="fixture-a", run_id="run-1", node="approve",
+                                       outcome="passed", start=3000, end=3200, resumed_from=original_sid)
+    spans = dict([(run_sid, run_entry), (original_sid, original_entry), (resumed_sid, resumed_entry)])
+    run = build_execution_tree(spans)[0]
+
+    assert run["end_ns"] == 3200  # not the Run span's own (earlier) endTimeUnixNano of 1500
+    assert run["approval_wait_ns"] == 1500  # 3000 (resume start) - 1500 (original Step's end)
+    assert run["execution_ns"] == run["end_ns"] - run["start_ns"] - run["approval_wait_ns"]
+    assert run["timeline_incomplete"] is False
+
+    original = next(s for s in run["steps"] if s["span_id"] == original_sid)
+    resumed = next(s for s in run["steps"] if s["span_id"] == resumed_sid)
+    assert original["awaiting_resume"] is False  # already resumed -- not an open wait
+    assert resumed["approval_wait_ns"] == 1500
+
+
+def test_step_resumed_from_a_span_absent_from_the_archive_has_no_synthesized_wait():
+    spans = _run_tree("fixture-a", "run-1", node="approve")
+    run_sid = next(sid for sid, (s, _) in spans.items() if s["name"] == "run")
+    trace_id = "a" * 32
+    resumed = _resumed_step_tree("fixture-a", "run-1", run_sid, trace_id,
+                                  node="approve", resumed_from="missing-span-id", start=2000)
+    run = build_execution_tree(_merge(spans, resumed))[0]
+    resumed_step = next(s for s in run["steps"] if s["resumed_from"] == "missing-span-id")
+    assert resumed_step["approval_wait_ns"] is None  # never synthesized
+    assert run["timeline_incomplete"] is True
+
+
+def test_step_still_awaiting_approval_with_no_resume_yet_is_flagged_not_a_gap():
+    spans = _run_tree("fixture-a", "run-1", node="approve")
+    step_span = next(s for s, _ in spans.values() if s["name"].startswith("step:"))
+    step_span["attributes"]["cord.outcome"] = "awaiting_approval"
+    run = build_execution_tree(spans)[0]
+    step = run["steps"][0]
+    assert step["awaiting_resume"] is True
+    assert step["approval_wait_ns"] is None  # this Step wasn't resumed; nothing to subtract
+    assert run["timeline_incomplete"] is True
+
+
 # --- repeated-execution evidence (#15) ---------------------------------------
 
 def _resumed_step_tree(graph_id, run_id, run_sid, trace_id, *, node, resumed_from, start):

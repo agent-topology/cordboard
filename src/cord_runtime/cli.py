@@ -9,8 +9,10 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import queue
 import shlex
 import sys
+import threading
 import time
 
 import requests
@@ -20,12 +22,13 @@ from cord_runtime.archive_query import ArchiveError, read_spans
 from cord_runtime.backends.aegra import AegraExecutionBackend
 from cord_runtime.connections import InvalidConnection, add_connection, load_connections, set_graph_map
 from cord_runtime.deployment_lifecycle import stop_idle
-from cord_runtime.live_reconciliation import LiveRun, reconcile
+from cord_runtime.live_reconciliation import LiveRun, await_convergence, reconcile
 from cord_runtime.router import route_signal
 from cord_runtime.rules import InvalidRule, SIGNAL_TYPES, add_rule
+from cord_runtime.run_continuity import UnknownThread, logical_run, record_submission
 from cord_runtime.signals import InvalidSignal, file_signal, manual_signal, schedule_signal
 from cord_runtime.topology import VALID, check_freshness, refresh_snapshot
-from cord_runtime.viewer import build_catalog, format_catalog_text
+from cord_runtime.viewer import build_catalog, build_execution_tree, format_catalog_text
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
@@ -159,41 +162,75 @@ def _parse_watch_target(raw: str) -> tuple[str, str, str]:
     return alias, thread_id, run_id
 
 
-def _watch_live_run(endpoint: str, thread_id: str, run_id: str, *, timeout: float) -> dict | None:
-    """Drain one Run's public lifecycle stream (#20) and reconcile it for the
-    catalog. Returns `None` -- printing a diagnostic, never raising -- when
-    the Run or its Assistant can't be identified; the viewer never fabricates
-    a Graph to hang a live Run under (ADR-0011/0015's "never block/guess").
+def _resolve_logical_run_id(board_dir: Path, alias: str, thread_id: str, run_id: str) -> str:
+    """The identity a watched Run's `LiveRun` is keyed by (#46 AC2).
+
+    `run_continuity`'s logical Run ID stays stable across a resume's fresh
+    API Run ID and matches the same `cord.run.id` the archive records (the
+    Run's own OTel span never reopens on resume -- see
+    `cord_runtime.execution.resume_run`), so watching either the original or
+    a resumed invocation's Run ID converges on one catalog entry instead of
+    forking it. A Thread `run_continuity` has never recorded (e.g. a Run
+    submitted outside `cord`) falls back to the watched Run ID itself rather
+    than blocking or guessing (ADR-0015).
+    """
+    try:
+        return logical_run(board_dir, alias, thread_id)["run_id"]
+    except UnknownThread:
+        return run_id
+
+
+def _watch_worker(alias: str, endpoint: str, thread_id: str, run_id: str, *, timeout: float,
+                   board_dir: Path, messages: "queue.Queue[tuple]") -> None:
+    """Runs in its own thread (#46 AC1): resolves one --watch target's
+    identity and streams its lifecycle events onto a shared queue instead of
+    returning only after the whole stream drains, so N watched targets make
+    progress concurrently -- none blocks behind another's completion -- and
+    the consumer can render each update as it arrives rather than only a
+    final snapshot.
 
     Depends on the ExecutionBackend boundary (#42) rather than a concrete
     Aegra transport function, so a future backend only needs to satisfy the
     same `describe_run`/`describe_assistant`/`watch` shape.
     """
+    # Every path through this function ends in exactly one "done" (#46 AC1):
+    # an early "failed" return must still signal completion, or the
+    # consumer's `while remaining > 0` loop in cmd_view waits forever for a
+    # thread that already exited.
+    try:
+        _watch_worker_body(alias, endpoint, thread_id, run_id, timeout=timeout,
+                            board_dir=board_dir, messages=messages)
+    finally:
+        messages.put(("done", thread_id, run_id, None))
+
+
+def _watch_worker_body(alias: str, endpoint: str, thread_id: str, run_id: str, *, timeout: float,
+                        board_dir: Path, messages: "queue.Queue[tuple]") -> None:
     backend = AegraExecutionBackend(endpoint)
     try:
         identity = backend.describe_run(thread_id, run_id)
     except (RuntimeError, ValueError) as exc:
-        print(f"cord: --watch {thread_id}/{run_id}: {exc}", file=sys.stderr)
-        return None
+        messages.put(("failed", thread_id, run_id, f"cord: --watch {thread_id}/{run_id}: {exc}"))
+        return
     try:
         graph_id = backend.describe_assistant(identity["assistant_id"])["graph_id"]
     except (RuntimeError, ValueError):
         graph_id = None
     if graph_id is None:
-        print(f"cord: --watch {thread_id}/{run_id}: could not resolve a Graph for assistant "
-              f"'{identity['assistant_id']}'; omitted from the catalog", file=sys.stderr)
-        return None
+        messages.put(("failed", thread_id, run_id,
+                       f"cord: --watch {thread_id}/{run_id}: could not resolve a Graph for assistant "
+                       f"'{identity['assistant_id']}'; omitted from the catalog"))
+        return
 
-    live = LiveRun(run_id, thread_id, graph_id=graph_id,
-                   assistant_id=identity["assistant_id"], subject=identity["subject"])
-    if identity["status"] in ("pending", "running", "interrupted"):
-        live.status = identity["status"]
+    logical_id = _resolve_logical_run_id(board_dir, alias, thread_id, run_id)
+    messages.put(("identified", logical_id, thread_id,
+                  {"graph_id": graph_id, "assistant_id": identity["assistant_id"], "subject": identity["subject"],
+                   "status": identity["status"]}))
     try:
         for event, data, event_id in backend.watch(thread_id, run_id, timeout=timeout):
-            live.apply(event, data, event_id, now=time.monotonic())
+            messages.put(("event", logical_id, thread_id, (event, data, event_id)))
     except RuntimeError as exc:
-        print(f"cord: --watch {thread_id}/{run_id}: {exc}", file=sys.stderr)
-    return reconcile({run_id: live}, recorded_run_ids=set(), now=time.monotonic()).get(run_id)
+        messages.put(("failed", thread_id, run_id, f"cord: --watch {thread_id}/{run_id}: {exc}"))
 
 
 def cmd_view(args: argparse.Namespace) -> int:
@@ -224,19 +261,82 @@ def cmd_view(args: argparse.Namespace) -> int:
                           "graph_map": info.get("graph_map") or {}}
         topology[endpoint] = check_freshness(board_dir, endpoint, timeout=_PROBE_TIMEOUT)
 
-    live_runs = {}
-    for alias, thread_id, run_id in watch_targets:
-        view = _watch_live_run(connections[alias]["endpoint"], thread_id, run_id, timeout=args.watch_timeout)
-        if view is not None:
-            live_runs[run_id] = view
+    live_by_id: dict[str, LiveRun] = {}
+    last_printed: list[str | None] = [None]
+
+    def read_archive() -> dict:
+        return read_spans(args.archive) if args.archive else {}
+
+    def recorded_run_ids() -> set[str]:
+        return {run["run_id"] for run in build_execution_tree(read_archive())}
+
+    def render() -> None:
+        """Re-read the archive and print the catalog if it changed since the
+        last render (#46 AC1/AC4): every render reflects the archive as of
+        right now, so a Run that got recorded mid-watch is dropped from
+        `live_by_id`'s view and shown as recorded instead, in the same print
+        that would otherwise have still called it live."""
+        spans = read_archive()
+        views = reconcile(live_by_id, {run["run_id"] for run in build_execution_tree(spans)},
+                          now=time.monotonic())
+        catalog = build_catalog(probed, topology, spans, live_runs=views)
+        text = json.dumps(catalog) if args.json else format_catalog_text(catalog)
+        if text != last_printed[0]:
+            print(text)
+            last_printed[0] = text
 
     try:
-        spans = read_spans(args.archive) if args.archive else {}
-        catalog = build_catalog(probed, topology, spans, live_runs=live_runs)
+        if watch_targets:
+            messages: "queue.Queue[tuple]" = queue.Queue()
+            threads = [
+                threading.Thread(
+                    target=_watch_worker, args=(alias, connections[alias]["endpoint"], thread_id, run_id),
+                    kwargs={"timeout": args.watch_timeout, "board_dir": board_dir, "messages": messages},
+                    daemon=True)
+                for alias, thread_id, run_id in watch_targets
+            ]
+            for t in threads:
+                t.start()
+
+            # One consumer loop applies every thread's events to shared state
+            # and renders (#46 AC1): each --watch target's network I/O runs
+            # concurrently on its own thread, so none blocks behind another's
+            # completion, while state mutation/printing stays single-threaded.
+            remaining = len(threads)
+            while remaining > 0:
+                kind, logical_id, thread_id, payload = messages.get()
+                if kind == "identified":
+                    live = LiveRun(logical_id, thread_id, graph_id=payload["graph_id"],
+                                   assistant_id=payload["assistant_id"], subject=payload["subject"])
+                    if payload["status"] in ("pending", "running", "interrupted"):
+                        live.status = payload["status"]
+                    live_by_id[logical_id] = live
+                    render()
+                elif kind == "event":
+                    event, data, event_id = payload
+                    live_by_id[logical_id].apply(event, data, event_id, now=time.monotonic())
+                    render()
+                elif kind == "failed":
+                    print(payload, file=sys.stderr)
+                elif kind == "done":
+                    remaining -= 1
+            for t in threads:
+                t.join()
+
+        if args.archive:
+            # Bounded post-watch convergence (#46 AC3/AC4): keep re-reading
+            # the archive until every completed watched Run is replaced by
+            # its durable record or reaches the ingestion-failed deadline.
+            # Skipped with no --archive: there is nothing to converge
+            # against, and this is `cord view`'s existing single-shot shape.
+            for _ in await_convergence(live_by_id, recorded_run_ids,
+                                        now_fn=time.monotonic, sleep_fn=time.sleep):
+                render()
+        else:
+            render()
     except ArchiveError as exc:
         return _fail(str(exc), EXIT_USAGE)
 
-    print(json.dumps(catalog) if args.json else format_catalog_text(catalog))
     return EXIT_OK
 
 
@@ -265,6 +365,14 @@ def cmd_run(args: argparse.Namespace) -> int:
         return _fail(str(exc), EXIT_USAGE)
     except RuntimeError as exc:
         return _fail(str(exc), EXIT_FAILURE)
+
+    if result.get("thread_id") and result.get("run_id"):
+        # Anchor this submission as its Thread's first (#46 AC2): a later
+        # resume (`approval_inbox.submit_response` -> `backend.resume`)
+        # already calls `record_submission` on its own fresh API Run ID, but
+        # only this original submission fixes *which* Run ID that resume
+        # gets grouped under instead of becoming a logical Run of its own.
+        record_submission(_board_dir(args), args.alias, result["thread_id"], result["run_id"])
 
     print(json.dumps(result))
     return EXIT_OK if result["status"] == "success" else EXIT_FAILURE

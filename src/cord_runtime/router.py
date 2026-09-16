@@ -45,6 +45,7 @@ from cord_runtime.concurrency import release as release_concurrency, try_claim a
 from cord_runtime.connections import InvalidConnection, get_connection
 from cord_runtime.deployment_lifecycle import ensure_started, release_active
 from cord_runtime.rules import load_rules
+from cord_runtime.run_continuity import record_submission
 from cord_runtime.signal_dedupe import claim as claim_signal
 from cord_runtime.signals import run_finished_signal
 
@@ -188,6 +189,10 @@ def route_signal(board_dir: Path, signal: dict, *, timeout: float = 120.0,
                 response = {"status": "execution_failed", "signal_id": signal["id"],
                             "rule": rule["name"], "error": str(exc)}
             else:
+                # Anchor this submission as its Thread's first (#46 AC2), the
+                # same as cmd_run -- see cord_runtime.cli.cmd_run's comment.
+                if result.get("thread_id") and result.get("run_id"):
+                    record_submission(board_dir, rule["connection"], result["thread_id"], result["run_id"])
                 response = {"status": "routed", "signal_id": signal["id"], "rule": rule["name"], "result": result}
     finally:
         release_active(board_dir, rule["connection"], connection, now=now_ts)
