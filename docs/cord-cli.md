@@ -8,7 +8,11 @@ settings, or graph-specific platform code
 [ADR-0015](decisions/0015-never-block-connection.md)). Cordboard does not
 describe the graph it connects to; a connection record names only where a
 Deployment lives. `cord view` (#13) is the generic catalog/topology/recorded-
-execution viewer; see [viewer.md](viewer.md) for its full contract. `cord
+execution viewer; see [viewer.md](viewer.md) for its full contract, including
+how it scopes catalog entries per connection and correlates a multi-graph
+topology document through `cord graph-map`'s explicit association (#43).
+`cord graph-map` stores that association and `cord sync` explicitly refreshes
+a connection's topology snapshot (#43). `cord
 deployment sweep` stops idle managed Deployments (#17;
 [signal-routing.md](signal-routing.md) has the full dedupe/concurrency/
 lazy-startup contract). `cord new` and `cord up`'s manifest/drift handling
@@ -32,6 +36,13 @@ registered with `--launch`. Their presence is what makes a Deployment
 "managed" (#17): Cordboard may start it on demand and stop it once idle.
 Their absence keeps a Deployment "external" — only ever contacted, never
 started or stopped, exactly as in the first slices.
+
+A record also optionally carries `graph_map` (#43), set only by `cord
+graph-map`: an explicit `{document_graph_id: cord_graph_id}` association from
+a published topology document's local `graphs[].id` to the recorded
+`cord.graph.id`, used to correlate a multi-graph document's Nodes. Its
+absence — including every record predating this field — is read as no
+associations, not an error.
 
 Writes are atomic (write to a temp file, then `os.replace`). The endpoint must
 be an `http`/`https` URL with a host and **no userinfo** (`user:pass@host` is
@@ -81,6 +92,39 @@ stopped: local
 $ cord deployment sweep
 no idle managed deployments
 ```
+
+### `cord graph-map <alias> <document_graph_id> <graph_id>`
+
+Stores one explicit association from a published topology document's local
+`graphs[].id` (`document_graph_id`) to the recorded `cord.graph.id`
+(`graph_id`) on an already-registered alias's connection record (#43). Never
+inferred by name or position — this is the only way a multi-graph document's
+Nodes become visible in `cord view`. Setting the same `document_graph_id`
+again replaces its prior association; other entries on the same alias are
+left unchanged.
+
+```sh
+$ cord graph-map aegra-local billing cord-graph-billing
+mapped 'aegra-local' document graph 'billing' -> 'cord-graph-billing'
+```
+
+### `cord sync [alias]`
+
+Explicitly refreshes one connection's, or every registered connection's,
+published topology snapshot (`cord_runtime.topology.refresh_snapshot`, #11
+via #43's CLI wiring) and prints each alias's fresh fetch status. A `valid`
+fetch replaces the stored snapshot; `absent`, `unreachable`, and `invalid`
+leave it untouched — these stay distinct diagnostics and never block
+anything ([ADR-0015](decisions/0015-never-block-connection.md)).
+
+```sh
+$ cord sync
+aegra-local	http://127.0.0.1:2026	valid
+```
+
+Exits `1` if any refreshed connection's fetch was not `valid`, `0` otherwise
+(including when no connections are registered) — a status report, like
+`list`, not an action that can be misused.
 
 ### `cord list [alias]`
 

@@ -18,13 +18,13 @@ import requests
 from cord_runtime.aegra_client import execute
 from cord_runtime.archive_query import ArchiveError, read_spans
 from cord_runtime.backends.aegra import AegraExecutionBackend
-from cord_runtime.connections import InvalidConnection, add_connection, load_connections
+from cord_runtime.connections import InvalidConnection, add_connection, load_connections, set_graph_map
 from cord_runtime.deployment_lifecycle import stop_idle
 from cord_runtime.live_reconciliation import LiveRun, reconcile
 from cord_runtime.router import route_signal
 from cord_runtime.rules import InvalidRule, SIGNAL_TYPES, add_rule
 from cord_runtime.signals import InvalidSignal, file_signal, manual_signal, schedule_signal
-from cord_runtime.topology import check_freshness
+from cord_runtime.topology import VALID, check_freshness, refresh_snapshot
 from cord_runtime.viewer import build_catalog, format_catalog_text
 
 EXIT_OK = 0
@@ -78,6 +78,37 @@ def cmd_deployment_sweep(args: argparse.Namespace) -> int:
     stopped = stop_idle(board_dir, connections, now=datetime.now(timezone.utc).timestamp())
     print("stopped: " + ", ".join(sorted(stopped)) if stopped else "no idle managed deployments")
     return EXIT_OK
+
+
+def cmd_graph_map(args: argparse.Namespace) -> int:
+    try:
+        set_graph_map(_board_dir(args), args.alias, args.document_graph_id, args.graph_id)
+    except InvalidConnection as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    print(f"mapped '{args.alias}' document graph '{args.document_graph_id}' -> '{args.graph_id}'")
+    return EXIT_OK
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    board_dir = _board_dir(args)
+    try:
+        connections = load_connections(board_dir)
+    except InvalidConnection as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    if args.alias is not None:
+        if args.alias not in connections:
+            return _fail(f"unknown alias '{args.alias}'", EXIT_USAGE)
+        connections = {args.alias: connections[args.alias]}
+    if not connections:
+        print("no connections registered")
+        return EXIT_OK
+    all_valid = True
+    for alias in sorted(connections):
+        endpoint = connections[alias]["endpoint"]
+        reading = refresh_snapshot(board_dir, endpoint, timeout=_PROBE_TIMEOUT)
+        all_valid = all_valid and reading.status == VALID
+        print(f"{alias}\t{endpoint}\t{reading.status}")
+    return EXIT_OK if all_valid else EXIT_FAILURE
 
 
 def _probe(endpoint: str) -> dict:
@@ -189,7 +220,8 @@ def cmd_view(args: argparse.Namespace) -> int:
     for alias, info in connections.items():
         endpoint = info["endpoint"]
         status = _probe(endpoint)
-        probed[alias] = {"endpoint": endpoint, "reachable": status["reachable"], "graphs": status["graphs"]}
+        probed[alias] = {"endpoint": endpoint, "reachable": status["reachable"], "graphs": status["graphs"],
+                          "graph_map": info.get("graph_map") or {}}
         topology[endpoint] = check_freshness(board_dir, endpoint, timeout=_PROBE_TIMEOUT)
 
     live_runs = {}
@@ -340,6 +372,17 @@ def build_parser() -> argparse.ArgumentParser:
     deployment_sweep = deployment_sub.add_parser(
         "sweep", help="Stop every managed Deployment idle beyond its declared idle_after")
     deployment_sweep.set_defaults(func=cmd_deployment_sweep)
+
+    graph_map = sub.add_parser(
+        "graph-map", help="Store an explicit document-local graph -> cord.graph.id association (#43)")
+    graph_map.add_argument("alias")
+    graph_map.add_argument("document_graph_id", help="graphs[].id inside the connection's published topology document")
+    graph_map.add_argument("graph_id", help="The recorded cord.graph.id this document-local graph corresponds to")
+    graph_map.set_defaults(func=cmd_graph_map)
+
+    sync = sub.add_parser("sync", help="Explicitly refresh a connection's published topology snapshot")
+    sync.add_argument("alias", nargs="?", default=None)
+    sync.set_defaults(func=cmd_sync)
 
     list_cmd = sub.add_parser("list", help="Show reachability and graphs for registered deployments")
     list_cmd.add_argument("alias", nargs="?", default=None)
