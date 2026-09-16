@@ -7,8 +7,10 @@ settings, or graph-specific platform code
 [ADR-0014](decisions/0014-no-graph-descriptors.md),
 [ADR-0015](decisions/0015-never-block-connection.md)). Cordboard does not
 describe the graph it connects to; a connection record names only where a
-Deployment lives. `cord new`, `cord up`'s manifest/drift handling, and other
-lifecycle commands remain planned (#17, #11, #13, #16).
+Deployment lives. `cord view` (#13) is the generic catalog/topology/recorded-
+execution viewer; see [viewer.md](viewer.md) for its full contract. `cord
+new`, `cord up`'s manifest/drift handling, and other lifecycle commands
+remain planned (#17, #11, #16).
 
 ## Storage
 
@@ -61,6 +63,28 @@ An unreachable Deployment is shown, not treated as invalid input:
 ```sh
 $ cord list
 aegra-local	http://127.0.0.1:2026	unreachable	graphs=-
+```
+
+### `cord view [alias] [--archive <path>]... [--json]`
+
+Prints the catalog: every Graph named by a registered connection's
+`/assistants` probe or present in recorded execution, its optional published
+topology, and its Subjects/Runs/Steps/Attempts. `--archive` (repeatable)
+reads recorded execution through the shared archive contract
+(`cord_runtime.archive_query.read_spans`); without it, connected Graphs still
+render with an empty Run list. `--json` prints the catalog as one JSON object.
+See [viewer.md](viewer.md) for the full topology-correlation and staleness
+contract.
+
+```sh
+$ cord view --archive examples/archive.graph-id.sample.otlp.jsonl
+Graph archive-fixture  (no connection, topology: no_connection)
+  Subject fixture:urn:cordboard:fixture:5
+    Run 17581de7-9734-4a01-9619-3d1a1fec89c8
+      Step draft -> passed
+        Attempt 1, tier=fast -> failed
+        Attempt 2, tier=fast -> escalated
+        Attempt 3, tier=deep -> passed
 ```
 
 ### `cord run <alias> <assistant> <subject> <input.json> [--context <context.json>] [--timeout <seconds>]`

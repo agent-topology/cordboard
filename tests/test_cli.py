@@ -5,6 +5,7 @@ The connection contract and command exit statuses are deterministic without it.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 import requests
@@ -19,6 +20,7 @@ from cord_runtime.connections import (
     validate_endpoint,
 )
 from cord_runtime.rules import load_rules
+from cord_runtime.topology import ABSENT, FreshnessCheck, TopologyReading
 
 
 # --- connections.py: storage contract -----------------------------------
@@ -144,6 +146,70 @@ def test_cmd_list_unreachable_exit_one(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert code == cli.EXIT_FAILURE
     assert "unreachable" in out and "graphs=-" in out
+
+
+# --- cli.py: cmd_view (#13) -------------------------------------------------
+
+def _fake_probe_get(url, timeout=None):
+    if url.endswith("/health"):
+        return FakeGetResponse(200)
+    if url.endswith("/assistants"):
+        return FakeGetResponse(200, {"assistants": [{"graph_id": "fixture-a"}]})
+    raise AssertionError(url)
+
+
+def test_cmd_view_no_connections_no_archive(tmp_path, capsys):
+    code = cli.main(["--board", str(tmp_path), "view"])
+    assert code == cli.EXIT_OK
+    assert "no Graphs" in capsys.readouterr().out
+
+
+def test_cmd_view_renders_graph_before_any_run(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    monkeypatch.setattr(cli.requests, "get", _fake_probe_get)
+    monkeypatch.setattr(cli, "check_freshness",
+                        lambda board_dir, endpoint, **kw: FreshnessCheck(status=ABSENT, reading=TopologyReading(status=ABSENT)))
+
+    code = cli.main(["--board", str(tmp_path), "view"])
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_OK
+    assert "Graph fixture-a" in out
+    assert "topology: absent" in out
+    assert "no recorded Runs" in out
+
+
+def test_cmd_view_unknown_alias_exit_two(tmp_path):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    assert cli.main(["--board", str(tmp_path), "view", "missing"]) == cli.EXIT_USAGE
+
+
+def test_cmd_view_json_output_is_valid_json(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    monkeypatch.setattr(cli.requests, "get", _fake_probe_get)
+    monkeypatch.setattr(cli, "check_freshness",
+                        lambda board_dir, endpoint, **kw: FreshnessCheck(status=ABSENT, reading=TopologyReading(status=ABSENT)))
+
+    code = cli.main(["--board", str(tmp_path), "view", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == cli.EXIT_OK
+    assert payload["graphs"][0]["graph_id"] == "fixture-a"
+
+
+def test_cmd_view_with_archive_shows_recorded_execution(tmp_path, monkeypatch, capsys):
+    root = Path(__file__).parents[1]
+    code = cli.main(["--board", str(tmp_path), "view",
+                     "--archive", str(root / "examples/archive.graph-id.sample.otlp.jsonl"), "--json"])
+    assert code == cli.EXIT_OK
+    payload = json.loads(capsys.readouterr().out)
+    graph_ids = {g["graph_id"] for g in payload["graphs"]}
+    assert graph_ids  # at least the archived Graphs render with no connection
+
+
+def test_cmd_view_invalid_archive_exit_two(tmp_path):
+    bad = tmp_path / "bad.otlp.jsonl"
+    bad.write_text("not json\n")
+    code = cli.main(["--board", str(tmp_path), "view", "--archive", str(bad)])
+    assert code == cli.EXIT_USAGE
 
 
 # --- cli.py: cmd_run -------------------------------------------------------

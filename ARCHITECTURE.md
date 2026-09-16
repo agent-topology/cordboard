@@ -39,8 +39,18 @@ and no payload (#16).
 optional published topology over HTTP, classifies it as absent, unreachable,
 invalid, or valid against the pinned `agent-topology-spec==0.1.0b3` schema,
 raises the R3 fan-out/interrupt warning, and tracks a local snapshot to detect
-when a previously fetched document changed (#11). It is a library only: no
-`cord` subcommand calls it yet, and `cord sync`'s CLI wiring remains planned.
+when a previously fetched document changed (#11). `cord sync`'s explicit
+refresh CLI wiring remains planned, but `cord view` (#13) now calls
+`check_freshness` directly to read the already-stored snapshot state.
+[`cord_runtime.viewer`](src/cord_runtime/viewer.py) is the generic catalog:
+`cord view` joins a connection's reachable Graphs (`/assistants`), optional
+topology, and recorded execution read through the shared archive contract
+(`cord_runtime.archive_query.role`/`parent`, reused rather than
+reimplemented) purely by explicit `cord.*` identity. A drifted document is
+shown stale and withheld from correlation; a topology document publishing
+more than one Graph is shown present but also withheld from correlation,
+since no explicit per-connection Deployment/Graph association storage exists
+yet to disambiguate it (see [docs/viewer.md](docs/viewer.md)) (#13).
 
 The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
 the implemented core/domain libraries and Omiologic Aegra deployment. These are
@@ -239,9 +249,11 @@ can reveal is shown, not enforced:
 A drifted picture is the harm ADR-0011 worried about, so the mitigation lives in
 what the viewer displays rather than in a log line: a stale topology must never
 look current. `cord_runtime.topology.fetch_topology`/`check_freshness` classify
-the first three rows and the snapshot-drift half of the fourth (#11); no
-catalog or viewer consumes them yet, so "Topology drawn"/"shown as stale" above
-describe #13's still-planned display, not current behavior.
+the first three rows and the snapshot-drift half of the fourth (#11);
+`cord_runtime.viewer`/`cord view` now consume them for all four rows (#13):
+"Topology drawn" only when a `current` fetch's document is unambiguous (see
+[docs/viewer.md](docs/viewer.md)'s Deployment/Graph association gap), and
+"shown as stale" for a `changed` fetch.
 
 R3 is a warning: an interrupt in a direct fan-out branch, judged from core
 edge-kind and interrupt fields. It covers static interrupts only; dynamic
