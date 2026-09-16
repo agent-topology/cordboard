@@ -13,6 +13,7 @@ import requests
 from cord_runtime.aegra_client import execute
 from cord_runtime.archive_check import check
 from cord_runtime.archive_query import query
+from cord_runtime.topology import VALID, fetch_topology
 from examples.aegra_server import environment
 from conftest import CREDENTIAL, PRIVATE_KEY, ROOT
 from test_collector import archived_spans, attributes, collector, send
@@ -238,6 +239,11 @@ def test_graph_execution_without_model_configuration(tmp_path, cli, postgres):
         with aegra(postgres, None, target, ROOT / "aegra/opaque.json") as endpoint:
             first = execute(endpoint, "opaque-graph", "opaque grouping label",
                             {"items": [CREDENTIAL]})
+            # This deployment publishes no topology manifest at all (#11):
+            # discovery is optional input for a viewer, never a precondition
+            # for connecting or recording a Graph (ADR-0015).
+            reading = fetch_topology(endpoint)
+            assert reading.status != VALID and reading.document is None
             second = execute(endpoint, "opaque-graph", "opaque grouping label",
                              {"items": []})
     assert first["values"]["size"] == 1 and second["values"]["size"] == 0

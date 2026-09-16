@@ -28,6 +28,12 @@ handling, `cord sync`) are still planned.
 `awaiting_approval` when the graph's own `interrupt()` pauses it and open a new,
 linked Step on resume, through LangGraph's public interrupt contract rather
 than any change to `agent-workflow-core` or Omiologic (#28).
+[`cord_runtime.topology`](src/cord_runtime/topology.py) reads a Deployment's
+optional published topology over HTTP, classifies it as absent, unreachable,
+invalid, or valid against the pinned `agent-topology-spec==0.1.0b3` schema,
+raises the R3 fan-out/interrupt warning, and tracks a local snapshot to detect
+when a previously fetched document changed (#11). It is a library only: no
+`cord` subcommand calls it yet, and `cord sync`'s CLI wiring remains planned.
 
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
@@ -168,9 +174,18 @@ deployments, triggers, Subject extraction, concurrency, approval expiry — neve
 single graph. The upstream schema is authoritative for the precise wire format;
 older `derived` wording in the ADRs is not a literal key.
 
-`cord up` is intended to compare freshly derived structure with the published
-structure hash and warn on drift without stopping startup. `cord sync` is the
-explicit refresh path. Source-file hashes and Mermaid text are not the comparison
+Cordboard cannot re-derive structure from source without importing graph code
+(ADR-0014), so it cannot itself confirm that a published document still
+matches the running graph. `cord_runtime.topology` instead tracks a local
+snapshot per Deployment endpoint and compares each fresh fetch's
+document-level `structureHash` against it (#11): unchanged means the
+published document has not moved since the last explicit refresh, not that
+it matches the running code; changed means the picture behind the stored
+snapshot is now stale and must not be shown as current until refreshed; and
+an absent, unreachable, or invalid fetch leaves the stored snapshot untouched
+and reports drift as unknown rather than either confirmed state. `cord sync`
+is the explicit refresh path this snapshot store is built to serve once #12's
+CLI calls it; source-file hashes and Mermaid text are not the comparison
 contract. JSON is authoritative; Mermaid is a rendering aid.
 
 Subgraphs default to opaque nodes (`depth=0`). Per-graph `completeness.gaps`
@@ -193,14 +208,19 @@ can reveal is shown, not enforced:
 
 A drifted picture is the harm ADR-0011 worried about, so the mitigation lives in
 what the viewer displays rather than in a log line: a stale topology must never
-look current.
+look current. `cord_runtime.topology.fetch_topology`/`check_freshness` classify
+the first three rows and the snapshot-drift half of the fourth (#11); no
+catalog or viewer consumes them yet, so "Topology drawn"/"shown as stale" above
+describe #13's still-planned display, not current behavior.
 
 R3 is a warning: an interrupt in a direct fan-out branch, judged from core
 edge-kind and interrupt fields. It covers static interrupts only; dynamic
 `interrupt()` calls are not visible in the topology and have no declaration path
 (ADR-0014). Whether a fan-out runs all branches comes from `agent-topology`'s
-experimental branch interpretation; when that is `unknown`, the warning says the
-condition cannot be confirmed. Warnings need no override.
+experimental branch interpretation; when that is `unknown` or an unrecognized
+revision, the warning says the condition cannot be confirmed. Warnings need no
+override. `cord_runtime.topology.parallel_interrupt_warnings` implements this
+judgment (#11).
 
 Missing Agent Cards, derivation gaps, producer limitations, and unreachable
 Deployments remain warnings or status information. A new rejection rule would
@@ -294,5 +314,8 @@ as executable specifications.
 The [upstream requirements](docs/decisions/cordboard-upstream-requirements.md)
 record each `agent-topology` finding against its measured `0.1.0b3` behavior and
 where Cordboard actually uses it. After ADR-0014 and ADR-0015 none of them can
-block a connection; they affect viewer and warning quality only. No
-`agent-topology` package is an installed Cordboard dependency yet.
+block a connection; they affect viewer and warning quality only.
+`agent-topology-spec==0.1.0b3` is pinned as a direct dependency (#11) for
+schema validation and structure-hash comparison; `agent-topology-langgraph`
+(the producer) is not and remains a graph-side choice, since Cordboard only
+consumes published documents and never derives structure itself.
