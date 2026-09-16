@@ -11,13 +11,15 @@ import json
 from pathlib import Path
 import shlex
 import sys
+import time
 
 import requests
 
-from cord_runtime.aegra_client import execute
+from cord_runtime.aegra_client import describe_assistant, describe_run, execute, watch_lifecycle
 from cord_runtime.archive_query import ArchiveError, read_spans
 from cord_runtime.connections import InvalidConnection, add_connection, load_connections
 from cord_runtime.deployment_lifecycle import stop_idle
+from cord_runtime.live_reconciliation import LiveRun, reconcile
 from cord_runtime.router import route_signal
 from cord_runtime.rules import InvalidRule, SIGNAL_TYPES, add_rule
 from cord_runtime.signals import InvalidSignal, file_signal, manual_signal, schedule_signal
@@ -117,6 +119,46 @@ def cmd_list(args: argparse.Namespace) -> int:
     return EXIT_OK if all_reachable else EXIT_FAILURE
 
 
+def _parse_watch_target(raw: str) -> tuple[str, str, str]:
+    parts = raw.split(":")
+    if len(parts) != 3 or not all(p.strip() for p in parts):
+        raise InvalidConnection(f"--watch '{raw}' must be ALIAS:THREAD_ID:RUN_ID")
+    alias, thread_id, run_id = parts
+    return alias, thread_id, run_id
+
+
+def _watch_live_run(endpoint: str, thread_id: str, run_id: str, *, timeout: float) -> dict | None:
+    """Drain one Run's public lifecycle stream (#20) and reconcile it for the
+    catalog. Returns `None` -- printing a diagnostic, never raising -- when
+    the Run or its Assistant can't be identified; the viewer never fabricates
+    a Graph to hang a live Run under (ADR-0011/0015's "never block/guess").
+    """
+    try:
+        identity = describe_run(endpoint, thread_id, run_id)
+    except (RuntimeError, ValueError) as exc:
+        print(f"cord: --watch {thread_id}/{run_id}: {exc}", file=sys.stderr)
+        return None
+    try:
+        graph_id = describe_assistant(endpoint, identity["assistant_id"])["graph_id"]
+    except (RuntimeError, ValueError):
+        graph_id = None
+    if graph_id is None:
+        print(f"cord: --watch {thread_id}/{run_id}: could not resolve a Graph for assistant "
+              f"'{identity['assistant_id']}'; omitted from the catalog", file=sys.stderr)
+        return None
+
+    live = LiveRun(run_id, thread_id, graph_id=graph_id,
+                   assistant_id=identity["assistant_id"], subject=identity["subject"])
+    if identity["status"] in ("pending", "running", "interrupted"):
+        live.status = identity["status"]
+    try:
+        for event, data, event_id in watch_lifecycle(endpoint, thread_id, run_id, timeout=timeout):
+            live.apply(event, data, event_id, now=time.monotonic())
+    except RuntimeError as exc:
+        print(f"cord: --watch {thread_id}/{run_id}: {exc}", file=sys.stderr)
+    return reconcile({run_id: live}, recorded_run_ids=set(), now=time.monotonic()).get(run_id)
+
+
 def cmd_view(args: argparse.Namespace) -> int:
     board_dir = _board_dir(args)
     try:
@@ -128,6 +170,14 @@ def cmd_view(args: argparse.Namespace) -> int:
             return _fail(f"unknown alias '{args.alias}'", EXIT_USAGE)
         connections = {args.alias: connections[args.alias]}
 
+    try:
+        watch_targets = [_parse_watch_target(raw) for raw in args.watch]
+    except InvalidConnection as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    for alias, _thread_id, _run_id in watch_targets:
+        if alias not in connections:
+            return _fail(f"unknown alias '{alias}' in --watch", EXIT_USAGE)
+
     probed = {}
     topology = {}
     for alias, info in connections.items():
@@ -136,9 +186,15 @@ def cmd_view(args: argparse.Namespace) -> int:
         probed[alias] = {"endpoint": endpoint, "reachable": status["reachable"], "graphs": status["graphs"]}
         topology[endpoint] = check_freshness(board_dir, endpoint, timeout=_PROBE_TIMEOUT)
 
+    live_runs = {}
+    for alias, thread_id, run_id in watch_targets:
+        view = _watch_live_run(connections[alias]["endpoint"], thread_id, run_id, timeout=args.watch_timeout)
+        if view is not None:
+            live_runs[run_id] = view
+
     try:
         spans = read_spans(args.archive) if args.archive else {}
-        catalog = build_catalog(probed, topology, spans)
+        catalog = build_catalog(probed, topology, spans, live_runs=live_runs)
     except ArchiveError as exc:
         return _fail(str(exc), EXIT_USAGE)
 
@@ -287,6 +343,11 @@ def build_parser() -> argparse.ArgumentParser:
     view.add_argument("alias", nargs="?", default=None)
     view.add_argument("--archive", type=Path, action="append", default=[],
                       help="Archive directory or *.otlp.jsonl[.gz] file to read recorded execution from (repeatable)")
+    view.add_argument("--watch", action="append", default=[], metavar="ALIAS:THREAD_ID:RUN_ID",
+                      help="Follow a Run's live Aegra SSE stream and show it alongside recorded execution, "
+                           "until it reaches a terminal status or --watch-timeout elapses (repeatable, #20)")
+    view.add_argument("--watch-timeout", type=float, default=120.0, dest="watch_timeout",
+                      help="Seconds to follow each --watch target before giving up (default: 120)")
     view.add_argument("--json", action="store_true", help="Print the catalog as one JSON object instead of text")
     view.set_defaults(func=cmd_view)
 

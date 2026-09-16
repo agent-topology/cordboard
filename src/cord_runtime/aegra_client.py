@@ -1,5 +1,6 @@
 """Fresh non-conversational executions through Aegra's public HTTP API."""
 
+import json
 import time
 
 import requests
@@ -123,3 +124,145 @@ def cancel(endpoint: str, thread_id: str, run_id: str, *, timeout=10) -> dict:
         request = _session_request(session, endpoint)
         request("POST", f"/threads/{thread_id}/runs/{run_id}/cancel")
         return {"run_id": run_id, "thread_id": thread_id, "status": "halted"}
+
+
+def describe_run(endpoint: str, thread_id: str, run_id: str, *, timeout=10) -> dict:
+    """Return one Run's own public identity: its Assistant and the Subject
+    string it was submitted with, read back from ``GET .../runs/{run_id}``.
+
+    Used to place a live Run in the viewer before any span exists for it --
+    ``config.configurable.cord_subject`` is exactly the opaque string
+    ``execute()``/``resume()`` transported unread; this call does not
+    interpret it further. Raises the same payload-free ``RuntimeError`` as
+    the rest of this client on an unreachable/non-2xx response.
+    """
+    if not isinstance(thread_id, str) or not thread_id.strip():
+        raise ValueError("Thread ID must be a non-empty string")
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise ValueError("Run ID must be a non-empty string")
+    with requests.Session() as session:
+        session.trust_env = False
+        request = _session_request(session, endpoint)
+        run = request("GET", f"/threads/{thread_id}/runs/{run_id}")
+        subject = (run.get("config") or {}).get("configurable", {}).get("cord_subject")
+        return {"run_id": run_id, "thread_id": thread_id,
+                "assistant_id": run["assistant_id"], "status": run["status"], "subject": subject}
+
+
+def describe_assistant(endpoint: str, assistant_id: str, *, timeout=10) -> dict:
+    """Return one Assistant's own public ``graph_id`` (`GET /assistants/{id}`).
+
+    The same ``graph_id`` a graph stamps as ``cord.graph.id`` (ADR-0002/0003),
+    letting a live Run (identified only by its Assistant) join the viewer's
+    existing per-Graph catalog, exactly like `cord list`'s `/assistants` probe.
+    """
+    if not isinstance(assistant_id, str) or not assistant_id.strip():
+        raise ValueError("Assistant ID must be a non-empty string")
+    with requests.Session() as session:
+        session.trust_env = False
+        request = _session_request(session, endpoint)
+        assistant = request("GET", f"/assistants/{assistant_id}")
+        return {"graph_id": assistant["graph_id"]}
+
+
+def _iter_sse_events(response):
+    """Parse one raw SSE byte stream into ``(event, data_text, event_id)``
+    frames, per the standard field/blank-line-terminated wire format Aegra's
+    ``sse_starlette``-based endpoints emit. A comment line (Aegra's periodic
+    ``: heartbeat`` keepalive) carries no field and is silently dropped."""
+    event = None
+    data_lines: list[str] = []
+    event_id = None
+    for raw_line in response.iter_lines(decode_unicode=True):
+        if raw_line is None:
+            continue
+        if raw_line == "":
+            if event is not None or data_lines:
+                yield event or "message", "\n".join(data_lines), event_id
+            event, data_lines, event_id = None, [], None
+            continue
+        if raw_line.startswith(":"):
+            continue
+        if raw_line.startswith("event:"):
+            event = raw_line[len("event:"):].strip()
+        elif raw_line.startswith("data:"):
+            data_lines.append(raw_line[len("data:"):].strip())
+        elif raw_line.startswith("id:"):
+            event_id = raw_line[len("id:"):].strip()
+
+
+_LIFECYCLE_EVENTS = frozenset({"metadata", "end", "error"})
+
+
+def stream_lifecycle(endpoint: str, thread_id: str, run_id: str, *,
+                      last_event_id: str | None = None, timeout: float = 120):
+    """Yield one Run's public lifecycle events from Aegra's own reconnect-safe
+    stream (``GET /threads/{thread_id}/runs/{run_id}/stream``), as
+    ``(event, data, event_id)``.
+
+    Only ``metadata`` (identity), ``end`` (terminal status) and ``error`` (a
+    fixed, payload-free diagnostic) are yielded. ``values``/``updates``/
+    ``messages*``/``debug`` frames carry graph business state and are
+    dropped here, unparsed -- Cordboard's platform/graph boundary, not an
+    optimization. Passing ``last_event_id`` (the last ``event_id`` a prior
+    call yielded) asks Aegra to replay any events since that id before
+    resuming live delivery, so a caller that persists it across a dropped
+    connection sees neither a gap nor a duplicate (#20 AC3). This function
+    makes exactly one HTTP connection; ``watch_lifecycle`` reconnects.
+    """
+    if not isinstance(thread_id, str) or not thread_id.strip():
+        raise ValueError("Thread ID must be a non-empty string")
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise ValueError("Run ID must be a non-empty string")
+    headers = {"Accept": "text/event-stream"}
+    if last_event_id:
+        headers["Last-Event-ID"] = last_event_id
+    url = endpoint.rstrip("/") + f"/threads/{thread_id}/runs/{run_id}/stream"
+    try:
+        with requests.Session() as session:
+            session.trust_env = False
+            with session.get(url, headers=headers, stream=True, timeout=timeout) as response:
+                if not 200 <= response.status_code < 300:
+                    raise RuntimeError(
+                        "Aegra stream request failed; check service readiness and input contract")
+                for event, data_text, event_id in _iter_sse_events(response):
+                    if event not in _LIFECYCLE_EVENTS:
+                        continue
+                    try:
+                        data = json.loads(data_text) if data_text else {}
+                    except ValueError:
+                        continue
+                    yield event, data, event_id
+    except requests.RequestException:
+        raise RuntimeError("Aegra stream request failed; check service readiness and input contract") from None
+
+
+def watch_lifecycle(endpoint: str, thread_id: str, run_id: str, *,
+                     timeout: float = 120, reconnect_delay: float = 0.5):
+    """Reconnect-safe generator over one Run's public lifecycle events.
+
+    Wraps ``stream_lifecycle``: a transport-level drop before an ``end``/
+    ``error`` event reopens the stream with the last ``event_id`` seen as
+    ``Last-Event-ID``, so Aegra's own replay buffer fills the gap instead of
+    the caller losing progress or fabricating a duplicate Run entry (#20).
+    Stops once a terminal (``end``/``error``) event lands, or once
+    ``timeout`` total seconds have elapsed since this call started.
+    """
+    deadline = time.monotonic() + timeout
+    last_event_id = None
+    saw_terminal = False
+    while not saw_terminal and time.monotonic() < deadline:
+        try:
+            for event, data, event_id in stream_lifecycle(
+                endpoint, thread_id, run_id, last_event_id=last_event_id,
+                timeout=max(1.0, deadline - time.monotonic()),
+            ):
+                if event_id:
+                    last_event_id = event_id
+                yield event, data, event_id
+                if event in ("end", "error"):
+                    saw_terminal = True
+        except RuntimeError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(reconnect_delay)

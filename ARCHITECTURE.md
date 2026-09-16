@@ -107,6 +107,20 @@ shown stale and withheld from correlation; a topology document publishing
 more than one Graph is shown present but also withheld from correlation,
 since no explicit per-connection Deployment/Graph association storage exists
 yet to disambiguate it (see [docs/viewer.md](docs/viewer.md)) (#13).
+`cord view --watch` (#20) follows one Run's live Aegra SSE stream (`GET
+/threads/{thread_id}/runs/{run_id}/stream`, Aegra 0.10.4's reconnect-safe
+join endpoint) and reconciles it with recorded execution through
+[`cord_runtime.live_reconciliation`](src/cord_runtime/live_reconciliation.py):
+identity and lifecycle status only (`metadata`/`end`/`error` SSE frames;
+`values`/`updates`/`messages*`/`debug` are dropped unread), model-free by
+construction. A completed live Run stays visible while Langfuse ingestion is
+pending, becomes a visible `ingestion_failed` diagnostic after a bounded
+window rather than looping forever, and is dropped once its recorded
+counterpart lands -- the durable record always replaces the temporary live
+one. Reconnects rely on Aegra's own monotonic per-Run event ids, so a dropped
+connection neither duplicates a Run entry nor loses progress. This is a
+single-shot follow bounded by one `cord view` invocation, not a standing
+daemon (see [docs/viewer.md](docs/viewer.md#live-runs-20)).
 
 The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
 the implemented core/domain libraries and Omiologic Aegra deployment. These are
@@ -177,7 +191,7 @@ flowchart LR
     O --> F[Append-only OTLP archive]
     O --> LF[Langfuse]
     LF -->|Public API| V
-    G -->|Live SSE, later slice| V
+    G -->|Live SSE, cord view --watch| V
 ```
 
 The Graph is opaque here: model providers, tools and optional gateways are its

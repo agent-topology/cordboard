@@ -16,6 +16,7 @@ from agent_topology.spec import finalize_document
 import pytest
 
 from cord_runtime.archive_query import ArchiveError
+from cord_runtime.live_reconciliation import INGESTION_FAILED, INGESTION_PENDING, LIVE
 from cord_runtime.topology import (
     WELL_KNOWN_PATH,
     check_freshness,
@@ -411,3 +412,77 @@ def test_format_catalog_text_includes_key_facts():
     assert "Run run-1" in text
     assert "Step draft -> passed" in text
     assert "Attempt 1, tier=fast -> failed" in text
+
+
+# --- live runs (#20) --------------------------------------------------------
+
+def _live_view(run_id, graph_id, *, source=LIVE, status="running", seconds=None,
+               thread_id="t-1", subject="subject-1"):
+    return {"run_id": run_id, "thread_id": thread_id, "graph_id": graph_id,
+            "assistant_id": graph_id, "subject": subject,
+            "aegra_status": status, "source": source, "seconds_since_completion": seconds}
+
+
+def test_live_run_appears_under_its_resolved_graph_when_not_yet_recorded():
+    live_runs = {"r-1": _live_view("r-1", "orphan-graph")}
+    catalog = build_catalog({}, {}, {}, live_runs=live_runs)
+    graph = catalog["graphs"][0]
+    assert graph["graph_id"] == "orphan-graph"
+    assert graph["topology_status"] == NO_CONNECTION
+    assert graph["subjects"] == []
+    assert graph["live_runs"] == [live_runs["r-1"]]
+
+
+def test_live_run_already_recorded_is_dropped_from_the_catalog():
+    """#20 AC4: arrival of the recorded result replaces the live placeholder."""
+    spans = _run_tree("fixture-a", "r-1")
+    live_runs = {"r-1": _live_view("r-1", "fixture-a")}
+    catalog = build_catalog({}, {}, spans, live_runs=live_runs)
+    graph = catalog["graphs"][0]
+    assert graph["live_runs"] == []
+    assert len(graph["subjects"][0]["runs"]) == 1
+
+
+def test_live_run_alongside_a_different_recorded_run_on_the_same_graph():
+    spans = _run_tree("fixture-a", "r-1")
+    live_runs = {"r-2": _live_view("r-2", "fixture-a")}
+    catalog = build_catalog({}, {}, spans, live_runs=live_runs)
+    graph = catalog["graphs"][0]
+    assert [v["run_id"] for v in graph["live_runs"]] == ["r-2"]
+    assert len(graph["subjects"][0]["runs"]) == 1
+
+
+def test_live_run_without_a_resolvable_graph_id_is_omitted():
+    live_runs = {"r-1": {**_live_view("r-1", None)}}
+    catalog = build_catalog({}, {}, {}, live_runs=live_runs)
+    assert catalog["graphs"] == []
+
+
+def test_live_runs_default_to_empty_when_not_given():
+    catalog = build_catalog({}, {}, {})
+    assert catalog == {"graphs": []}
+
+
+def test_format_catalog_text_renders_a_running_live_run():
+    catalog = build_catalog({}, {}, {}, live_runs={"r-1": _live_view("r-1", "g1")})
+    text = format_catalog_text(catalog)
+    assert "Live Run r-1 (thread t-1) [live, running]" in text
+
+
+def test_format_catalog_text_renders_ingestion_pending():
+    view = _live_view("r-1", "g1", source=INGESTION_PENDING, status="success", seconds=12.0)
+    text = format_catalog_text(build_catalog({}, {}, {}, live_runs={"r-1": view}))
+    assert "ingestion pending 12s" in text
+
+
+def test_format_catalog_text_renders_ingestion_failed_as_a_bounded_visible_diagnostic():
+    """#20 AC5: a bounded ingestion failure is visible, not an endless loading state."""
+    view = _live_view("r-1", "g1", source=INGESTION_FAILED, status="success", seconds=312.0)
+    text = format_catalog_text(build_catalog({}, {}, {}, live_runs={"r-1": view}))
+    assert "ingestion FAILED after 312s" in text
+
+
+def test_format_catalog_text_a_live_run_suppresses_the_no_recorded_runs_line():
+    catalog = build_catalog({}, {}, {}, live_runs={"r-1": _live_view("r-1", "g1")})
+    text = format_catalog_text(catalog)
+    assert "no recorded Runs" not in text
