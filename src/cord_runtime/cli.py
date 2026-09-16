@@ -15,8 +15,9 @@ import time
 
 import requests
 
-from cord_runtime.aegra_client import describe_assistant, describe_run, execute, watch_lifecycle
+from cord_runtime.aegra_client import execute
 from cord_runtime.archive_query import ArchiveError, read_spans
+from cord_runtime.backends.aegra import AegraExecutionBackend
 from cord_runtime.connections import InvalidConnection, add_connection, load_connections
 from cord_runtime.deployment_lifecycle import stop_idle
 from cord_runtime.live_reconciliation import LiveRun, reconcile
@@ -132,14 +133,19 @@ def _watch_live_run(endpoint: str, thread_id: str, run_id: str, *, timeout: floa
     catalog. Returns `None` -- printing a diagnostic, never raising -- when
     the Run or its Assistant can't be identified; the viewer never fabricates
     a Graph to hang a live Run under (ADR-0011/0015's "never block/guess").
+
+    Depends on the ExecutionBackend boundary (#42) rather than a concrete
+    Aegra transport function, so a future backend only needs to satisfy the
+    same `describe_run`/`describe_assistant`/`watch` shape.
     """
+    backend = AegraExecutionBackend(endpoint)
     try:
-        identity = describe_run(endpoint, thread_id, run_id)
+        identity = backend.describe_run(thread_id, run_id)
     except (RuntimeError, ValueError) as exc:
         print(f"cord: --watch {thread_id}/{run_id}: {exc}", file=sys.stderr)
         return None
     try:
-        graph_id = describe_assistant(endpoint, identity["assistant_id"])["graph_id"]
+        graph_id = backend.describe_assistant(identity["assistant_id"])["graph_id"]
     except (RuntimeError, ValueError):
         graph_id = None
     if graph_id is None:
@@ -152,7 +158,7 @@ def _watch_live_run(endpoint: str, thread_id: str, run_id: str, *, timeout: floa
     if identity["status"] in ("pending", "running", "interrupted"):
         live.status = identity["status"]
     try:
-        for event, data, event_id in watch_lifecycle(endpoint, thread_id, run_id, timeout=timeout):
+        for event, data, event_id in backend.watch(thread_id, run_id, timeout=timeout):
             live.apply(event, data, event_id, now=time.monotonic())
     except RuntimeError as exc:
         print(f"cord: --watch {thread_id}/{run_id}: {exc}", file=sys.stderr)

@@ -111,7 +111,12 @@ frames; `values`/`updates`/`messages*`/`debug` frames carry graph business
 state and are dropped unread. A Run's Assistant is resolved to its `graph_id`
 (`describe_assistant`, the same public `/assistants` identity `cord list`
 already reads) before the Run can be placed in the catalog; one that can't be
-resolved is omitted with a diagnostic, never guessed.
+resolved is omitted with a diagnostic, never guessed. `cli.py`'s `--watch`
+path (`_watch_live_run`, #42) reads all three (`describe_run`,
+`describe_assistant`, and the SSE stream as `watch`) through
+`cord_runtime.backends.aegra.AegraExecutionBackend` rather than importing
+`aegra_client` directly, though the backend still reuses these same
+already-verified `aegra_client` functions underneath; behavior is unchanged.
 
 `cord_runtime.live_reconciliation.reconcile` turns that lifecycle state into
 one of three display sources, all model-free (no Tier/model field is ever

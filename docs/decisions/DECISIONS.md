@@ -29,6 +29,22 @@
 | **0014** | **Cordboard는 그래프를 묘사하지 않는다 — 그래프 단위 설정과 매니페스트 확장을 두지 않는다** | **Accepted** | **[0014-no-graph-descriptors.md](0014-no-graph-descriptors.md)** |
 | **0015** | **연결을 막지 않는다 — 매니페스트는 선택이고, 카탈로그 규칙은 경고다** | **Accepted** | **[0015-never-block-connection.md](0015-never-block-connection.md)** |
 | **0016** | **Deterministic control plane과 외부 Testbed 경계** | **Accepted** | **[0016-control-plane-and-testbed.md](0016-control-plane-and-testbed.md)** |
+| **0017** | **ExecutionBackend 식별자·상태·결과 계약 확정** | **Accepted** | **[0017-execution-backend-contract.md](0017-execution-backend-contract.md)** |
+
+---
+
+## ExecutionBackend 계약 확정, #42 ready 전환 (2026-09-16)
+
+**0017 · Accepted · [ExecutionBackend 식별자·상태·결과 계약](0017-execution-backend-contract.md)**
+
+[#42](https://github.com/agent-topology/cordboard/issues/42)는 `planning:backlog`였고,
+본문이 "Publish the interface/result/status contract before marking ready"를 명시했다.
+이 ADR은 ADR-0016 §2가 승인은 했지만 상세화하지 않은 스케치를 `RuntimeStatus`/
+`ClientWaitOutcome` enum, `LogicalRunId`/`InvocationId`/`ThreadId`/`TraceId` 타입,
+`ExecutionBackend`/`AegraExecutionBackend` 메서드 시그니처, 기존 `aegra_client` 자유
+함수·`cord run` JSON·`run_continuity.json` 포맷에 대한 버전 있는 호환 경로까지
+구체화했다. 사용자 검토 후 Accepted로 확정되었고, #42는 `planning:ready`로 전환했다.
+코드 구현은 이 ADR에 포함되지 않는다 — 후속 구현 PR이 §1–§5를 그대로 옮긴다.
 
 ---
 
