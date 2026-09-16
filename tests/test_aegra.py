@@ -10,9 +10,10 @@ from uuid import uuid4
 import pytest
 import requests
 
-from cord_runtime.aegra_client import execute
+from cord_runtime.aegra_client import describe_assistant, describe_run, execute, stream_lifecycle, watch_lifecycle
 from cord_runtime.archive_check import check
 from cord_runtime.archive_query import query
+from cord_runtime.live_reconciliation import LiveRun
 from cord_runtime.topology import VALID, fetch_topology
 from examples.aegra_server import environment
 from conftest import CREDENTIAL, PRIVATE_KEY, ROOT
@@ -272,3 +273,55 @@ def test_graph_execution_without_model_configuration(tmp_path, cli, postgres):
     assert query([directory], reference=time.time_ns()) == []
     assert CREDENTIAL.encode() not in b"".join(p.read_bytes() for p in directory.glob("*.otlp.jsonl"))
     assert check([directory], cli) == 0
+
+
+@pytest.mark.aegra
+@pytest.mark.collector
+def test_live_lifecycle_stream_against_real_aegra(tmp_path, postgres):
+    """#20: verify the real Aegra 0.10.4 SSE/reconnect wire contract this
+    slice's live viewer builds against, rather than assuming it -- a real
+    local Aegra, not a mocked stream."""
+    directory = tmp_path / "live"
+    with collector(directory) as target:
+        with aegra(postgres, None, target, ROOT / "aegra/opaque.json") as endpoint:
+            thread_id = requests.post(endpoint + "/threads", json={}, timeout=10).json()["thread_id"]
+            run_body = {
+                "assistant_id": "opaque-graph", "input": {"items": []},
+                "config": {"configurable": {"cord_subject": "watch-subject"}},
+                "stream_mode": ["values"],
+            }
+            run_id = requests.post(endpoint + f"/threads/{thread_id}/runs",
+                                   json=run_body, timeout=10).json()["run_id"]
+
+            identity = describe_run(endpoint, thread_id, run_id)
+            assert identity["run_id"] == run_id
+            assert identity["thread_id"] == thread_id
+            # Aegra resolves the submitted "opaque-graph" assistant_id to its
+            # own internal Assistant UUID; describe_assistant is exactly the
+            # public lookup back to the graph_id (#20 -- not the same string).
+            assert identity["assistant_id"] != "opaque-graph"
+            assert identity["subject"] == "watch-subject"
+            assert describe_assistant(endpoint, identity["assistant_id"]) == {"graph_id": "opaque-graph"}
+
+            events = list(stream_lifecycle(endpoint, thread_id, run_id, timeout=10))
+            kinds = [event for event, _data, _event_id in events]
+            assert kinds[-1] == "end"
+            assert all(kind in ("metadata", "end") for kind in kinds)  # no error on the happy path
+            end_data = next(data for event, data, _event_id in events if event == "end")
+            assert end_data["status"] == "success"
+            last_event_id = events[-1][2]
+            assert last_event_id is not None
+
+            # Reconnecting on an already-terminal Run with the last event id
+            # seen must not crash and must still resolve, matching #20 AC3
+            # (no duplicate Run, no lost progress across a reconnect).
+            replayed = list(stream_lifecycle(endpoint, thread_id, run_id,
+                                             last_event_id=last_event_id, timeout=10))
+            assert all(kind == "end" for kind, _data, _event_id in replayed)
+
+            live = LiveRun(run_id, thread_id, graph_id="opaque-graph",
+                           assistant_id="opaque-graph", subject="watch-subject")
+            for event, data, event_id in watch_lifecycle(endpoint, thread_id, run_id, timeout=10):
+                live.apply(event, data, event_id, now=time.monotonic())
+            assert live.status == "success"
+            assert live.is_terminal

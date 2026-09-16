@@ -96,9 +96,50 @@ per-graph `completeness.gaps`, and its document-wide `producerLimitations`.
 None of these block anything ([ADR-0007](decisions/0007-catalog-rejection.md)
 replaced by [ADR-0015](decisions/0015-never-block-connection.md)).
 
+## Live runs (#20)
+
+`cord view --watch <alias>:<thread_id>:<run_id>` (repeatable) follows one
+Run's Aegra SSE stream (`GET /threads/{thread_id}/runs/{run_id}/stream`,
+Aegra 0.10.4's reconnect-safe join endpoint) and shows it alongside recorded
+execution, until it reaches a terminal status or `--watch-timeout` elapses
+(default 120s).
+
+Only public identities and lifecycle status are read: `cord_runtime.
+aegra_client.stream_lifecycle`/`watch_lifecycle` yield exactly the `metadata`
+(identity), `end` (terminal status) and `error` (a fixed diagnostic) SSE
+frames; `values`/`updates`/`messages*`/`debug` frames carry graph business
+state and are dropped unread. A Run's Assistant is resolved to its `graph_id`
+(`describe_assistant`, the same public `/assistants` identity `cord list`
+already reads) before the Run can be placed in the catalog; one that can't be
+resolved is omitted with a diagnostic, never guessed.
+
+`cord_runtime.live_reconciliation.reconcile` turns that lifecycle state into
+one of three display sources, all model-free (no Tier/model field is ever
+read):
+
+| Source | Meaning |
+| --- | --- |
+| `live` | Still running, or completed less than `ingestion_pending_after` (5s) ago |
+| `ingestion_pending` | Completed live, but no recorded counterpart has landed yet |
+| `ingestion_failed` | Completed live more than `ingestion_failed_after` (300s) ago, still unrecorded |
+
+A live Run whose `run_id` already has a recorded counterpart (from `--archive`
+or elsewhere) is dropped from `live_runs` entirely -- the durable record
+always replaces the temporary live one, never rendered alongside it.
+Reconnects rely on Aegra's own monotonic per-Run event ids
+(`{run_id}_event_{sequence}`, its `Last-Event-ID` contract): a replayed or
+duplicate event never regresses a Run's status or completion time, so a
+dropped connection neither duplicates a Run entry nor loses progress.
+
+`cord view`'s single-shot render only follows a Run for as long as one
+invocation runs; there is no standing daemon or background poller. A Graph
+not otherwise named by a connection or recorded execution is still created to
+hold its live Runs, exactly like a recorded-only Graph (`topology_status:
+"no_connection"`).
+
 ## Out of scope
 
-Live SSE (#20), the approval inbox (#14), graph editing, and detailed
-subgraph expansion at positive depth. `cord view` reads through
-`check_freshness`, never `cord sync`; the explicit refresh/snapshot path
-remains a separate, still-unwired command (#11's CLI gap).
+The approval inbox (#14), graph editing, and detailed subgraph expansion at
+positive depth. `cord view` reads through `check_freshness`, never
+`cord sync`; the explicit refresh/snapshot path remains a separate,
+still-unwired command (#11's CLI gap).

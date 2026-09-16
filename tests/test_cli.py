@@ -492,3 +492,79 @@ def test_cmd_signal_schedule_invalid_timestamp_exit_two(tmp_path):
 def test_cmd_signal_file_missing_file_exit_two(tmp_path):
     code = cli.main(["--board", str(tmp_path), "signal", "file", str(tmp_path / "missing.json")])
     assert code == cli.EXIT_USAGE
+
+
+# --- cli.py: cmd_view --watch (#20) -----------------------------------------
+
+def test_cmd_view_watch_unknown_alias_exit_two(tmp_path):
+    code = cli.main(["--board", str(tmp_path), "view", "--watch", "missing:t-1:r-1"])
+    assert code == cli.EXIT_USAGE
+
+
+def test_cmd_view_watch_malformed_target_exit_two(tmp_path):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    code = cli.main(["--board", str(tmp_path), "view", "--watch", "not-a-triple"])
+    assert code == cli.EXIT_USAGE
+
+
+def test_cmd_view_watch_renders_a_live_run(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    monkeypatch.setattr(cli.requests, "get", _fake_probe_get)
+    monkeypatch.setattr(cli, "check_freshness",
+                        lambda board_dir, endpoint, **kw: FreshnessCheck(status=ABSENT, reading=TopologyReading(status=ABSENT)))
+    monkeypatch.setattr(cli, "describe_run", lambda endpoint, thread_id, run_id: {
+        "run_id": run_id, "thread_id": thread_id, "assistant_id": "fixture-a",
+        "status": "running", "subject": "subject-1",
+    })
+    monkeypatch.setattr(cli, "describe_assistant", lambda endpoint, assistant_id: {"graph_id": "fixture-a"})
+
+    def fake_watch_lifecycle(endpoint, thread_id, run_id, *, timeout):
+        yield "metadata", {}, f"{run_id}_event_0"
+        yield "end", {"status": "success"}, f"{run_id}_event_1"
+
+    monkeypatch.setattr(cli, "watch_lifecycle", fake_watch_lifecycle)
+
+    code = cli.main(["--board", str(tmp_path), "view", "--watch", "aegra-local:t-1:r-1"])
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_OK
+    assert "Live Run r-1 (thread t-1) [live, success]" in out
+
+
+def test_cmd_view_watch_unresolvable_assistant_is_omitted_not_fatal(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    monkeypatch.setattr(cli.requests, "get", _fake_probe_get)
+    monkeypatch.setattr(cli, "check_freshness",
+                        lambda board_dir, endpoint, **kw: FreshnessCheck(status=ABSENT, reading=TopologyReading(status=ABSENT)))
+    monkeypatch.setattr(cli, "describe_run", lambda endpoint, thread_id, run_id: {
+        "run_id": run_id, "thread_id": thread_id, "assistant_id": "unknown-assistant",
+        "status": "running", "subject": None,
+    })
+
+    def fake_describe_assistant(endpoint, assistant_id):
+        raise RuntimeError("Aegra API request failed; check service readiness and input contract")
+
+    monkeypatch.setattr(cli, "describe_assistant", fake_describe_assistant)
+
+    code = cli.main(["--board", str(tmp_path), "view", "--watch", "aegra-local:t-1:r-1"])
+    out, err = capsys.readouterr()
+    assert code == cli.EXIT_OK
+    assert "Live Run" not in out
+    assert "could not resolve a Graph" in err
+
+
+def test_cmd_view_watch_unreachable_run_is_reported_not_fatal(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    monkeypatch.setattr(cli.requests, "get", _fake_probe_get)
+    monkeypatch.setattr(cli, "check_freshness",
+                        lambda board_dir, endpoint, **kw: FreshnessCheck(status=ABSENT, reading=TopologyReading(status=ABSENT)))
+
+    def fake_describe_run(endpoint, thread_id, run_id):
+        raise RuntimeError("Aegra API request failed; check service readiness and input contract")
+
+    monkeypatch.setattr(cli, "describe_run", fake_describe_run)
+
+    code = cli.main(["--board", str(tmp_path), "view", "--watch", "aegra-local:t-1:r-1"])
+    out, err = capsys.readouterr()
+    assert code == cli.EXIT_OK
+    assert "Live Run" not in out
+    assert "check service readiness" in err

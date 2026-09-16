@@ -22,6 +22,7 @@ present, just not correlated (see `correlate_topology`).
 from typing import Any
 
 from cord_runtime.archive_query import ArchiveError, parent, query_spans, role
+from cord_runtime.live_reconciliation import INGESTION_FAILED, INGESTION_PENDING, LIVE
 from cord_runtime.topology import ABSENT, CHANGED, INVALID, UNREACHABLE, FreshnessCheck, graphs, parallel_interrupt_warnings
 
 # Topology status values this module reports for display, distinct from
@@ -185,14 +186,22 @@ def correlate_topology(freshness: FreshnessCheck | None) -> dict[str, Any]:
     return {"status": CURRENT, "node_ids": node_ids, "warnings": tuple(warnings), "correlated": True}
 
 
-def build_catalog(connections: dict[str, dict], topology: dict[str, FreshnessCheck], spans: dict) -> dict[str, Any]:
+def build_catalog(connections: dict[str, dict], topology: dict[str, FreshnessCheck], spans: dict,
+                   live_runs: dict[str, dict] | None = None) -> dict[str, Any]:
     """The generic catalog: every connected or recorded Graph, its optional
-    topology, and its recorded execution, joined only by explicit identity.
+    topology, its recorded execution, and any still-live execution, joined
+    only by explicit identity.
 
     `connections`: `{alias: {"endpoint": str, "reachable": bool, "graphs": [graph_id, ...]}}`,
         exactly `cord list`'s existing `/assistants` probe shape.
     `topology`: `{endpoint: FreshnessCheck}`, one check per connected endpoint.
     `spans`: the archive contract's `read_spans(...)` result (may be `{}`).
+    `live_runs`: `{run_id: view}` from `cord_runtime.live_reconciliation.reconcile`
+        (may be `None`/`{}`); each `view` needs `graph_id` to be placed --
+        an entry whose Assistant could not be resolved to a Graph is dropped
+        rather than guessed (#20). A `run_id` also present in `spans`'
+        recorded execution is always dropped here too, defensively, even
+        though `reconcile` already excludes it -- the durable record wins.
 
     A Graph with a registered connection but zero Runs still renders (its
     `runs` list is simply empty); a Graph with recorded execution but no
@@ -204,6 +213,15 @@ def build_catalog(connections: dict[str, dict], topology: dict[str, FreshnessChe
     by_graph: dict[str, list[dict]] = {}
     for run in runs:
         by_graph.setdefault(run["graph_id"], []).append(run)
+    recorded_run_ids = {run["run_id"] for run in runs}
+
+    live_by_graph: dict[str, list[dict]] = {}
+    for run_id, view in (live_runs or {}).items():
+        if run_id in recorded_run_ids or not view.get("graph_id"):
+            continue
+        live_by_graph.setdefault(view["graph_id"], []).append(view)
+    for views in live_by_graph.values():
+        views.sort(key=lambda v: v["run_id"])
 
     connection_by_graph: dict[str, dict] = {}
     for alias, info in connections.items():
@@ -213,7 +231,7 @@ def build_catalog(connections: dict[str, dict], topology: dict[str, FreshnessChe
             }
 
     graph_views = []
-    for graph_id in sorted(set(connection_by_graph) | set(by_graph)):
+    for graph_id in sorted(set(connection_by_graph) | set(by_graph) | set(live_by_graph)):
         connection = connection_by_graph.get(graph_id)
         if connection is None:
             correlation = {"status": NO_CONNECTION, "node_ids": (), "warnings": (), "correlated": False}
@@ -250,8 +268,23 @@ def build_catalog(connections: dict[str, dict], topology: dict[str, FreshnessChe
                 {"subject_type": subject_type, "subject_id": subject_id, "runs": subject_runs}
                 for (subject_type, subject_id), subject_runs in sorted(subjects.items())
             ],
+            "live_runs": live_by_graph.get(graph_id, []),
         })
     return {"graphs": graph_views}
+
+
+def _format_live_source(live: dict[str, Any]) -> str:
+    """Render one live-run view's status/source as the bracketed suffix
+    `format_catalog_text` appends to its line (#20 AC1/AC2/AC5)."""
+    status = live["aegra_status"]
+    if live["source"] == LIVE:
+        return f"live, {status}"
+    seconds = int(live["seconds_since_completion"])
+    if live["source"] == INGESTION_PENDING:
+        return f"live, {status}, ingestion pending {seconds}s"
+    if live["source"] == INGESTION_FAILED:
+        return f"live, {status}, ingestion FAILED after {seconds}s"
+    return f"live, {status}"  # pragma: no cover -- defensive; reconcile() emits only the above
 
 
 def format_catalog_text(catalog: dict[str, Any]) -> str:
@@ -272,8 +305,11 @@ def format_catalog_text(catalog: dict[str, Any]) -> str:
             lines.append(f"  warning: {warning}")
         for name in graph["unmatched_node_names"]:
             lines.append(f"  warning: recorded Node '{name}' is not in the correlated topology")
-        if not graph["subjects"]:
+        if not graph["subjects"] and not graph["live_runs"]:
             lines.append("  no recorded Runs")
+        for live in graph["live_runs"]:
+            lines.append(f"  Live Run {live['run_id']} (thread {live['thread_id']}) "
+                         f"[{_format_live_source(live)}]")
         for subject in graph["subjects"]:
             lines.append(f"  Subject {subject['subject_type']}:{subject['subject_id']}")
             for run in subject["runs"]:

@@ -103,7 +103,7 @@ $ cord list
 aegra-local	http://127.0.0.1:2026	unreachable	graphs=-
 ```
 
-### `cord view [alias] [--archive <path>]... [--json]`
+### `cord view [alias] [--archive <path>]... [--watch <alias:thread_id:run_id>]... [--watch-timeout <seconds>] [--json]`
 
 Prints the catalog: every Graph named by a registered connection's
 `/assistants` probe or present in recorded execution, its optional published
@@ -114,6 +114,12 @@ render with an empty Run list. `--json` prints the catalog as one JSON object.
 See [viewer.md](viewer.md) for the full topology-correlation and staleness
 contract.
 
+`--watch` (repeatable) follows one Run's live execution over its Deployment's
+own Aegra SSE stream (`GET /threads/{thread_id}/runs/{run_id}/stream`) until
+it reaches a terminal status or `--watch-timeout` elapses (default 120s), then
+renders it alongside recorded execution -- see [viewer.md](viewer.md#live-runs-20)
+for the full live/recorded reconciliation contract (#20).
+
 ```sh
 $ cord view --archive examples/archive.graph-id.sample.otlp.jsonl
 Graph archive-fixture  (no connection, topology: no_connection)
@@ -123,6 +129,10 @@ Graph archive-fixture  (no connection, topology: no_connection)
         Attempt 1, tier=fast -> failed
         Attempt 2, tier=fast -> escalated
         Attempt 3, tier=deep -> passed
+
+$ cord view --watch aegra-local:9f3c...:a1b2...
+Graph minimal-graph  (aegra-local, reachable, topology: absent)
+  Live Run a1b2... (thread 9f3c...) [live, running]
 ```
 
 ### `cord run <alias> <assistant> <subject> <input.json> [--context <context.json>] [--timeout <seconds>]`

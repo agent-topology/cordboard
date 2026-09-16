@@ -9,7 +9,16 @@ real server to distinguish success from failure.
 import pytest
 import requests
 
-from cord_runtime.aegra_client import cancel, execute, resume
+import cord_runtime.aegra_client as aegra_client
+from cord_runtime.aegra_client import (
+    cancel,
+    describe_assistant,
+    describe_run,
+    execute,
+    resume,
+    stream_lifecycle,
+    watch_lifecycle,
+)
 
 ENDPOINT = "http://127.0.0.1:9"  # never dialed; requests are faked below.
 
@@ -207,3 +216,174 @@ def test_cancel_missing_run_id_fails_before_any_request(monkeypatch):
     monkeypatch.setattr(requests.Session, "request", fake_request)
     with pytest.raises(ValueError, match="Run ID"):
         cancel(ENDPOINT, "t-12", "  ")
+
+
+def test_describe_run_returns_assistant_status_and_transported_subject(monkeypatch):
+    _install(monkeypatch, {
+        "/threads/t-13/runs/r-13": FakeResponse(200, {
+            "run_id": "r-13", "assistant_id": "opaque-graph", "status": "running",
+            "config": {"configurable": {"cord_subject": "subject-13"}},
+        }),
+    })
+    result = describe_run(ENDPOINT, "t-13", "r-13")
+    assert result == {"run_id": "r-13", "thread_id": "t-13", "assistant_id": "opaque-graph",
+                      "status": "running", "subject": "subject-13"}
+
+
+def test_describe_run_missing_thread_id_fails_before_any_request(monkeypatch):
+    def fake_request(self, method, url, json=None, timeout=None, allow_redirects=None):
+        raise AssertionError("no request should be sent for an invalid Thread ID")
+
+    monkeypatch.setattr(requests.Session, "request", fake_request)
+    with pytest.raises(ValueError, match="Thread ID"):
+        describe_run(ENDPOINT, "  ", "r-13")
+
+
+def test_describe_assistant_returns_graph_id(monkeypatch):
+    _install(monkeypatch, {"/assistants/opaque-graph": FakeResponse(200, {"graph_id": "opaque-graph"})})
+    assert describe_assistant(ENDPOINT, "opaque-graph") == {"graph_id": "opaque-graph"}
+
+
+def test_describe_assistant_missing_id_fails_before_any_request(monkeypatch):
+    def fake_request(self, method, url, json=None, timeout=None, allow_redirects=None):
+        raise AssertionError("no request should be sent for an invalid Assistant ID")
+
+    monkeypatch.setattr(requests.Session, "request", fake_request)
+    with pytest.raises(ValueError, match="Assistant ID"):
+        describe_assistant(ENDPOINT, "  ")
+
+
+class FakeStreamResponse:
+    def __init__(self, status_code, lines):
+        self.status_code = status_code
+        self._lines = lines
+
+    def iter_lines(self, decode_unicode=True):
+        yield from self._lines
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+def _install_get(monkeypatch, responses):
+    """responses: list of FakeStreamResponse, consumed one per call; records headers seen."""
+    calls = []
+
+    def fake_get(self, url, headers=None, stream=None, timeout=None):
+        calls.append({"url": url, "headers": headers})
+        return responses.pop(0)
+
+    monkeypatch.setattr(requests.Session, "get", fake_get)
+    return calls
+
+
+def test_stream_lifecycle_yields_only_lifecycle_events_and_skips_business_state(monkeypatch):
+    lines = [
+        "event: metadata", 'data: {"run_id":"r-14","attempt":1}', "id: r-14_event_0", "",
+        "event: values", "data: {not valid json, never parsed}", "id: r-14_event_1", "",
+        ": heartbeat", "",
+        "event: end", 'data: {"status":"success"}', "id: r-14_event_2", "",
+    ]
+    _install_get(monkeypatch, [FakeStreamResponse(200, lines)])
+    events = list(stream_lifecycle(ENDPOINT, "t-14", "r-14", timeout=5))
+    assert events == [
+        ("metadata", {"run_id": "r-14", "attempt": 1}, "r-14_event_0"),
+        ("end", {"status": "success"}, "r-14_event_2"),
+    ]
+
+
+def test_stream_lifecycle_sends_last_event_id_header_when_resuming(monkeypatch):
+    lines = ["event: end", 'data: {"status":"success"}', "id: r-15_event_3", ""]
+    calls = _install_get(monkeypatch, [FakeStreamResponse(200, lines)])
+    list(stream_lifecycle(ENDPOINT, "t-15", "r-15", last_event_id="r-15_event_2", timeout=5))
+    assert calls[0]["headers"]["Last-Event-ID"] == "r-15_event_2"
+
+
+def test_stream_lifecycle_omits_last_event_id_header_on_a_fresh_connection(monkeypatch):
+    lines = ["event: end", 'data: {"status":"success"}', "id: r-16_event_0", ""]
+    calls = _install_get(monkeypatch, [FakeStreamResponse(200, lines)])
+    list(stream_lifecycle(ENDPOINT, "t-16", "r-16", timeout=5))
+    assert "Last-Event-ID" not in calls[0]["headers"]
+
+
+def test_stream_lifecycle_non_2xx_raises_payload_free_diagnostic(monkeypatch):
+    _install_get(monkeypatch, [FakeStreamResponse(404, [])])
+    with pytest.raises(RuntimeError, match="check service readiness"):
+        list(stream_lifecycle(ENDPOINT, "t-17", "r-17", timeout=5))
+
+
+def test_stream_lifecycle_unreachable_endpoint_raises_payload_free_diagnostic(monkeypatch):
+    def fake_get(self, url, headers=None, stream=None, timeout=None):
+        raise requests.ConnectionError("refused")
+
+    monkeypatch.setattr(requests.Session, "get", fake_get)
+    with pytest.raises(RuntimeError, match="check service readiness"):
+        list(stream_lifecycle(ENDPOINT, "t-18", "r-18", timeout=5))
+
+
+def test_stream_lifecycle_missing_run_id_fails_before_any_request(monkeypatch):
+    def fake_get(self, url, headers=None, stream=None, timeout=None):
+        raise AssertionError("no request should be sent for an invalid Run ID")
+
+    monkeypatch.setattr(requests.Session, "get", fake_get)
+    with pytest.raises(ValueError, match="Run ID"):
+        list(stream_lifecycle(ENDPOINT, "t-19", "  ", timeout=5))
+
+
+def test_watch_lifecycle_reconnects_with_last_event_id_after_a_drop(monkeypatch):
+    """A transport failure mid-stream (before a terminal event) is retried;
+    the retry carries the last event id already seen, matching Aegra's own
+    reconnect contract (#20 AC3: no duplicate, no lost progress)."""
+    calls = []
+
+    def fake_stream_lifecycle(endpoint, thread_id, run_id, *, last_event_id=None, timeout=120):
+        calls.append(last_event_id)
+        if last_event_id is None:
+            yield "metadata", {}, "r-20_event_0"
+            raise RuntimeError("Aegra stream request failed; check service readiness and input contract")
+        assert last_event_id == "r-20_event_0"
+        yield "end", {"status": "success"}, "r-20_event_1"
+
+    monkeypatch.setattr(aegra_client, "stream_lifecycle", fake_stream_lifecycle)
+    monkeypatch.setattr(aegra_client.time, "sleep", lambda seconds: None)
+    events = list(watch_lifecycle(ENDPOINT, "t-20", "r-20", timeout=5, reconnect_delay=0))
+    assert events == [
+        ("metadata", {}, "r-20_event_0"),
+        ("end", {"status": "success"}, "r-20_event_1"),
+    ]
+    assert calls == [None, "r-20_event_0"]
+
+
+def test_watch_lifecycle_stops_after_a_terminal_event_without_reconnecting(monkeypatch):
+    calls = []
+
+    def fake_stream_lifecycle(endpoint, thread_id, run_id, *, last_event_id=None, timeout=120):
+        calls.append(last_event_id)
+        yield "end", {"status": "success"}, "r-21_event_0"
+
+    monkeypatch.setattr(aegra_client, "stream_lifecycle", fake_stream_lifecycle)
+    events = list(watch_lifecycle(ENDPOINT, "t-21", "r-21", timeout=5))
+    assert events == [("end", {"status": "success"}, "r-21_event_0")]
+    assert calls == [None]
+
+
+def test_watch_lifecycle_gives_up_once_the_timeout_elapses(monkeypatch):
+    def fake_stream_lifecycle(endpoint, thread_id, run_id, *, last_event_id=None, timeout=120):
+        raise RuntimeError("Aegra stream request failed; check service readiness and input contract")
+        yield  # pragma: no cover -- unreachable; makes this a generator function
+
+    # deadline calc -> 0.0 (deadline=1.0); while-check -> 0.5 (enters loop);
+    # inner timeout calc -> 2.0; post-failure deadline check -> 2.0 (expired).
+    clock = iter([0.0, 0.5, 2.0])
+
+    def fake_monotonic():
+        return next(clock, 2.0)
+
+    monkeypatch.setattr(aegra_client, "stream_lifecycle", fake_stream_lifecycle)
+    monkeypatch.setattr(aegra_client.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(aegra_client.time, "sleep", lambda seconds: None)
+    with pytest.raises(RuntimeError, match="check service readiness"):
+        list(watch_lifecycle(ENDPOINT, "t-22", "r-22", timeout=1, reconnect_delay=0))
