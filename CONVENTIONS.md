@@ -27,9 +27,10 @@ See also the
 Keep graph-specific logic under `examples/`; do not promote it into generic
 platform infrastructure. There is no npm build, Rust crate, formatter, or CI
 workflow here. [`cord add`/`cord list`/`cord run`](docs/cord-cli.md) are
-executable (#12); remaining platform components and lifecycle commands
-(`cord new`, `cord up`, `cord sync`) are planned unless explicitly documented
-as executable.
+executable (#12), as are [`cord rule add`/`cord signal
+manual|file|schedule`](docs/signal-routing.md) (#16); remaining platform
+components and lifecycle commands (`cord new`, `cord up`, `cord sync`) are
+planned unless explicitly documented as executable.
 
 ## Documentation and decisions
 

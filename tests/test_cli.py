@@ -18,6 +18,7 @@ from cord_runtime.connections import (
     load_connections,
     validate_endpoint,
 )
+from cord_runtime.rules import load_rules
 
 
 # --- connections.py: storage contract -----------------------------------
@@ -244,3 +245,105 @@ def test_cmd_run_execution_failure_exit_one_no_payload_in_diagnostic(tmp_path, m
     err = capsys.readouterr().err
     assert "did not succeed" in err
     assert "shh" not in err
+
+
+# --- cli.py: cmd_rule_add (#16) --------------------------------------------
+
+def test_cmd_rule_add_success_exit_zero(tmp_path, capsys):
+    code = cli.main(["--board", str(tmp_path), "rule", "add", "issue-triage", "manual",
+                     "aegra-local", "triage-graph", "subject",
+                     "--match", "kind=issue", "--input", "body=body"])
+    assert code == cli.EXIT_OK
+    assert "added rule" in capsys.readouterr().out
+    rules = load_rules(tmp_path)
+    assert rules == [{"name": "issue-triage", "signal_type": "manual", "connection": "aegra-local",
+                      "assistant": "triage-graph", "subject": "subject",
+                      "match": {"kind": "issue"}, "input": {"body": "body"}}]
+
+
+def test_cmd_rule_add_duplicate_without_replace_exit_two(tmp_path):
+    args = ["--board", str(tmp_path), "rule", "add", "issue-triage", "manual",
+            "aegra-local", "triage-graph", "subject"]
+    assert cli.main(args) == cli.EXIT_OK
+    assert cli.main(args) == cli.EXIT_USAGE
+
+
+def test_cmd_rule_add_invalid_signal_type_rejected_by_argparse(tmp_path):
+    with pytest.raises(SystemExit):
+        cli.main(["--board", str(tmp_path), "rule", "add", "r", "webhook", "aegra-local", "g", "subject"])
+
+
+def test_cmd_rule_add_match_kv_parses_json_literals(tmp_path):
+    cli.main(["--board", str(tmp_path), "rule", "add", "r", "manual", "aegra-local", "g", "subject",
+             "--match", "count=3", "--match", "flag=true"])
+    assert load_rules(tmp_path)[0]["match"] == {"count": 3, "flag": True}
+
+
+# --- cli.py: cmd_signal_* (#16) --------------------------------------------
+
+def _add_routing_rule(tmp_path, signal_type, **overrides):
+    rule = {"name": f"{signal_type}-rule", "signal_type": signal_type, "connection": "aegra-local",
+            "assistant": "triage-graph", "subject": "subject", "match": {}, "input": {"body": "body"}}
+    rule.update(overrides)
+    from cord_runtime.rules import add_rule
+    add_rule(tmp_path, rule)
+
+
+def test_cmd_signal_manual_routes_and_exits_zero_on_success(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    _add_routing_rule(tmp_path, "manual")
+    input_path = _input_file(tmp_path, {"subject": "manual:demo", "body": "hi"})
+
+    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120):
+        return {"run_id": "r", "thread_id": "t", "status": "success", "values": {}}
+
+    monkeypatch.setattr("cord_runtime.router.execute", fake_execute)
+    code = cli.main(["--board", str(tmp_path), "signal", "manual", str(input_path)])
+    assert code == cli.EXIT_OK
+    outcome = json.loads(capsys.readouterr().out)
+    assert outcome["status"] == "routed"
+
+
+def test_cmd_signal_manual_unmatched_exits_one(tmp_path, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    input_path = _input_file(tmp_path, {"subject": "manual:demo"})
+    code = cli.main(["--board", str(tmp_path), "signal", "manual", str(input_path)])
+    assert code == cli.EXIT_FAILURE
+    outcome = json.loads(capsys.readouterr().out)
+    assert outcome["status"] == "unmatched"
+
+
+def test_cmd_signal_file_routes(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    _add_routing_rule(tmp_path, "file")
+    event_path = tmp_path / "event.json"
+    event_path.write_text(json.dumps({"subject": "file:notes/api.md", "body": "changed"}), encoding="utf-8")
+
+    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120):
+        return {"run_id": "r", "thread_id": "t", "status": "success", "values": {}}
+
+    monkeypatch.setattr("cord_runtime.router.execute", fake_execute)
+    code = cli.main(["--board", str(tmp_path), "signal", "file", str(event_path)])
+    assert code == cli.EXIT_OK
+
+
+def test_cmd_signal_schedule_routes(tmp_path, monkeypatch, capsys):
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    _add_routing_rule(tmp_path, "schedule", subject="schedule", input={"body": "schedule"})
+
+    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120):
+        return {"run_id": "r", "thread_id": "t", "status": "success", "values": {}}
+
+    monkeypatch.setattr("cord_runtime.router.execute", fake_execute)
+    code = cli.main(["--board", str(tmp_path), "signal", "schedule", "daily-digest", "2026-09-16T09:00:00+00:00"])
+    assert code == cli.EXIT_OK
+
+
+def test_cmd_signal_schedule_invalid_timestamp_exit_two(tmp_path):
+    code = cli.main(["--board", str(tmp_path), "signal", "schedule", "daily-digest", "not-a-timestamp"])
+    assert code == cli.EXIT_USAGE
+
+
+def test_cmd_signal_file_missing_file_exit_two(tmp_path):
+    code = cli.main(["--board", str(tmp_path), "signal", "file", str(tmp_path / "missing.json")])
+    assert code == cli.EXIT_USAGE
