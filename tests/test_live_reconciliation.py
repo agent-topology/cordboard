@@ -7,6 +7,7 @@ from cord_runtime.live_reconciliation import (
     INGESTION_PENDING,
     LIVE,
     LiveRun,
+    await_convergence,
     reconcile,
 )
 
@@ -117,6 +118,92 @@ def test_reconcile_past_failed_threshold_is_ingestion_failed_not_endless_loading
     views = reconcile({"r-1": run}, set(), now=500.0,
                       ingestion_pending_after=5.0, ingestion_failed_after=300.0)
     assert views["r-1"]["source"] == INGESTION_FAILED
+
+
+# --- await_convergence (#46 AC3/AC4) ----------------------------------------
+
+class _Clock:
+    """A controlled clock: `now_fn` reads it, `sleep_fn` advances it -- no real waiting."""
+
+    def __init__(self, start=0.0):
+        self.now = start
+        self.slept = []
+
+    def now_fn(self):
+        return self.now
+
+    def sleep_fn(self, seconds):
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+def test_convergence_stops_once_recorded_evidence_replaces_the_live_run():
+    """#46 AC4: new recorded evidence replaces live during the same session."""
+    run = _run()
+    run.apply("end", {"status": "success"}, "r-1_event_1", now=0.0)
+    clock = _Clock()
+    recorded_after_first_poll = {"recorded": False}
+
+    def get_recorded_run_ids():
+        return {"r-1"} if recorded_after_first_poll["recorded"] else set()
+
+    snapshots = []
+    for views in await_convergence({"r-1": run}, get_recorded_run_ids,
+                                    now_fn=clock.now_fn, sleep_fn=clock.sleep_fn,
+                                    poll_interval=1.0, ingestion_pending_after=5.0):
+        snapshots.append(views)
+        recorded_after_first_poll["recorded"] = True  # arrives just after the first poll
+
+    assert snapshots[0]["r-1"]["source"] == LIVE
+    assert snapshots[-1] == {}  # recorded: dropped from the live view, not lost -- the caller re-reads the archive
+    assert clock.slept == [1.0]  # polled exactly once more after the first snapshot, then stopped
+
+
+def test_convergence_is_bounded_by_ingestion_failed_after_not_endless():
+    """#46 AC3: a bounded failed/unavailable state is shown when the deadline expires."""
+    run = _run()
+    run.apply("end", {"status": "success"}, "r-1_event_1", now=0.0)
+    clock = _Clock()
+
+    snapshots = list(await_convergence({"r-1": run}, lambda: set(),
+                                       now_fn=clock.now_fn, sleep_fn=clock.sleep_fn,
+                                       poll_interval=100.0, ingestion_pending_after=5.0,
+                                       ingestion_failed_after=300.0))
+
+    assert snapshots[-1]["r-1"]["source"] == INGESTION_FAILED
+    assert clock.now >= 300.0
+    # Stops polling once FAILED -- not an endless loop waiting on an archive
+    # that never arrives.
+    assert snapshots[-1] == reconcile({"r-1": run}, set(), now=clock.now,
+                                      ingestion_pending_after=5.0, ingestion_failed_after=300.0)
+
+
+def test_convergence_never_polls_for_a_run_that_never_completed():
+    """A --watch target whose stream ended without going terminal (e.g. a
+    --watch-timeout) is still live, not something to converge -- #46 never
+    blocks on a Run that is genuinely still running."""
+    run = _run()
+    run.apply("metadata", {}, "r-1_event_0", now=0.0)  # never reaches "end"/"error"
+    clock = _Clock()
+
+    snapshots = list(await_convergence({"r-1": run}, lambda: set(),
+                                       now_fn=clock.now_fn, sleep_fn=clock.sleep_fn))
+
+    assert len(snapshots) == 1  # exactly one poll, then returns -- nothing to wait on
+    assert snapshots[0]["r-1"]["source"] == LIVE
+    assert clock.slept == []
+
+
+def test_convergence_yields_the_first_snapshot_even_when_already_resolved():
+    run = _run()
+    run.apply("end", {"status": "success"}, "r-1_event_1", now=0.0)
+    clock = _Clock()
+
+    snapshots = list(await_convergence({"r-1": run}, lambda: {"r-1"},
+                                       now_fn=clock.now_fn, sleep_fn=clock.sleep_fn))
+
+    assert snapshots == [{}]
+    assert clock.slept == []
 
 
 def test_reconcile_carries_identity_without_any_model_or_tier_field():

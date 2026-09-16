@@ -148,6 +148,27 @@ one. Reconnects rely on Aegra's own monotonic per-Run event ids, so a dropped
 connection neither duplicates a Run entry nor loses progress. This is a
 single-shot follow bounded by one `cord view` invocation, not a standing
 daemon (see [docs/viewer.md](docs/viewer.md#live-runs-20)).
+[Continuous live/durable reconciliation](docs/viewer.md#live-runs-20) (#46)
+closes #20's remaining gaps within that one invocation: more than one
+`--watch` target now runs concurrently (a shared queue, one consumer thread)
+instead of draining sequentially, so progress from any target renders before
+another finishes; each `LiveRun` is keyed by `cord_runtime.run_continuity`'s
+logical Run ID rather than the raw watched API Run ID, so a resume's fresh
+API Run ID updates the same catalog entry instead of forking it (`cord run`
+and `route_signal` now call `record_submission` on their original submission,
+closing the anchor `approval_inbox`'s resume path already relied on); and
+once every watched stream goes terminal, `--archive` triggers a bounded
+convergence poll (`cord_runtime.live_reconciliation.await_convergence`) that
+re-reads the archive until each completed Run is recorded or reaches the
+ingestion-failed deadline, rather than exiting the instant the SSE stream
+closes. `cord_runtime.viewer.build_execution_tree` also stops trusting a Run
+span's own `endTimeUnixNano`: because that span closes at the Run's first
+pause and never reopens on resume (ADR-0008), a Run's truthful `end_ns` is
+now the max of its own span and every Step/Attempt it contains, with
+`approval_wait_ns` separated from `execution_ns` and a missing original
+`awaiting_approval` Step surfaced as `timeline_incomplete` rather than a
+silently wrong total. This closes #46; #47 (a real web viewer over the same
+shared read model) remains separate and unimplemented.
 
 The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
 the implemented core/domain libraries and Omiologic Aegra deployment. These are

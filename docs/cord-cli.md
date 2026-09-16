@@ -158,17 +158,26 @@ render with an empty Run list. `--json` prints the catalog as one JSON object.
 See [viewer.md](viewer.md) for the full topology-correlation and staleness
 contract.
 
-`--watch` (repeatable) follows one Run's live execution over its Deployment's
-own Aegra SSE stream (`GET /threads/{thread_id}/runs/{run_id}/stream`) until
-it reaches a terminal status or `--watch-timeout` elapses (default 120s), then
-renders it alongside recorded execution -- see [viewer.md](viewer.md#live-runs-20)
-for the full live/recorded reconciliation contract (#20).
+`--watch` (repeatable) follows each named Run's live execution over its own
+Deployment's Aegra SSE stream (`GET /threads/{thread_id}/runs/{run_id}/stream`)
+concurrently -- more than one target makes progress independently, none
+blocks behind another's completion -- printing an updated catalog as any
+target's state changes, until every stream reaches a terminal status or
+`--watch-timeout` elapses (default 120s). With `--archive`, once every stream
+is terminal the command keeps re-reading the archive on a bounded poll until
+each completed Run is replaced by its recorded counterpart or reaches the
+ingestion-failed deadline (#46 AC3/AC4); without `--archive` it renders once
+and exits, as before. A watched Run is keyed by its logical Run ID (#46 AC2),
+so watching a resumed invocation's fresh Aegra API Run ID still updates the
+same catalog entry as the original submission. See
+[viewer.md](viewer.md#live-runs-20) for the full live/recorded reconciliation
+contract (#20, #46).
 
 ```sh
 $ cord view --archive examples/archive.graph-id.sample.otlp.jsonl
 Graph archive-fixture  (no connection, topology: no_connection)
   Subject fixture:urn:cordboard:fixture:5
-    Run 17581de7-9734-4a01-9619-3d1a1fec89c8
+    Run 17581de7-9734-4a01-9619-3d1a1fec89c8 (executed 0.004s)
       Step draft -> passed
         Attempt 1, tier=fast -> failed
         Attempt 2, tier=fast -> escalated

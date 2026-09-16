@@ -112,7 +112,12 @@ replaced by [ADR-0015](decisions/0015-never-block-connection.md)).
 Run's Aegra SSE stream (`GET /threads/{thread_id}/runs/{run_id}/stream`,
 Aegra 0.10.4's reconnect-safe join endpoint) and shows it alongside recorded
 execution, until it reaches a terminal status or `--watch-timeout` elapses
-(default 120s).
+(default 120s). More than one `--watch` target runs concurrently, each on its
+own thread streaming lifecycle events onto a shared queue that one consumer
+loop applies and re-renders from as they arrive -- so N targets make progress
+independently (#46 AC1): none is drained to completion before the next even
+starts, and the catalog is printed every time any target's state changes, not
+only once after everything finishes.
 
 Only public identities and lifecycle status are read: `cord_runtime.
 aegra_client.stream_lifecycle`/`watch_lifecycle` yield exactly the `metadata`
@@ -122,11 +127,23 @@ state and are dropped unread. A Run's Assistant is resolved to its `graph_id`
 (`describe_assistant`, the same public `/assistants` identity `cord list`
 already reads) before the Run can be placed in the catalog; one that can't be
 resolved is omitted with a diagnostic, never guessed. `cli.py`'s `--watch`
-path (`_watch_live_run`, #42) reads all three (`describe_run`,
+path (`_watch_worker`, #42) reads all three (`describe_run`,
 `describe_assistant`, and the SSE stream as `watch`) through
 `cord_runtime.backends.aegra.AegraExecutionBackend` rather than importing
 `aegra_client` directly, though the backend still reuses these same
 already-verified `aegra_client` functions underneath; behavior is unchanged.
+
+Each watched Run's `LiveRun` is keyed by `cord_runtime.run_continuity`'s
+logical Run ID for its (Deployment, Thread) pair, not the raw watched API Run
+ID (#46 AC2): a resume gets a fresh Aegra API Run ID (ADR-0003 correction),
+but the archive's `cord.run.id` -- and this catalog entry -- stay anchored to
+the *original* submission, since a Run's OTel span never reopens on resume
+(`cord_runtime.execution.resume_run`). `cord run` and `route_signal` now call
+`record_submission` right after a successful `execute()`, the same call
+`approval_inbox.submit_response` already made on resume, so that original
+anchor actually exists; watching a Thread with no recorded submission (e.g.
+started outside `cord`) falls back to the watched Run ID itself rather than
+blocking or guessing (ADR-0015).
 
 `cord_runtime.live_reconciliation.reconcile` turns that lifecycle state into
 one of three display sources, all model-free (no Tier/model field is ever
@@ -146,11 +163,40 @@ Reconnects rely on Aegra's own monotonic per-Run event ids
 duplicate event never regresses a Run's status or completion time, so a
 dropped connection neither duplicates a Run entry nor loses progress.
 
-`cord view`'s single-shot render only follows a Run for as long as one
-invocation runs; there is no standing daemon or background poller. A Graph
-not otherwise named by a connection or recorded execution is still created to
-hold its live Runs, exactly like a recorded-only Graph (`topology_status:
-"no_connection"`).
+`cord view --watch` only follows a Run for as long as one invocation runs;
+there is no standing daemon or background poller across separate invocations.
+Within that one invocation, once every watched target's stream goes terminal,
+`--archive` (if given) triggers a bounded convergence phase (#46 AC3/AC4,
+`cord_runtime.live_reconciliation.await_convergence`): the archive is
+re-read on a poll interval until each completed Run is either replaced by its
+recorded counterpart -- printed as recorded in the same catalog that no
+longer lists it as live, so it is never dropped from view -- or reaches the
+`ingestion_failed_after` deadline, whichever comes first. No `--archive`
+skips this phase entirely (nothing to converge against) and `cord view`
+prints its usual single final snapshot. A Graph not otherwise named by a
+connection or recorded execution is still created to hold its live Runs,
+exactly like a recorded-only Graph (`topology_status: "no_connection"`).
+
+## Execution timeline fields (#46 AC5)
+
+`build_execution_tree` no longer trusts a Run span's own `endTimeUnixNano` as
+its completion boundary: per ADR-0008, `cord_runtime.execution.run`'s span
+closes the instant a graph first pauses, and `resume_run` never reopens it --
+only new Step spans attach to the same trace on a resume. Each Run's `end_ns`
+is instead the max of its own span end and every Step/Attempt end it
+contains, the truthful outer boundary of everything actually recorded.
+
+A Step with `resumed_from` set carries `approval_wait_ns`: the gap between
+the original `awaiting_approval` Step's end and this Step's start, when that
+original Step is present in the given spans. When it isn't (pruned, or never
+delivered), `approval_wait_ns` is `None` -- never synthesized -- and the Run
+carries `timeline_incomplete: True`. A Step still `awaiting_approval` with no
+later Step resuming it is flagged `awaiting_resume: True`, evidence of an
+open wait rather than a gap in the data. Each Run's `execution_ns` subtracts
+only the *known* approval waits (`approval_wait_ns`, summed) from its total
+`end_ns - start_ns` span, so a Run with an unmatched wait still gets a
+best-effort `execution_ns` alongside its `timeline_incomplete` flag rather
+than no number at all.
 
 ## Out of scope
 

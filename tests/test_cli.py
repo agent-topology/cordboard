@@ -477,6 +477,24 @@ def test_cmd_run_success_prints_result_exit_zero(tmp_path, monkeypatch, capsys):
     assert captured["request_context"] is None
 
 
+def test_cmd_run_records_submission_as_the_threads_first_for_later_resume_identity(tmp_path, monkeypatch):
+    """#46 AC2: a resume's fresh API Run ID only groups under the ORIGINAL
+    submission's logical Run ID if that original submission was itself
+    recorded -- `cord run` must do this, not just `approval_inbox`'s resume."""
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    input_path = _input_file(tmp_path, {})
+
+    def fake_execute(endpoint, assistant, subject, graph_input, *, request_context=None, timeout=120):
+        return {"run_id": "r-1", "thread_id": "t-1", "status": "success", "values": {}}
+
+    monkeypatch.setattr(cli, "execute", fake_execute)
+    code = cli.main(["--board", str(tmp_path), "run", "aegra-local", "g", "subj", str(input_path)])
+    assert code == cli.EXIT_OK
+
+    from cord_runtime.run_continuity import logical_run
+    assert logical_run(tmp_path, "aegra-local", "t-1") == {"run_id": "r-1", "api_run_ids": ["r-1"]}
+
+
 def test_cmd_run_context_file_passed_through(tmp_path, monkeypatch):
     add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
     input_path = _input_file(tmp_path, {})
@@ -580,6 +598,9 @@ def test_cmd_signal_manual_routes_and_exits_zero_on_success(tmp_path, monkeypatc
     assert code == cli.EXIT_OK
     outcome = json.loads(capsys.readouterr().out)
     assert outcome["status"] == "routed"
+
+    from cord_runtime.run_continuity import logical_run
+    assert logical_run(tmp_path, "aegra-local", "t") == {"run_id": "r", "api_run_ids": ["r"]}
 
 
 def test_cmd_signal_manual_unmatched_exits_one(tmp_path, capsys):
@@ -704,3 +725,156 @@ def test_cmd_view_watch_unreachable_run_is_reported_not_fatal(tmp_path, monkeypa
     assert code == cli.EXIT_OK
     assert "Live Run" not in out
     assert "check service readiness" in err
+
+
+# --- cli.py: cmd_view --watch continuous reconciliation (#46) ---------------
+
+def _watch_common(monkeypatch, *, status="running"):
+    monkeypatch.setattr(cli.requests, "get", _fake_probe_get)
+    monkeypatch.setattr(cli, "check_freshness",
+                        lambda board_dir, endpoint, **kw: FreshnessCheck(status=ABSENT, reading=TopologyReading(status=ABSENT)))
+    monkeypatch.setattr(AegraExecutionBackend, "describe_assistant",
+                        lambda self, assistant_id: {"graph_id": "fixture-a"})
+    monkeypatch.setattr(AegraExecutionBackend, "describe_run", lambda self, thread_id, run_id: {
+        "run_id": run_id, "thread_id": thread_id, "assistant_id": "fixture-a", "status": status, "subject": "s",
+    })
+
+
+def test_cmd_view_watch_targets_progress_independently_not_sequentially(tmp_path, monkeypatch, capsys):
+    """#46 AC1: multiple watched Deployments do not wait for one another --
+    a slow target's stream draining must not block a fast target's from even
+    starting, which the old sequential `for` loop over --watch targets did."""
+    import threading
+
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    _watch_common(monkeypatch)
+
+    fast_done = threading.Event()
+
+    def fake_watch(self, thread_id, run_id, *, timeout):
+        if run_id == "r-slow":
+            # Only unblocks once the "fast" target has already finished --
+            # this only happens if both targets' watches started concurrently.
+            if not fast_done.wait(timeout=5):
+                raise AssertionError("r-fast never started: --watch targets ran sequentially, not concurrently")
+        yield "end", {"status": "success"}, f"{run_id}_event_0"
+        if run_id == "r-fast":
+            fast_done.set()
+
+    monkeypatch.setattr(AegraExecutionBackend, "watch", fake_watch)
+
+    code = cli.main(["--board", str(tmp_path), "view",
+                     "--watch", "aegra-local:t-slow:r-slow", "--watch", "aegra-local:t-fast:r-fast"])
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_OK
+    assert "Live Run r-slow (thread t-slow) [live, success]" in out
+    assert "Live Run r-fast (thread t-fast) [live, success]" in out
+
+
+def test_cmd_view_watch_prints_progress_before_the_stream_goes_terminal(tmp_path, monkeypatch, capsys):
+    """#46 AC1: progress is visible before terminal completion, not only a
+    single print after the whole stream drains."""
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    _watch_common(monkeypatch, status="pending")
+
+    def fake_watch(self, thread_id, run_id, *, timeout):
+        yield "metadata", {}, f"{run_id}_event_0"
+        yield "end", {"status": "success"}, f"{run_id}_event_1"
+
+    monkeypatch.setattr(AegraExecutionBackend, "watch", fake_watch)
+
+    code = cli.main(["--board", str(tmp_path), "view", "--watch", "aegra-local:t-1:r-1"])
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert code == cli.EXIT_OK
+    assert any("[live, running]" in line for line in lines)  # printed while still running
+    assert any("[live, success]" in line for line in lines)  # then updated on completion
+    assert len(lines) >= 2  # more than one snapshot was printed
+
+
+def test_cmd_view_watch_resumed_run_id_displays_under_its_original_logical_run(tmp_path, monkeypatch, capsys):
+    """#46 AC2: watching a resumed invocation's fresh API Run ID still
+    updates the original logical Run's catalog entry, not a new one."""
+    from cord_runtime.run_continuity import record_submission
+
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    _watch_common(monkeypatch)
+
+    def fake_watch(self, thread_id, run_id, *, timeout):
+        yield "end", {"status": "success"}, f"{run_id}_event_0"
+
+    monkeypatch.setattr(AegraExecutionBackend, "watch", fake_watch)
+
+    record_submission(tmp_path, "aegra-local", "t-1", "original-run-id")
+    record_submission(tmp_path, "aegra-local", "t-1", "resumed-run-id")  # the resume's fresh API Run ID
+
+    code = cli.main(["--board", str(tmp_path), "view", "--watch", "aegra-local:t-1:resumed-run-id"])
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_OK
+    assert "Live Run original-run-id (thread t-1)" in out
+    assert "resumed-run-id" not in out
+
+
+def test_cmd_view_watch_unknown_thread_falls_back_to_the_watched_run_id(tmp_path, monkeypatch, capsys):
+    """No prior submission recorded for this Thread (e.g. submitted outside
+    `cord`): #46 AC2's identity resolution must not block or guess -- it
+    falls back to the watched Run ID itself (ADR-0015)."""
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    _watch_common(monkeypatch)
+
+    def fake_watch(self, thread_id, run_id, *, timeout):
+        yield "end", {"status": "success"}, f"{run_id}_event_0"
+
+    monkeypatch.setattr(AegraExecutionBackend, "watch", fake_watch)
+
+    code = cli.main(["--board", str(tmp_path), "view", "--watch", "aegra-local:t-1:r-1"])
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_OK
+    assert "Live Run r-1 (thread t-1)" in out
+
+
+def test_cmd_view_watch_with_archive_converges_to_a_bounded_ingestion_failed(tmp_path, monkeypatch, capsys):
+    """#46 AC3: a completed live Run whose archive never arrives eventually
+    shows a bounded ingestion-failed diagnostic, driven by a real
+    (here, controlled) clock rather than exiting the instant the SSE stream
+    goes terminal."""
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    _watch_common(monkeypatch)
+
+    def fake_watch(self, thread_id, run_id, *, timeout):
+        yield "end", {"status": "success"}, f"{run_id}_event_0"
+
+    monkeypatch.setattr(AegraExecutionBackend, "watch", fake_watch)
+    monkeypatch.setattr(cli, "read_spans", lambda paths: {})  # the archive never delivers
+
+    clock = {"now": 0.0}
+    monkeypatch.setattr(cli.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(cli.time, "sleep", lambda seconds: clock.__setitem__("now", clock["now"] + seconds))
+
+    code = cli.main(["--board", str(tmp_path), "view", "--watch", "aegra-local:t-1:r-1",
+                     "--archive", str(tmp_path / "archive"), "--json"])
+    assert code == cli.EXIT_OK
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+    final_live_runs = lines[-1]["graphs"][0]["live_runs"]
+    assert final_live_runs and final_live_runs[0]["source"] == "ingestion_failed"
+    assert clock["now"] >= 300.0  # the default ingestion_failed_after deadline
+
+
+def test_cmd_view_watch_without_archive_skips_convergence_polling(tmp_path, monkeypatch, capsys):
+    """No --archive: nothing to converge against, so `cord view --watch`
+    keeps its existing single-shot shape instead of polling pointlessly."""
+    add_connection(tmp_path, "aegra-local", "http://127.0.0.1:2026")
+    _watch_common(monkeypatch)
+
+    def fake_watch(self, thread_id, run_id, *, timeout):
+        yield "end", {"status": "success"}, f"{run_id}_event_0"
+
+    monkeypatch.setattr(AegraExecutionBackend, "watch", fake_watch)
+
+    def fail_sleep(seconds):
+        raise AssertionError("must not poll/sleep when --archive was not given")
+
+    monkeypatch.setattr(cli.time, "sleep", fail_sleep)
+
+    code = cli.main(["--board", str(tmp_path), "view", "--watch", "aegra-local:t-1:r-1"])
+    assert code == cli.EXIT_OK
+    assert "Live Run r-1" in capsys.readouterr().out

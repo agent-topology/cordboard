@@ -65,6 +65,23 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
     (e.g. a duplicate submission), distinct from an ordinary resume chain. A
     new Step span alone is never proof of a duplicate business mutation; this
     is span evidence only; effect probes/receipts/idempotency stay graph-owned.
+
+    Timeline fields (#46 AC5) separate approval wait from execution time
+    rather than trusting the Run span's own `endTimeUnixNano` alone: per
+    ADR-0008, `cord_runtime.execution.run`'s span closes the instant the
+    graph first pauses, and `resume_run` never reopens it -- only new Step
+    spans attach to the same trace on a resume. So each Run's `end_ns` here
+    is the max of its own span end and every Step/Attempt end it contains,
+    the truthful outer boundary of everything actually recorded. A Step with
+    `resumed_from` set carries `approval_wait_ns` (the gap between the
+    original awaiting_approval Step's end and this Step's start) when that
+    original Step is present in `spans`, or `None` -- never synthesized --
+    when it was pruned or never delivered; the Run then carries
+    `timeline_incomplete: True` rather than a silently wrong total. A Step
+    still `awaiting_approval` with no later Step resuming it is flagged
+    `awaiting_resume: True` (evidence of an open wait, not a gap). Each
+    Run's `execution_ns` subtracts only the *known* approval waits from its
+    total span.
     """
     if spans:
         query_spans(spans, reference=0, top=1)  # validation only; count is unused
@@ -82,6 +99,7 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
                 "subject_type": attrs["cord.subject.type"],
                 "subject_id": attrs["cord.subject.id"],
                 "start_ns": run_span["startTimeUnixNano"],
+                "end_ns": run_span["endTimeUnixNano"],
                 "steps": [],
             }
         return runs[key]
@@ -91,9 +109,11 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
         if key not in steps:
             attrs = step_span["attributes"]
             record = {
+                "span_id": key,
                 "node": attrs["cord.node.name"],
                 "outcome": attrs["cord.outcome"],
                 "start_ns": step_span["startTimeUnixNano"],
+                "end_ns": step_span["endTimeUnixNano"],
                 "resumed_from": attrs.get("cord.resumed_from"),
                 "repeated_execution": False,
                 "attempts": [],
@@ -118,6 +138,7 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
                     "tier": attrs.get("cord.tier"),
                     "outcome": attrs["cord.outcome"],
                     "start_ns": span["startTimeUnixNano"],
+                    "end_ns": span["endTimeUnixNano"],
                 })
         except ArchiveError as exc:
             raise ArchiveError(f"{location}: {exc}") from None
@@ -136,6 +157,30 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
             group.sort(key=lambda s: s["start_ns"])
             for step in group[1:]:
                 step["repeated_execution"] = True
+
+    # Timeline truthfulness (#46 AC5): approval wait vs. execution time, and
+    # incomplete/unmatched evidence surfaced rather than guessed.
+    for step in steps.values():
+        if step["resumed_from"] is not None:
+            original = steps.get(step["resumed_from"])
+            step["approval_wait_ns"] = (max(0, step["start_ns"] - original["end_ns"])
+                                        if original is not None else None)
+        else:
+            step["approval_wait_ns"] = None
+        step["awaiting_resume"] = (step["outcome"] == "awaiting_approval"
+                                   and step["span_id"] not in by_resumed_from)
+
+    for record in runs.values():
+        end_candidates = [record["end_ns"]] + [s["end_ns"] for s in record["steps"]] \
+            + [a["end_ns"] for s in record["steps"] for a in s["attempts"]]
+        record["end_ns"] = max(end_candidates)
+        known_waits = [s["approval_wait_ns"] for s in record["steps"] if s["approval_wait_ns"] is not None]
+        record["approval_wait_ns"] = sum(known_waits)
+        record["execution_ns"] = max(0, record["end_ns"] - record["start_ns"] - record["approval_wait_ns"])
+        record["timeline_incomplete"] = any(
+            (s["resumed_from"] is not None and s["approval_wait_ns"] is None) or s["awaiting_resume"]
+            for s in record["steps"]
+        )
 
     return sorted(runs.values(), key=lambda r: r["start_ns"])
 
@@ -228,8 +273,12 @@ def _subjects_view(graph_runs: list[dict]) -> list[dict]:
         key = (run["subject_type"], run["subject_id"])
         subjects.setdefault(key, []).append({
             "run_id": run["run_id"],
+            "execution_ns": run["execution_ns"],
+            "approval_wait_ns": run["approval_wait_ns"],
+            "timeline_incomplete": run["timeline_incomplete"],
             "steps": [{"node": s["node"], "outcome": s["outcome"],
                        "resumed_from": s["resumed_from"], "repeated_execution": s["repeated_execution"],
+                       "approval_wait_ns": s["approval_wait_ns"], "awaiting_resume": s["awaiting_resume"],
                        "attempts": [
                 {"number": a["number"], "tier": a["tier"], "outcome": a["outcome"]} for a in s["attempts"]
             ]} for s in run["steps"]],
@@ -389,13 +438,25 @@ def format_catalog_text(catalog: dict[str, Any]) -> str:
         for subject in graph["subjects"]:
             lines.append(f"  Subject {subject['subject_type']}:{subject['subject_id']}")
             for run in subject["runs"]:
-                lines.append(f"    Run {run['run_id']}")
+                duration = f"executed {run['execution_ns'] / 1e9:.3f}s"
+                if run["approval_wait_ns"]:
+                    duration += f", waited {run['approval_wait_ns'] / 1e9:.3f}s for approval"
+                if run["timeline_incomplete"]:
+                    duration += ", timeline incomplete"
+                lines.append(f"    Run {run['run_id']} ({duration})")
                 for step in run["steps"]:
                     lines.append(f"      Step {step['node']} -> {step['outcome']}")
                     if step["repeated_execution"]:
                         lines.append(
                             f"        warning: repeated execution -- another Step already resumed "
                             f"from {step['resumed_from']}"
+                        )
+                    if step["awaiting_resume"]:
+                        lines.append("        waiting for approval to resume")
+                    if step["resumed_from"] is not None and step["approval_wait_ns"] is None:
+                        lines.append(
+                            f"        warning: resumed from {step['resumed_from']}, but that Step is not "
+                            "in this archive -- approval wait time unknown"
                         )
                     for attempt in step["attempts"]:
                         tier = f", tier={attempt['tier']}" if attempt["tier"] else ""
