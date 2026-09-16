@@ -159,13 +159,34 @@ The external testbed installs a versioned package, exact commit or built wheel;
 source-relative and editable Cordboard dependencies are not acceptance evidence.
 Unit and mocked HTTP/SSE contract tests remain in this repository.
 
-The intended `ExecutionBackend` boundary makes Aegra the first adapter, with
-A2A an optional future adapter. This abstraction is not implemented yet.
-Also planned are separate runtime status and client wait outcomes, explicit
-logical Run/invocation/Thread/trace types, and identity/status-only results with
-opt-in state retrieval. Current `aegra_client` behavior still merges interrupted
-and deadline-reached runs into `waiting` and returns full `values` on success.
-These are compatibility changes to implement and verify, not new current API claims.
+[ADR-0017](docs/decisions/0017-execution-backend-contract.md) finalizes and
+[`cord_runtime.backends`](src/cord_runtime/backends/) implements the
+`ExecutionBackend` boundary, with Aegra as the first adapter (A2A remains an
+optional future one) (#42). `backends/aegra.py`'s `AegraExecutionBackend`
+decomposes the transport into `create_thread`/`submit_run`/`get_run`/
+`get_state`/`wait_for_run` and exposes `list_assistants`/`execute`/`status`/
+`resume`/`cancel`/`watch`. `wait_for_run` separates `RuntimeStatus`
+(`QUEUED`/`RUNNING`/`INTERRUPTED`/`SUCCEEDED`/`FAILED`/`CANCELLED`/`UNKNOWN`)
+from `ClientWaitOutcome` (`COMPLETED`/`DEADLINE_REACHED`/`TRANSPORT_ERROR`): a
+deadline reached while still queued/running keeps that exact status and never
+reports an interrupt or cancellation, and a terminal failure or a mid-poll
+transport failure comes back as a value with the Thread/Invocation identity
+intact rather than an exception that discards it. `LogicalRunId`/
+`InvocationId`/`ThreadId`/`TraceId` (`backends/base.py`) are distinct types;
+`ExecutionResult`, the default `execute`/`resume` result, carries identity and
+status only, never checkpoint state -- `get_state` is the separate, explicit
+output-retrieval call. `cord_runtime.aegra_client`'s free functions
+(`execute`/`resume`/`cancel`/`describe_run`/`describe_assistant`/
+`watch_lifecycle`/`stream_lifecycle`) are unchanged and still merge interrupted
+and deadline-reached runs into `waiting` and return full `values` on success;
+`AegraExecutionBackend` reuses several of them as already-verified primitives
+rather than replacing them, and only `cli.py`'s `--watch` path (`_watch_live_run`,
+the viewer's live-run discovery) has moved onto the new backend so far.
+`cmd_run`'s submission (`cli.py`) and `router.route_signal`'s submission both
+still call the unchanged `aegra_client.execute`, preserving `cord run`'s JSON/exit
+contract and the already-verified #16-#18 cascade/dedupe/concurrency behavior;
+migrating either onto the new result shape is explicit follow-up work (ADR-0017's
+2026-09-16 implementation note), not done here.
 
 Entity Deployments own runtime provisioning, graph libraries, credentials,
 authorization, checkpoints, topology publication and execution instrumentation.
