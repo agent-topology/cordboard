@@ -154,12 +154,13 @@ def test_resume_reuses_the_thread_and_gets_a_new_api_run_id(monkeypatch):
         "/threads/t-7/runs/r-7b": FakeResponse(200, {"status": "success"}),
         "/threads/t-7/state": FakeResponse(200, {"values": {"approved": True}}),
     })
-    result = resume(ENDPOINT, "t-7", {"approved": True}, timeout=5)
+    result = resume(ENDPOINT, "t-7", "opaque-graph", {"approved": True}, timeout=5)
     assert result == {"run_id": "r-7b", "thread_id": "t-7", "status": "success",
                       "values": {"approved": True}}
     assert not any(c["url"].endswith("/threads") for c in calls)
     run_call = next(c for c in calls if c["url"].endswith("/threads/t-7/runs"))
-    assert run_call["json"] == {"command": {"resume": {"approved": True}}, "stream_mode": ["values"]}
+    assert run_call["json"] == {"assistant_id": "opaque-graph",
+                                "command": {"resume": {"approved": True}}, "stream_mode": ["values"]}
 
 
 def test_resume_interrupted_again_is_waiting(monkeypatch):
@@ -167,7 +168,7 @@ def test_resume_interrupted_again_is_waiting(monkeypatch):
         "/threads/t-8/runs": FakeResponse(200, {"run_id": "r-8b"}),
         "/threads/t-8/runs/r-8b": FakeResponse(200, {"status": "interrupted"}),
     })
-    result = resume(ENDPOINT, "t-8", "next-answer", timeout=5)
+    result = resume(ENDPOINT, "t-8", "opaque-graph", "next-answer", timeout=5)
     assert result == {"run_id": "r-8b", "thread_id": "t-8", "status": "waiting"}
 
 
@@ -177,7 +178,28 @@ def test_resume_missing_thread_id_fails_before_any_request(monkeypatch):
 
     monkeypatch.setattr(requests.Session, "request", fake_request)
     with pytest.raises(ValueError, match="Thread ID"):
-        resume(ENDPOINT, "  ", "answer")
+        resume(ENDPOINT, "  ", "opaque-graph", "answer")
+
+
+def test_resume_missing_assistant_fails_before_any_request(monkeypatch):
+    def fake_request(self, method, url, json=None, timeout=None, allow_redirects=None):
+        raise AssertionError("no request should be sent for a blank Assistant")
+
+    monkeypatch.setattr(requests.Session, "request", fake_request)
+    with pytest.raises(ValueError, match="Assistant"):
+        resume(ENDPOINT, "t-7", "  ", "answer")
+
+
+def test_resume_wrong_assistant_rejected_without_retry_or_payload(monkeypatch):
+    """Mirrors Aegra 0.10.4's own rejection of a bad Assistant on resume
+    (docs/decisions/0016-control-plane-and-testbed.md): the client neither
+    retries the POST nor inspects the error body to recover."""
+    calls = _install(monkeypatch, {
+        "/threads/t-7/runs": FakeResponse(422, {"detail": "assistant not found"}),
+    })
+    with pytest.raises(RuntimeError, match="check service readiness"):
+        resume(ENDPOINT, "t-7", "no-such-assistant", "answer", timeout=5)
+    assert sum(1 for c in calls if c["url"].endswith("/threads/t-7/runs")) == 1
 
 
 def test_cancel_requests_the_runs_own_public_cancel_action(monkeypatch):

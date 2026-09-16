@@ -80,7 +80,7 @@ def execute(endpoint: str, assistant: str, subject: str, graph_input: dict, *,
         return _poll_until_settled(request, path, run_id, thread_id, timeout)
 
 
-def resume(endpoint: str, thread_id: str, resume_value, *, timeout=120):
+def resume(endpoint: str, thread_id: str, assistant: str, resume_value, *, timeout=120):
     """Continue an existing Thread through LangGraph's public ``command.resume``.
 
     A different contract from ``execute()``: no Thread is created, and
@@ -91,16 +91,27 @@ def resume(endpoint: str, thread_id: str, resume_value, *, timeout=120):
     back to the logical Run it continues is `cord_runtime.run_continuity`'s
     job, not this client's.
 
+    Aegra 0.10.4 rejects a resume submission with HTTP 422 when its
+    ``assistant_id`` is absent (docs/decisions/0016-control-plane-and-testbed.md),
+    so ``assistant`` -- the same Assistant the interrupted Run was submitted
+    against -- is required here and validated before any request is sent, the
+    same way ``execute()`` validates ``subject``. A wrong Assistant is
+    rejected by Aegra itself; this client never retries the POST or inspects
+    the response payload to recover.
+
     The returned ``status`` has the same meaning as ``execute()``'s.
     """
     if not isinstance(thread_id, str) or not thread_id.strip():
         raise ValueError("Thread ID must be a non-empty string")
+    if not isinstance(assistant, str) or not assistant.strip():
+        raise ValueError("Assistant must be a non-empty string")
     with requests.Session() as session:
         session.trust_env = False
         request = _session_request(session, endpoint)
         path = f"/threads/{thread_id}"
         run_id = request("POST", path + "/runs",
-                         {"command": {"resume": resume_value}, "stream_mode": ["values"]})["run_id"]
+                         {"assistant_id": assistant, "command": {"resume": resume_value},
+                          "stream_mode": ["values"]})["run_id"]
         return _poll_until_settled(request, path, run_id, thread_id, timeout)
 
 

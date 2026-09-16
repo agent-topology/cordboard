@@ -257,7 +257,11 @@ executions only, mapping their API IDs to `cord.run.id`.
 `cord_runtime.aegra_client.resume` now submits LangGraph's public
 `command.resume` on an existing Thread, transporting the operator's answer
 unread exactly like `execute()`'s `request_context`, and returns the new API
-Run ID Aegra assigns it. `cord_runtime.run_continuity` durably groups that new
+Run ID Aegra assigns it. `resume` now takes a required `assistant` argument
+and sends it as `assistant_id`, matching `execute()`; Aegra 0.10.4 returns
+HTTP 422 on a resume submission that omits it (#40,
+docs/decisions/0016-control-plane-and-testbed.md), and this is a caller-facing
+signature change from the previous two-positional-argument form. `cord_runtime.run_continuity` durably groups that new
 ID under the Thread's first API Run ID (#14, partial): this is the mapping
 piece of the ADR-0003 correction, keyed on Deployment/Thread, not yet wired
 into `cord view`, the CLI, or any graph. `cord_runtime.approval_expiry`
