@@ -128,12 +128,12 @@ newly completed features.
 
 | Work | Existing owner | Readiness |
 | --- | --- | --- |
-| Connect and run existing deployments | [#12](https://github.com/omiologic/cordboard-proto/issues/12) | Ready; first implementation. No topology, new template or provider prerequisite |
-| Read optional topology | [#11](https://github.com/omiologic/cordboard-proto/issues/11) | Ready independently; initial released beta.3 spec baseline |
-| Producer instrumentation and pause/resume Step boundaries | [#28](https://github.com/omiologic/cordboard-proto/issues/28) | Refine the public lifecycle seam; does not block API connection |
-| Generic recorded viewer | [#13](https://github.com/omiologic/cordboard-proto/issues/13) | After #11/#12; existing archived fixtures support UI development |
-| Authorized inbox and logical/API Run continuity | [#14](https://github.com/omiologic/cordboard-proto/issues/14) | After #13/#28; entity validation remains authoritative |
-| Expiry, routing, deduplication, cascades, isolation and live UI | [#15–#20](https://github.com/omiologic/cordboard-proto/issues/3) and [#15](https://github.com/omiologic/cordboard-proto/issues/15) | Refine against actual prerequisite interfaces; no all-features serial gate |
+| Connect and run existing deployments | [#12](https://github.com/agent-topology/cordboard/issues/12) | Ready; first implementation. No topology, new template or provider prerequisite |
+| Read optional topology | [#11](https://github.com/agent-topology/cordboard/issues/11) | Ready independently; initial released beta.3 spec baseline |
+| Producer instrumentation and pause/resume Step boundaries | [#28](https://github.com/agent-topology/cordboard/issues/28) | Refine the public lifecycle seam; does not block API connection |
+| Generic recorded viewer | [#13](https://github.com/agent-topology/cordboard/issues/13) | After #11/#12; existing archived fixtures support UI development |
+| Authorized inbox and logical/API Run continuity | [#14](https://github.com/agent-topology/cordboard/issues/14) | After #13/#28; entity validation remains authoritative |
+| Expiry, routing, deduplication, cascades, isolation and live UI | [#15–#20](https://github.com/agent-topology/cordboard/issues/3) and [#15](https://github.com/agent-topology/cordboard/issues/15) | Refine against actual prerequisite interfaces; no all-features serial gate |
 
 The #1 foundation Epic and Slice 0/0.5 milestones close against the existing
 boundary and Langfuse verification records. This reconciliation runs no new
