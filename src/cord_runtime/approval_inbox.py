@@ -92,6 +92,9 @@ def _revision_of(state: dict) -> str | None:
 def _interrupts_of(state: dict) -> list[dict]:
     found = []
     for task in state.get("tasks") or []:
+        # Aegra retains a completed branch's interrupt alongside its result.
+        if task.get("result") is not None:
+            continue
         for interrupt in task.get("interrupts") or []:
             found.append(interrupt)
     return found

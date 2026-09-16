@@ -31,6 +31,10 @@ LangGraph seam, not just the pinned source.
   change. A Deployment or Thread that raises a transport error while being
   probed is skipped, never raised -- one unreachable Deployment cannot hide
   every other Deployment's waiting interrupts.
+  Aegra can retain an old interrupt on a task that already has a non-null
+  `result` while another branch waits. That completed task is excluded from
+  both discovery and the submission-time pending check; its history does not
+  make it a new approval request.
 - `submit_response(board_dir, deployment=, thread_id=, interrupt_id=,
   approver=, response_value=, revision=, auth_boundary=, now=, timeout=)`
   routes one operator's answer to the exact interrupt it targets, in order:

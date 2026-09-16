@@ -120,6 +120,28 @@ def test_discover_waiting_excludes_threads_that_are_not_interrupted(tmp_path):
     assert found == []
 
 
+@pytest.mark.parametrize("completed_result", [{"left": True}, {}, False])
+def test_completed_branch_interrupt_is_neither_waiting_nor_resumable(tmp_path, completed_result):
+    alias, thread_id = _seed(tmp_path)
+    backend = FakeBackend(state={
+        "tasks": [
+            {"interrupts": [{"id": "interrupt-a"}], "result": completed_result},
+            {"interrupts": [{"id": "interrupt-b"}], "result": None},
+        ],
+        "checkpoint": {"checkpoint_id": "chk-1"},
+    })
+    factory = _factory({alias: backend})
+    found = discover_waiting(tmp_path, reminder_after=60, timeout_after=300, now=NOW,
+                             backend_factory=factory)
+    assert [entry.interrupt_id for entry in found] == ["interrupt-b"]
+    response = submit_response(tmp_path, deployment=alias, thread_id=thread_id,
+                               interrupt_id="interrupt-a", approver="alice", response_value=True,
+                               revision="chk-1", auth_boundary=SyntheticEntityAuthBoundary(GRANTS),
+                               now=NOW, backend_factory=factory)
+    assert response.status == "rejected" and "stale" in response.reason
+    assert backend.resume_calls == []
+
+
 def test_discover_waiting_starts_the_approval_expiry_clock(tmp_path):
     alias, thread_id = _seed(tmp_path)
     backend = FakeBackend()
