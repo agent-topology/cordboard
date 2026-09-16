@@ -9,7 +9,7 @@ real server to distinguish success from failure.
 import pytest
 import requests
 
-from cord_runtime.aegra_client import execute
+from cord_runtime.aegra_client import execute, resume
 
 ENDPOINT = "http://127.0.0.1:9"  # never dialed; requests are faked below.
 
@@ -114,3 +114,35 @@ def test_execute_transports_request_context_unread(monkeypatch):
     run_call = next(c for c in calls if c["url"].endswith("/threads/t-6/runs"))
     assert run_call["json"]["context"] == context
     assert run_call["json"]["config"] == {"configurable": {"cord_subject": "subject-6"}}
+
+
+def test_resume_reuses_the_thread_and_gets_a_new_api_run_id(monkeypatch):
+    calls = _install(monkeypatch, {
+        "/threads/t-7/runs": FakeResponse(200, {"run_id": "r-7b"}),
+        "/threads/t-7/runs/r-7b": FakeResponse(200, {"status": "success"}),
+        "/threads/t-7/state": FakeResponse(200, {"values": {"approved": True}}),
+    })
+    result = resume(ENDPOINT, "t-7", {"approved": True}, timeout=5)
+    assert result == {"run_id": "r-7b", "thread_id": "t-7", "status": "success",
+                      "values": {"approved": True}}
+    assert not any(c["url"].endswith("/threads") for c in calls)
+    run_call = next(c for c in calls if c["url"].endswith("/threads/t-7/runs"))
+    assert run_call["json"] == {"command": {"resume": {"approved": True}}, "stream_mode": ["values"]}
+
+
+def test_resume_interrupted_again_is_waiting(monkeypatch):
+    _install(monkeypatch, {
+        "/threads/t-8/runs": FakeResponse(200, {"run_id": "r-8b"}),
+        "/threads/t-8/runs/r-8b": FakeResponse(200, {"status": "interrupted"}),
+    })
+    result = resume(ENDPOINT, "t-8", "next-answer", timeout=5)
+    assert result == {"run_id": "r-8b", "thread_id": "t-8", "status": "waiting"}
+
+
+def test_resume_missing_thread_id_fails_before_any_request(monkeypatch):
+    def fake_request(self, method, url, json=None, timeout=None, allow_redirects=None):
+        raise AssertionError("no request should be sent for an invalid Thread ID")
+
+    monkeypatch.setattr(requests.Session, "request", fake_request)
+    with pytest.raises(ValueError, match="Thread ID"):
+        resume(ENDPOINT, "  ", "answer")

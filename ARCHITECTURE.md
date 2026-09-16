@@ -152,8 +152,17 @@ The definitions come from [ADR-0002](docs/decisions/0002-vocabulary.md),
 For non-conversational graphs, a new Run gets a new Thread. Resume is intended
 to continue the same logical Run and Thread; rerun starts fresh. Aegra 0.10.4
 creates a new API Run ID even for resume. The Slice 0 client supports independent
-executions only, mapping their API IDs to `cord.run.id`; logical continuation
-across multiple API invocations is deferred (ADR-0003 correction).
+executions only, mapping their API IDs to `cord.run.id`.
+`cord_runtime.aegra_client.resume` now submits LangGraph's public
+`command.resume` on an existing Thread, transporting the operator's answer
+unread exactly like `execute()`'s `request_context`, and returns the new API
+Run ID Aegra assigns it. `cord_runtime.run_continuity` durably groups that new
+ID under the Thread's first API Run ID (#14, partial): this is the mapping
+piece of the ADR-0003 correction, keyed on Deployment/Thread, not yet wired
+into `cord view`, the CLI, or any graph. A full approval inbox — waiting-Run
+discovery across Deployments, the authorized submission boundary, expiry, and
+dedupe of concurrent/stale/repeated responses — remains backlog per #14's own
+blockers; none of that exists yet.
 Subject groups executions without
 sharing checkpoint state and maps to Langfuse `session_id`. A conversational
 graph may manage Thread reuse internally; the platform still groups by Subject.
