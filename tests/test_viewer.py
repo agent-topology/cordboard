@@ -100,7 +100,7 @@ def _sid():
 
 def _span(kind, *, span_id, parent_id, trace_id, graph_id, run_id, subject_type="fixture",
          subject_id="urn:test:1", node=None, outcome=None, attempt=None, tier=None,
-         semconv="0.3.0", start=1000, end=2000):
+         semconv="0.3.0", start=1000, end=2000, resumed_from=None):
     attrs = {"cord.graph.id": graph_id, "cord.run.id": run_id,
              "cord.subject.type": subject_type, "cord.subject.id": subject_id}
     if kind == "run":
@@ -110,6 +110,8 @@ def _span(kind, *, span_id, parent_id, trace_id, graph_id, run_id, subject_type=
         name = f"step:{node}"
         attrs["cord.node.name"] = node
         attrs["cord.outcome"] = outcome
+        if resumed_from is not None:
+            attrs["cord.resumed_from"] = resumed_from
     else:
         name = "attempt"
         attrs["cord.node.name"] = node
@@ -193,6 +195,48 @@ def test_execution_tree_reuses_archive_contract_validation():
     step_span["attributes"]["cord.node.name"] = "other"
     with pytest.raises(ArchiveError, match="Node identity mismatch"):
         build_execution_tree(spans)
+
+
+# --- repeated-execution evidence (#15) ---------------------------------------
+
+def _resumed_step_tree(graph_id, run_id, run_sid, trace_id, *, node, resumed_from, start):
+    """One additional Step, linked to `run_sid`, claiming to resume `resumed_from`."""
+    step_sid, step_entry = _span("step", span_id=_sid(), parent_id=run_sid, trace_id=trace_id,
+                                  graph_id=graph_id, run_id=run_id, node=node, outcome="passed",
+                                  start=start, end=start + 1, resumed_from=resumed_from)
+    return {step_sid: step_entry}
+
+
+def test_normal_single_resume_is_not_flagged_repeated():
+    spans = _run_tree("fixture-a", "run-1", node="approve")
+    run_sid = next(sid for sid, (s, _) in spans.items() if s["name"] == "run")
+    trace_id = "a" * 32
+    resumed = _resumed_step_tree("fixture-a", "run-1", run_sid, trace_id,
+                                  node="approve", resumed_from="orig-span", start=2000)
+    run = build_execution_tree(_merge(spans, resumed))[0]
+    assert [(s["node"], s["resumed_from"], s["repeated_execution"]) for s in run["steps"]] == [
+        ("approve", None, False),
+        ("approve", "orig-span", False),
+    ]
+
+
+def test_two_steps_resuming_the_same_span_flag_the_later_one_as_repeated():
+    spans = _run_tree("fixture-a", "run-1", node="approve")
+    run_sid = next(sid for sid, (s, _) in spans.items() if s["name"] == "run")
+    trace_id = "a" * 32
+    first_resume = _resumed_step_tree("fixture-a", "run-1", run_sid, trace_id,
+                                       node="approve", resumed_from="orig-span", start=2000)
+    duplicate_resume = _resumed_step_tree("fixture-a", "run-1", run_sid, trace_id,
+                                           node="approve", resumed_from="orig-span", start=3000)
+    run = build_execution_tree(_merge(spans, first_resume, duplicate_resume))[0]
+    flags = {(s["start_ns"]): s["repeated_execution"] for s in run["steps"]}
+    assert flags == {1100: False, 2000: False, 3000: True}
+
+
+def test_execution_tree_empty_run_steps_carry_resumed_from_none_by_default():
+    run = build_execution_tree(_run_tree("fixture-a", "run-1"))[0]
+    assert run["steps"][0]["resumed_from"] is None
+    assert run["steps"][0]["repeated_execution"] is False
 
 
 # --- correlate_topology ------------------------------------------------------

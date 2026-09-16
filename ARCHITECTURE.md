@@ -28,6 +28,15 @@ handling, `cord sync`) are still planned.
 `awaiting_approval` when the graph's own `interrupt()` pauses it and open a new,
 linked Step on resume, through LangGraph's public interrupt contract rather
 than any change to `agent-workflow-core` or Omiologic (#28).
+[Approval expiry, halt, and repeated-execution evidence](docs/approval-expiry.md)
+applies an injected-clock reminder/timeout policy to one already-known waiting
+approval, resolves an approval-versus-timeout race to exactly one durable
+disposition (`resumed` or `halted`) without forging a graph-specific rejection,
+and flags a Step whose `cord.resumed_from` is shared by more than one other
+Step as repeated-execution evidence in `cord view` (#15). `cord_runtime.
+aegra_client.cancel` adds the one supported public halt action. Waiting-Run
+discovery across Deployments and the authorized submission boundary remain
+backlog per #14's own blockers, unchanged by this slice.
 [Signal/Rule routing](docs/signal-routing.md) adds `cord rule add` and
 `cord signal manual|file|schedule`, one generic router
 (`cord_runtime.router.route_signal`) all three sources call, evaluating only
@@ -159,10 +168,15 @@ unread exactly like `execute()`'s `request_context`, and returns the new API
 Run ID Aegra assigns it. `cord_runtime.run_continuity` durably groups that new
 ID under the Thread's first API Run ID (#14, partial): this is the mapping
 piece of the ADR-0003 correction, keyed on Deployment/Thread, not yet wired
-into `cord view`, the CLI, or any graph. A full approval inbox — waiting-Run
-discovery across Deployments, the authorized submission boundary, expiry, and
-dedupe of concurrent/stale/repeated responses — remains backlog per #14's own
-blockers; none of that exists yet.
+into `cord view`, the CLI, or any graph. `cord_runtime.approval_expiry`
+applies reminder/timeout/halt policy to one already-known waiting
+(Deployment, Thread) pair keyed on that same logical `run_id`, and
+`cord_runtime.aegra_client.cancel` adds the halt action itself (#15). A full
+approval inbox — waiting-Run discovery across Deployments and the authorized
+submission boundary — remains backlog per #14's own blockers; dedupe of
+concurrent/stale *responses* (distinct from #15's repeated-*execution*
+evidence in the viewer, which is span-based and already recorded) is not
+implemented either.
 Subject groups executions without
 sharing checkpoint state and maps to Langfuse `session_id`. A conversational
 graph may manage Thread reuse internally; the platform still groups by Subject.

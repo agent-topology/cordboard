@@ -9,7 +9,7 @@ real server to distinguish success from failure.
 import pytest
 import requests
 
-from cord_runtime.aegra_client import execute, resume
+from cord_runtime.aegra_client import cancel, execute, resume
 
 ENDPOINT = "http://127.0.0.1:9"  # never dialed; requests are faked below.
 
@@ -146,3 +146,41 @@ def test_resume_missing_thread_id_fails_before_any_request(monkeypatch):
     monkeypatch.setattr(requests.Session, "request", fake_request)
     with pytest.raises(ValueError, match="Thread ID"):
         resume(ENDPOINT, "  ", "answer")
+
+
+def test_cancel_requests_the_runs_own_public_cancel_action(monkeypatch):
+    calls = _install(monkeypatch, {
+        "/threads/t-9/runs/r-9/cancel": FakeResponse(200, {}),
+    })
+    result = cancel(ENDPOINT, "t-9", "r-9")
+    assert result == {"run_id": "r-9", "thread_id": "t-9", "status": "halted"}
+    call, = calls
+    assert call["method"] == "POST"
+    assert call["url"].endswith("/threads/t-9/runs/r-9/cancel")
+    assert call["json"] is None
+
+
+def test_cancel_never_submits_a_resume_command(monkeypatch):
+    calls = _install(monkeypatch, {
+        "/threads/t-10/runs/r-10/cancel": FakeResponse(200, {}),
+    })
+    cancel(ENDPOINT, "t-10", "r-10")
+    assert not any(c["url"].endswith("/threads/t-10/runs") for c in calls)
+
+
+def test_cancel_ambiguous_transport_raises_payload_free_diagnostic(monkeypatch):
+    def fake_request(self, method, url, json=None, timeout=None, allow_redirects=None):
+        raise requests.ConnectionError("refused")
+
+    monkeypatch.setattr(requests.Session, "request", fake_request)
+    with pytest.raises(RuntimeError, match="check service readiness"):
+        cancel(ENDPOINT, "t-11", "r-11")
+
+
+def test_cancel_missing_run_id_fails_before_any_request(monkeypatch):
+    def fake_request(self, method, url, json=None, timeout=None, allow_redirects=None):
+        raise AssertionError("no request should be sent for an invalid Run ID")
+
+    monkeypatch.setattr(requests.Session, "request", fake_request)
+    with pytest.raises(ValueError, match="Run ID"):
+        cancel(ENDPOINT, "t-12", "  ")

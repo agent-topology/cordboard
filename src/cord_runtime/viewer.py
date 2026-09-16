@@ -45,6 +45,16 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
     visible even when `cord.tier` and `gen_ai.*` are absent (Run semconv
     0.3.0); Subject grouping survives on `cord.subject.type`/`cord.subject.id`
     alone.
+
+    Each Step record also carries `resumed_from` (the linked span ID, or
+    `None`) and `repeated_execution` (#15): a normal resume links exactly one
+    new Step to the Step it resumes, so `resumed_from` values are expected to
+    be unique. When more than one Step declares the *same* `resumed_from`,
+    every one after the earliest-starting is flagged `repeated_execution:
+    True` -- evidence that the same paused point was resumed more than once
+    (e.g. a duplicate submission), distinct from an ordinary resume chain. A
+    new Step span alone is never proof of a duplicate business mutation; this
+    is span evidence only; effect probes/receipts/idempotency stay graph-owned.
     """
     if spans:
         query_spans(spans, reference=0, top=1)  # validation only; count is unused
@@ -74,6 +84,8 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
                 "node": attrs["cord.node.name"],
                 "outcome": attrs["cord.outcome"],
                 "start_ns": step_span["startTimeUnixNano"],
+                "resumed_from": attrs.get("cord.resumed_from"),
+                "repeated_execution": False,
                 "attempts": [],
             }
             steps[key] = record
@@ -104,6 +116,17 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
         record["steps"].sort(key=lambda s: s["start_ns"])
         for step in record["steps"]:
             step["attempts"].sort(key=lambda a: a["start_ns"])
+
+    by_resumed_from: dict[str, list[dict]] = {}
+    for step in steps.values():
+        if step["resumed_from"] is not None:
+            by_resumed_from.setdefault(step["resumed_from"], []).append(step)
+    for group in by_resumed_from.values():
+        if len(group) > 1:
+            group.sort(key=lambda s: s["start_ns"])
+            for step in group[1:]:
+                step["repeated_execution"] = True
+
     return sorted(runs.values(), key=lambda r: r["start_ns"])
 
 
@@ -208,7 +231,9 @@ def build_catalog(connections: dict[str, dict], topology: dict[str, FreshnessChe
             key = (run["subject_type"], run["subject_id"])
             subjects.setdefault(key, []).append({
                 "run_id": run["run_id"],
-                "steps": [{"node": s["node"], "outcome": s["outcome"], "attempts": [
+                "steps": [{"node": s["node"], "outcome": s["outcome"],
+                           "resumed_from": s["resumed_from"], "repeated_execution": s["repeated_execution"],
+                           "attempts": [
                     {"number": a["number"], "tier": a["tier"], "outcome": a["outcome"]} for a in s["attempts"]
                 ]} for s in run["steps"]],
             })
@@ -255,6 +280,11 @@ def format_catalog_text(catalog: dict[str, Any]) -> str:
                 lines.append(f"    Run {run['run_id']}")
                 for step in run["steps"]:
                     lines.append(f"      Step {step['node']} -> {step['outcome']}")
+                    if step["repeated_execution"]:
+                        lines.append(
+                            f"        warning: repeated execution -- another Step already resumed "
+                            f"from {step['resumed_from']}"
+                        )
                     for attempt in step["attempts"]:
                         tier = f", tier={attempt['tier']}" if attempt["tier"] else ""
                         lines.append(f"        Attempt {attempt['number']}{tier} -> {attempt['outcome']}")

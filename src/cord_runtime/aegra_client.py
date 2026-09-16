@@ -90,3 +90,25 @@ def resume(endpoint: str, thread_id: str, resume_value, *, timeout=120):
         run_id = request("POST", path + "/runs",
                          {"command": {"resume": resume_value}, "stream_mode": ["values"]})["run_id"]
         return _poll_until_settled(request, path, run_id, thread_id, timeout)
+
+
+def cancel(endpoint: str, thread_id: str, run_id: str, *, timeout=10) -> dict:
+    """Request the run's own public cancellation -- the platform's chosen halt
+    action for an expired approval wait (#15), never a forged graph decision.
+
+    A different contract from ``resume()``: this never submits
+    ``command.resume``, so a timeout can never be mistaken for an operator's
+    answer. The ``requests`` failure this raises (via the shared session
+    helper) is payload-free but means the cancellation's outcome is unknown
+    -- ambiguous transport -- and callers must not treat it as a confirmed
+    halt.
+    """
+    if not isinstance(thread_id, str) or not thread_id.strip():
+        raise ValueError("Thread ID must be a non-empty string")
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise ValueError("Run ID must be a non-empty string")
+    with requests.Session() as session:
+        session.trust_env = False
+        request = _session_request(session, endpoint)
+        request("POST", f"/threads/{thread_id}/runs/{run_id}/cancel")
+        return {"run_id": run_id, "thread_id": thread_id, "status": "halted"}
