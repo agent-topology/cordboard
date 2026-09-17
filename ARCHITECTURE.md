@@ -16,13 +16,15 @@ Its milestones and issues are plans, not additional implemented capabilities;
 only its first contract Task is initially ready for execution.
 
 That first contract Task ([#66](https://github.com/agent-topology/cordboard/issues/66),
-[ADR-0020](docs/decisions/0020-playground-launch-contract.md)) fixes the
+[ADR-0020](docs/decisions/0020-playground-launch-contract.md)) fixed the
 playground's entry command, artifact boundary, and process/fixture/board/
 archive ownership. It confirms rather than changes ADR-0016/ADR-0018's
-ownership split. [docs/playground.md](docs/playground.md) records the
-resulting command sequence as a planned contract; no code from it is
-implemented yet — that is #67 (entry path, in `cordboard-testbed`) and #68
-(black-box qualification).
+ownership split. The `cordboard-testbed` implementation from #67 and the #68
+fresh-environment qualification now exercise the documented sequence from a
+hash-verified wheel through real Aegra/Postgres/Collector processes and
+Chromium. [docs/playground.md](docs/playground.md) records the operator path
+and links its local and hosted evidence; no `cord-runtime` implementation was
+added for these Testbed-owned tasks.
 
 Cordboard has a [minimal executable graph](docs/minimal-graph.md) with
 in-memory execution records (#4), plus a separate archive integration (#5):

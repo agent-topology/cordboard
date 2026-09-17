@@ -1,11 +1,13 @@
 # Playground launch contract (#66, ADR-0020)
 
-> **Status: planned.** ADR-0020 fixes the command sequence, artifact
-> boundary, and ownership below. None of it is implemented yet:
-> `scripts/run-playground` and the standalone idle-only publisher module are
-> [#67](https://github.com/agent-topology/cordboard/issues/67)'s scope, in the
-> `cordboard-testbed` repository, not this one. This document records the
-> decision so #67 and #68 do not have to re-derive it.
+> **Status: implemented and qualified.** `scripts/run-playground`, the
+> standalone idle-only publisher, and the black-box qualifier live in
+> `cordboard-testbed`, as required by ADR-0020. Testbed
+> [PR #5](https://github.com/agent-topology/cordboard-testbed/pull/5) carries the
+> qualification implementation and committed local evidence; the same path
+> passed in
+> [hosted Ubuntu CI](https://github.com/agent-topology/cordboard-testbed/actions/runs/35224036284).
+> No `cord-runtime` implementation was added for this Testbed-owned path.
 
 ## Why this is not `cord serve` alone
 
@@ -23,18 +25,19 @@ not a new backend and not a new Cordboard subcommand.
 ```sh
 # 1. Install the candidate artifact (existing cordboard-testbed contract)
 python3 scripts/install-wheel /absolute/path/cord_runtime-<version>-py3-none-any.whl \
-  --sha256 <64-character-build-sha256>
+  --sha256 <64-character-build-sha256> \
+  --source-revision <full-cordboard-commit-sha>
 .venv/bin/python scripts/prepare-tools
 
-# 2. Launch the playground (new; cordboard-testbed, #67)
+# 2. Launch the playground (cordboard-testbed)
 .venv/bin/python scripts/run-playground --evidence .artifacts/playground
 ```
 
-`run-playground` prints the same "Minimal environment ready" line
-`start-environment` already prints, then the `cord serve` URL line
-(`Cordboard: http://127.0.0.1:<port>/`) once the four scenarios below are
-seeded. Ctrl-C stops the server and, immediately after, everything
-`start-environment` already stops (owned processes, then
+`run-playground` retains `start-environment`'s "Minimal environment ready"
+line in the per-invocation supervisor log. Its stdout prints the fixed archive
+path and then the `cord serve` URL (`Cordboard: http://127.0.0.1:<port>/`) once
+the four scenarios below are seeded. Ctrl-C stops the server and, immediately
+after, everything `start-environment` already stops (owned processes, then
 `docker compose stop`; the Postgres checkpoint volume is retained, matching
 existing acceptance behavior). Docker and the two pinned public binaries
 (`otelcol-contrib`, `redact-secret`) are visible prerequisites, not something
@@ -89,11 +92,19 @@ a bounded, non-destructive failure by `start-environment`; `run-playground`
 does not add new failure classification on top of it. `cord serve` failures
 (invalid host/port) use ADR-0018 §7's existing validation unchanged.
 
-## What this document is not
+## Qualification evidence
 
-It is not implementation evidence. See ADR-0020 for the full rationale,
-rejected alternatives, and trade-off analysis. See
-[#67](https://github.com/agent-topology/cordboard/issues/67) for the
-implementation Task and [#68](https://github.com/agent-topology/cordboard/issues/68)
-for the black-box qualification that replays this exact command sequence
-headlessly.
+The black-box qualifier replays the three commands above from a new evidence
+directory without importing Cordboard implementation modules or writing the
+board/archive directly. It checks the public HTTP contract before visiting all
+five pages for the four states in real Playwright Chromium, then observes a
+rejected concurrent launch, append-only rerun, and SIGINT-to-parent-only
+cleanup from outside the process.
+
+The committed local evidence and hosted receipt live under
+[`evidence/issue68/`](https://github.com/agent-topology/cordboard-testbed/tree/main/evidence/issue68)
+in the Testbed repository. Hosted run 35224036284 rebuilt product
+commit `a468dcd44f1184dfd3ffd90705bd2f3e20314482`, reproduced wheel SHA256
+`cec2ef3ca8805f42992d3a83ade75eb7ecb1dec0b7191c109851487ee7e2c0c0`,
+and passed the candidate, existing acceptance, and new playground jobs. See
+ADR-0020 for the rationale, rejected alternatives, and trade-off analysis.
