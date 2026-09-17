@@ -149,6 +149,14 @@ AT-6(LangGraph 지원 범위)이다. AT-2·AT-3은 실험적 확장으로, AT-4�
 [여섯 내부 의존성 점검](../internal-dependencies.md)에 기록했다. ADR-0011의 양수 깊이
 설명도 날짜 붙은 정정으로 갱신했다. 새로운 플랫폼 결정이나 통합 완료 선언은 아니다.
 
+**beta.4 게시, pin 갱신 (2026-09-16)** — `agent-topology-spec` 0.1.0b4가 위 qualification과 같은
+소스 커밋(`05486d7…`)에서 PyPI에 게시됐다. Cordboard는 pin을 `0.1.0b3` → `0.1.0b4`로 올렸고
+(`pyproject.toml`/`uv.lock`), 코드 변경 없이 전체 회귀(611 passed, 36 deselected)가 그대로 통과했다.
+AT-1은 이제 "후보에서 해결"이 아니라 게시본에서 닫혔다. `RECOGNIZED_INTERPRETATION_VERSION`은
+여전히 `"1"`만 인식하며, revision `"2"` 인식 여부는 이번 갱신의 범위 밖 별도 결정이다. 상세는
+[업스트림 요구사항 문서](cordboard-upstream-requirements.md)와
+[내부 의존성 점검](../internal-dependencies.md)의 같은 날짜 addendum을 따른다.
+
 **실측된 좋은 신호** — `agent-topology` beta.1 → beta.2에서 같은 그래프의 `structureHash`가
 동일했다(`d0b436…`). 포맷이 두 릴리스를 건너 안정적이었다는 증거다. beta.2 → beta.3에서도
 다른 예제 그래프의 해시가 같았다(`192398ec…`, 2026-09-12).

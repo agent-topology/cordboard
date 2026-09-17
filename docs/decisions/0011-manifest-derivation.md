@@ -355,3 +355,13 @@ qualification과 실제 배포를 구분한다. 생산자는 여전히 graph/ent
 Cordboard의 spec pin은 소비 코드가 생길 때 정한다. 팩터리 호출과 context 조립도
 entity가 소유한다. `agt`는 팩터리를 호출하지 않으며 import-safe compiled-object
 export가 필요하다. [정확한 revision과 근거](../internal-dependencies.md).
+
+## 정정 — 서브그래프 후보가 게시로 넘어갔다 (2026-09-16)
+
+위 2026-09-15 정정의 "후보 artifact qualification과 실제 배포를 구분한다"는 구분이 끝났다.
+같은 소스 커밋(`05486d7…`)이 `agent-topology-spec==0.1.0b4`로 PyPI에 게시됐고, Cordboard의
+spec pin을 실제로 그 버전으로 올렸다(`pyproject.toml`/`uv.lock`, 코드 변경 없음, 전체 회귀
+611 passed·36 deselected 그대로 통과). AT-1과 결정 6의 `expanded-subgraph-metadata` 폐기는
+이제 후보가 아니라 Cordboard가 실제로 소비하는 spec의 동작이다. `RECOGNIZED_INTERPRETATION_VERSION`이
+revision `"2"`를 인식하도록 바꾸는 것은 이 정정의 범위가 아니라 별도 결정이다 — Cordboard는
+여전히 그 revision을 불투명하게 취급한다. [근거](../internal-dependencies.md).

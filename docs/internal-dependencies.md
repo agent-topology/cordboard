@@ -6,6 +6,21 @@ inspected source. Release information comes from checked-in release records and
 local tags; registries and remote branch tips were not re-queried. No dependency
 pins, upstream source, services, or external business state were changed.
 
+## 2026-09-16 addendum — beta.4 published, Cordboard pin bumped
+
+`agent-topology-spec` 0.1.0b4 is now published on PyPI as
+[v0.1.0-beta.4](https://github.com/agent-topology/agent-topology/releases/tag/v0.1.0-beta.4),
+from the same qualified source commit (`05486d7ee9cee7650779cb0e9c00a85bd152a3e8`) this
+review already inspected as a candidate below -- publication, not new source.
+Cordboard's `pyproject.toml`/`uv.lock` pin moved from `0.1.0b3` to `0.1.0b4`; no
+Cordboard source changed, and the full non-external suite (611 passed, 36
+deselected) passed unchanged against the new pin. The "publication still
+pending" and "candidate" framing in the snapshot and sections below describes
+2026-09-15; treat it as superseded by this addendum, not re-verified from
+scratch. `cord_runtime.topology.RECOGNIZED_INTERPRETATION_VERSION` still only
+recognizes revision `"1"`; adopting revision `"2"` (now real, not only
+candidate) is separate follow-up work, not part of this pin bump.
+
 ## Source snapshot
 
 | Repository | Inspected HEAD | Release/source distinction |

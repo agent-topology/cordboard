@@ -8,6 +8,27 @@
 
 ---
 
+## 현재 상태 — beta.4 게시, Cordboard pin 갱신 (2026-09-16)
+
+`agent-topology-spec` 0.1.0b4가 PyPI에 게시됐다 —
+[v0.1.0-beta.4 릴리스](https://github.com/agent-topology/agent-topology/releases/tag/v0.1.0-beta.4),
+소스 커밋은 아래 2026-09-15 절이 이미 가리킨 qualification 커밋 `05486d7…`와 같다. 새 코드가
+아니라 그때 검증해 둔 candidate의 게시다. Cordboard는 `pyproject.toml`/`uv.lock`의 pin을
+`0.1.0b3` → `0.1.0b4`로 올렸고, 코드는 건드리지 않은 채 전체 회귀
+(`uv run --locked --group proxy --group web-test pytest -q -m 'not collector and not aegra and not langfuse'`,
+611 passed, 36 deselected)가 그대로 통과했다 — depth-0 문서가 바이트 단위로 그대로라는
+업스트림 주장과 일치한다.
+
+- **AT-1은 이제 배포 대기가 아니라 게시본에서 닫혔다.** 아래 2026-09-15 절의 "후보 소스에서
+  해결, 배포는 대기 중" 문장은 이 절로 갱신한다.
+- `cord_runtime.topology.RECOGNIZED_INTERPRETATION_VERSION`은 여전히 `"1"`만 인식한다.
+  materialized child가 있는 그래프가 내는 revision `"2"` 문서는 에러가 아니라 불투명(확인 불가)으로
+  읽힌다(ADR-0015). revision `"2"`를 인식하도록 바꿀지는 이 pin 갱신의 범위가 아니라 별도 결정이다.
+- AT-6(Python LangGraph 1.2.10–1.2.11)은 게시본에서도 그대로다 — 릴리스 노트가 확인해 준다.
+- RS(redact-secret)와 여섯 내부 의존성 저장소 상태는 이 갱신으로 바뀌지 않았다.
+
+---
+
 ## 현재 상태 — 내부 의존성 소스 점검 (2026-09-15)
 
 여섯 저장소의 정확한 커밋, 태그, 실제 pin과 구현 근거는
@@ -19,8 +40,13 @@ beta.3 실측 이력이며, 현재 개발 소스 상태는 다음과 구분한�
   폐기됐다. 후보 artifact 검증은 기록되어 있으나 배포는 아직 대기 중이다.
 - **AT-2·AT-3:** 여전히 실험적 해석이다. materialized child가 있는 graph는 revision `"2"`를
   쓰며 revision `"1"`만 아는 소비자는 이를 불투명하게 취급한다. 동적 interrupt는 여전히
-  정적 topology에서 알 수 없다. **AT-4·AT-5**의 기존 결론은 유지한다.
-- **AT-6:** Python LangGraph 1.2.10–1.2.11 범위는 후보에서도 그대로다.
+  정적 topology에서 알 수 없다. **AT-4·AT-5**의 기존 결론은 유지한다. 실험적 확장을 코어 스키마로
+  승격할지는 업스트림 [#96](https://github.com/agent-topology/agent-topology/issues/96)이
+  "별도 후속으로 미룬다"고 명시한 채 남아 있었다 — 그 후속을
+  [agent-topology#163](https://github.com/agent-topology/agent-topology/issues/163)으로 올렸다(2026-09-16).
+- **AT-6:** Python LangGraph 1.2.10–1.2.11 범위는 후보에서도 그대로다. 범위 확장 자체가 아니라
+  "언제·어떤 근거로 넓히는가"의 정책이 없다는 점을
+  [agent-topology#164](https://github.com/agent-topology/agent-topology/issues/164)로 올렸다(2026-09-16).
 - **RS:** upstream beta.2와 Omiologic의 `0.1.0b2` pin을 확인했다. Cordboard는 계속
   `0.1.0b1`이며 아래 RS-1/2/5는 그 버전의 검증 이력이다. HEAD의 추가 탐지 수정은
   unreleased이고, 이번 문서 점검에서 패키지 업그레이드나 관문 재검증은 하지 않았다.
@@ -95,6 +121,11 @@ Temporal 문서에서는 또 다른 확장을 봐야 한다. 그건 코어 문�
 **cordboard에 미치는 영향:** 뷰어가 `__start__`/`__end__`를 그릴지 판단하려면 확장을 읽어야 한다.
 지금은 LangGraph만 쓰므로 동작은 하지만, 코어를 읽는 코드가 확장에 의존하게 된다.
 
+> **2026-09-16 정정.** `x-langgraph`/`x-topology-interpretation`으로 실험적으로는 풀렸지만
+> ([agent-topology#96](https://github.com/agent-topology/agent-topology/issues/96)),
+> 코어 승격 여부는 그 이슈가 "별도 후속"으로 미룬 채 남아 있었다. 그 후속을
+> [agent-topology#163](https://github.com/agent-topology/agent-topology/issues/163)으로 올렸다.
+
 ---
 
 ### AT-3 · `direct` 팬아웃의 병렬 의미가 명시되지 않았다 🟡
@@ -113,6 +144,9 @@ LangGraph에서 인터럽트 ID가 충돌해 그 Run이 영구히 재개 불가�
 
 > **2026-09-12 정정.** R3은 거부가 아니라 경고다([ADR-0015](0015-never-block-connection.md)).
 > 0.1.0b3의 실험적 branch 해석이 이 질문에 답했고, 확인되지 않는 경우는 경고가 불확실성으로 표시한다.
+
+> **2026-09-16 정정.** 실험적 branch 해석을 코어로 승격할지는 여전히 미정이다 — 위 AT-2와 같은
+> 이슈로 묶어 [agent-topology#163](https://github.com/agent-topology/agent-topology/issues/163)으로 올렸다.
 
 ---
 
@@ -166,6 +200,9 @@ cordboard는 "그래프마다 자기 의존성"을 원칙으로 두는데(ADR-00
 > 매니페스트는 연결의 전제조건이 아니다([ADR-0015](0015-never-block-connection.md)). 범위 밖 그래프는
 > 그림 없이 연결·기록되므로, 이 항목은 연결 조건이 아니라 뷰어가 그림을 그릴 수 있는 범위의 문제다.
 > 범위를 넓혀 달라는 요구 자체는 여전히 유효하다.
+
+> **2026-09-16 정정.** "지원 범위 확장 정책"은 여전히 없다 —
+> [agent-topology#164](https://github.com/agent-topology/agent-topology/issues/164)로 올렸다.
 
 ---
 

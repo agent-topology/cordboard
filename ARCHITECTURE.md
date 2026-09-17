@@ -140,7 +140,7 @@ queued/running, paused again, or reaches terminal state is routed
 identically to the router's own synchronous path.
 [`cord_runtime.topology`](src/cord_runtime/topology.py) reads a Deployment's
 optional published topology over HTTP, classifies it as absent, unreachable,
-invalid, or valid against the pinned `agent-topology-spec==0.1.0b3` schema,
+invalid, or valid against the pinned `agent-topology-spec==0.1.0b4` schema,
 raises the R3 fan-out/interrupt warning, and tracks a local snapshot to detect
 when a previously fetched document changed (#11). `cord sync [alias]` (#43)
 wires this explicit refresh into the CLI, printing each connection's fresh
@@ -223,7 +223,7 @@ command generates files rather than serving the proposed discovery endpoint.
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
 [docs/artifacts/cordboard.html](docs/artifacts/cordboard.html) summarizes the
-design as of 2026-09-12, and
+design as of 2026-09-16, and
 [docs/artifacts/cordboard-glossary.html](docs/artifacts/cordboard-glossary.html)
 maps each shared word to its meaning in Cordboard documents (ADR-0002). Where
 either disagrees with an ADR, the ADR wins. The
@@ -456,13 +456,19 @@ Subgraphs default to opaque nodes (`depth=0`). Per-graph `completeness.gaps`
 and general `producerLimitations` must both be visible; a producer limitation
 does not itself make every document incomplete. These limitations are warnings.
 
-The published beta.3 baseline loses parents at positive depth. The inspected
-beta.4 candidate addresses this with retained parent nodes and child `graphs[]`
-entries referenced by `subgraphId`; its qualification is recorded, publication
-is pending. Positive-depth hashes change, and materialized graphs use experimental
-interpretation revision `"2"`. Follow references rather than parsing graph IDs;
-unknown interpretation revisions remain opaque. This is an upstream migration
-consideration, not an installed Cordboard feature. See the
+The beta.3 baseline lost parents at positive depth. Published beta.4
+(`agent-topology-spec==0.1.0b4`, now Cordboard's pinned version) fixes this
+with retained parent nodes and child `graphs[]` entries referenced by
+`subgraphId`. Positive-depth hashes changed, and materialized graphs use
+experimental interpretation revision `"2"`. Follow references rather than
+parsing graph IDs; unknown interpretation revisions remain opaque --
+`cord_runtime.topology.RECOGNIZED_INTERPRETATION_VERSION` still only
+recognizes `"1"`, so a materialized child's revision-`"2"` facts are read as
+unconfirmed rather than an error (ADR-0015), not yet as recognized data.
+Whether to recognize revision `"2"` is separate follow-up work, not decided
+by this pin bump. Depth-0 output is unchanged and the full non-external test
+suite (611 passed, 36 deselected) passed against beta.4 with no source
+changes beyond the pin. See the
 [versioned review](docs/internal-dependencies.md#topology-beta3-baseline-versus-beta4-candidate).
 
 ## Catalog validation
@@ -614,12 +620,13 @@ as executable specifications.
 | ADR-0010 is unwritten | The index labels the DeepAgents template decision Accepted but explicitly says no ADR file exists. The design direction is recorded, but its formal ADR remains pending. |
 
 The [upstream requirements](docs/decisions/cordboard-upstream-requirements.md)
-record each `agent-topology` finding against its measured `0.1.0b3` behavior and
-add the 2026-09-15 candidate-source update; AT-1 is addressed in beta.4
-candidate source, and AT-6's supported range is unchanged. After ADR-0014 and
-ADR-0015 none of them can block a connection; they affect viewer and warning
-quality only. `agent-topology-spec==0.1.0b3` is pinned as a direct dependency
-(#11) for schema validation and structure-hash comparison;
+record each `agent-topology` finding against its measured `0.1.0b3` behavior,
+the 2026-09-15 candidate-source update, and the 2026-09-16 publication update;
+AT-1 is addressed and published in beta.4, and AT-6's supported range is
+unchanged. After ADR-0014 and ADR-0015 none of them can block a connection;
+they affect viewer and warning quality only. `agent-topology-spec==0.1.0b4`
+is pinned as a direct dependency (#11) for schema validation and
+structure-hash comparison;
 `agent-topology-langgraph` (the producer) is not and remains a graph-side
 choice, since Cordboard only consumes published documents and never derives
 structure itself. The [internal dependency review](docs/internal-dependencies.md#actual-integration-gaps)

@@ -4,14 +4,14 @@ requires-python = "==3.12.*"
 
 [[package]]
 name = "agent-topology-spec"
-version = "0.1.0b3"
+version = "0.1.0b4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonschema" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/69/e3/69ed2ef9589f85467a1138c79ab9fb77e4a62498512fd18cced56dbb52fe/agent_topology_spec-0.1.0b3.tar.gz", hash = "sha256:b6da5f5640eae25477771845ea171fef80195856163e69a5f9d4dc047862a71d", size = 13199, upload-time = "2026-09-12T19:16:51.696Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/c9/85092a983814e37b7aeeebaee280321966ac1cb42328e431c0adae3dcb5a/agent_topology_spec-0.1.0b4.tar.gz", hash = "sha256:1119bd518165e28a56d6bf006b10b6607dbb792594542552ddf740557ab61050", size = 13225, upload-time = "2026-09-15T23:52:12.98Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/71/ac/b727fa2ce0a8ac2dedb9877462a7277cae36d972af2b3c4211dc592f7ae5/agent_topology_spec-0.1.0b3-py3-none-any.whl", hash = "sha256:45732c5080126484af8ba4bea7a1767f72fca27721825c0f678321fa7093e276", size = 10652, upload-time = "2026-09-12T19:16:50.699Z" },
+    { url = "https://files.pythonhosted.org/packages/24/b0/d55f753b6e18469192a4b96f6f08d16c5f97bab50489ce1608da5b3833bf/agent_topology_spec-0.1.0b4-py3-none-any.whl", hash = "sha256:8873164617d06baad5914e9a359d039a8b67677a0d6e3a128201d13f47f8c190", size = 10681, upload-time = "2026-09-15T23:52:11.914Z" },
 ]
 
 [[package]]
@@ -327,7 +327,7 @@ web-test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-topology-spec", specifier = "==0.1.0b3" },
+    { name = "agent-topology-spec", specifier = "==0.1.0b4" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "langchain-core", specifier = "==1.6.3" },
     { name = "langgraph", specifier = "==1.2.11" },
