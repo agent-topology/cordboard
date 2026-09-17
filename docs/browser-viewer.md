@@ -108,6 +108,28 @@ than one on the same Thread, or no approval authority configured for the
 connection, is shown as bounded explanatory text instead of a guess. The
 observation page markup itself carries no mutation form or JS handler.
 
+## First-run orientation (#69)
+
+`GET /` states what Cordboard connects and records in one short paragraph, then
+renders every catalog entry's own recorded and live Runs as explicit, clickable
+choices instead of a bare count. Each choice pairs a plain-English purpose --
+`cord_runtime.web.presentation.scenario_summary`, derived only from vocabulary
+`build_catalog`/`build_execution_tree` already expose (declared Step/Attempt
+outcomes, Aegra status) -- with its exact `run_id` in secondary `<code>`
+markup, never inventing graph-specific meaning (AGENTS.md's no-descriptors
+rule). A Run with a matching authorized waiting interrupt links straight to
+its `/approvals/...` response form (reusing the same authorized-inbox
+resolution the `cord-action-slot` on the Run page already performs, exposed to
+the index template as `action_slot_for`); an ambiguous or unauthorized case
+renders the same bounded explanatory text the Run page already does, never a
+guessed link. Every graph card also links to its `/execute` form directly, so
+first execution is one click from `/`. An idle graph (no recorded or live
+Runs) states that plainly instead of a bare zero, and the sidebar/no-catalog
+empty states name the bounded next action (`cord add`) instead of only "no
+graphs" prose. None of this adds a new domain classification: it only
+rephrases the same `build_catalog`/`_action_slot` outputs the Graph and Run
+pages already render, so `?format=json` is unchanged.
+
 ## Execution submission and approval controls (#49, ADR-0019)
 
 `GET/POST /connections/{alias}/graphs/{graph_id}/execute` renders and accepts
@@ -166,8 +188,15 @@ uv build --wheel
 `tests/test_web.py` covers HTTP/JSON identity and escaping, eight topology
 states, declared outcomes, exact wait intervals, SSE reconnect/deduplication,
 ingestion deadlines and durable replacement, empty/error/disconnected views,
-loopback binding, responsive DOM, keyboard focus and polling fallback.
-The browser test writes desktop/narrow screenshots to pytest's temporary folder.
+loopback binding, responsive DOM, keyboard focus and polling fallback, plus
+(#69) the index orientation text, per-Run plain-English summaries derived
+purely from declared outcomes/Aegra status, the authorized-inbox action link
+(ready/ambiguous/no-authority) surfaced directly on `/`, the bounded empty-
+catalog/empty-graph next actions, and exact JSON parity with the unchanged
+`build_catalog` model.
+The browser test writes desktop/narrow screenshots (including the `/` index
+itself) to pytest's temporary folder and asserts the orientation heading and
+a named scenario link are present and keyboard-reachable at both widths.
 It needs the optional web-test group; absent Playwright is an explicit skip,
 not browser acceptance.
 
@@ -219,6 +248,33 @@ shared-model and local DOM tests.
   are inapplicable. [CI](../.github/workflows/ci.yml) now configures the service-free
   suite including Chromium, wheel build, and installed asset checks. A hosted run
   and external Testbed suite migration are not claimed by this local evidence.
+
+### Executed evidence — 2026-09-17 (#69)
+
+- Focused new/updated suite: `uv run --locked --group web-test pytest -q
+  tests/test_web.py` -- **25 passed** (Chromium DOM/screenshot tests included,
+  no skips), covering the four new/updated orientation tests plus every
+  pre-existing case unchanged.
+- Full service-free suite: `uv run --locked --group proxy --group web-test
+  pytest -q -m 'not collector and not aegra and not langfuse'` -- **615
+  passed, 36 deselected**, 41.42 seconds (four net-new tests over the #48/#49
+  baseline of 611; zero regressions).
+- Chromium 145.0.7632.6 (Playwright 1.58.0): the `/` index renders "What
+  Cordboard shows here" plus a keyboard-reachable "Recorded Run: passed" link,
+  and the 375×667 index screenshot has no horizontal overflow
+  (`document.documentElement.scrollWidth <= innerWidth`).
+- `uv build --wheel` passed: `cord_runtime-0.0.1-py3-none-any.whl` SHA256
+  `05954c8abae10d907786d39e3680be917fdbe9510362d31589866fe57820c93a`, with the
+  updated `page.html`/`presentation.py`/`viewer.css` confirmed present inside
+  the archive. Installed non-editably into an isolated `uv venv --python
+  3.12`; `uv pip check` passed (58 packages compatible), and the installed
+  package's `scenario_summary`/`page.html` render correctly from the wheel,
+  not from the source tree.
+- No real Testbed/browser-acceptance run against `cordboard-testbed` was
+  executed for this change -- ADR-0016's control-plane/Testbed boundary keeps
+  that suite's migration and final artifact acceptance external; this is local
+  mocked-rendering evidence only, consistent with the #48/#49 evidence above.
+- `git diff --check` passed on the changed files.
 
 Reproduction after the external Testbed's documented candidate installation and
 `scripts/start-environment`:

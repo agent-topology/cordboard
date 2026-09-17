@@ -7,9 +7,10 @@ import pytest
 import requests
 
 from cord_runtime.live_reconciliation import LiveRun
+from cord_runtime.run_continuity import record_submission
 from cord_runtime.viewer import build_catalog
 from cord_runtime.web.observation import Observation
-from cord_runtime.web.presentation import graph_url, layout, timeline
+from cord_runtime.web.presentation import graph_url, layout, scenario_summary, timeline
 from cord_runtime.web.server import make_server, serve
 from test_viewer import _document, _run_tree, _merge, _span
 
@@ -27,6 +28,18 @@ class StaticObservation:
 
     def run_updates(self, _):
         yield from self.updates
+
+
+class BoardObservation(StaticObservation):
+    """A StaticObservation that also resolves the authorized-inbox action slot (#69),
+    exercising the same board/connections path a real Observation would."""
+    def __init__(self, catalog, board, connections):
+        super().__init__(catalog)
+        self.board = board
+        self._connections = connections
+
+    def connections(self):
+        return self._connections
 
 
 @contextmanager
@@ -54,6 +67,62 @@ def catalog_fixture():
         graph["topology_status"] = "current"
         graph["topology_structure"] = _document(["main"])["graphs"][0]["structure"]
     return catalog
+
+
+def test_scenario_summary_names_evidence_from_generic_vocabulary_only():
+    recorded = catalog_fixture()["graphs"][0]["runs"]
+    by_id = {r["run_id"]: r for r in recorded}
+    assert scenario_summary(by_id["success"]) == "Recorded Run: passed"
+    assert scenario_summary(by_id["retry"]) == "Recorded Run: 2 Attempts (failed, passed)"
+    assert scenario_summary(by_id["interrupt"]) == "Recorded Run: paused, awaiting approval"
+    live = {"run_id": "live-1", "aegra_status": "interrupted"}
+    assert scenario_summary(live) == "Run: waiting on approval"
+    assert scenario_summary({"run_id": "x", "aegra_status": "success"}) == "Run: finished successfully"
+
+
+def test_index_first_run_orientation_offers_scenario_choices_with_bounded_actions(tmp_path):
+    catalog = catalog_fixture()
+    record_submission(tmp_path, "demo", "thread-1", "interrupt")
+    connections = {"demo": {"endpoint": "http://localhost", "auth_endpoint": None}}
+    with running(BoardObservation(catalog, tmp_path, connections)) as base:
+        page = requests.get(base + "/").text
+        # States what Cordboard connects and records (AC1).
+        assert "Cordboard connects to registered Graph deployments and records" in page
+        # Each recorded/live Run is an explicit, human-readable choice (AC1/AC2).
+        assert 'Recorded Run: passed</a>' in page
+        assert 'Recorded Run: 2 Attempts (failed, passed)</a>' in page
+        assert 'Recorded Run: paused, awaiting approval</a>' in page
+        # Exact identifiers stay available, in secondary markup (AC3).
+        assert "<code>interrupt</code>" in page and "<code>success</code>" in page
+        assert "Thread <code>thread-1</code>" in page
+        # Links to the existing safe action surface, or a bounded reason it is absent (AC2).
+        assert "/connections/demo/graphs/g/execute" in page
+        assert "No approval authority configured for this deployment." in page
+        # An idle graph (no recorded Runs) gets a bounded next action, not bare internal status (AC4).
+        assert "No recorded Runs yet." in page and page.count("Submit an execution</a>") == 2
+        # The shared JSON model is unaffected by the new HTML orientation (AC5 JSON stability).
+        assert requests.get(base + "/?format=json").json() == json.loads(json.dumps(catalog))
+
+
+def test_index_empty_catalog_gives_bounded_next_action():
+    with running(StaticObservation({"graphs": []})) as base:
+        page = requests.get(base + "/").text
+        assert "cord add" in page and "No connections or recorded graphs yet" in page
+
+
+def test_index_action_slot_links_directly_to_a_ready_approval(tmp_path, monkeypatch):
+    from cord_runtime import approval_inbox
+    catalog = catalog_fixture()
+    record_submission(tmp_path, "demo", "thread-1", "interrupt")
+    connections = {"demo": {"endpoint": "http://localhost", "auth_endpoint": "http://localhost:9"}}
+
+    class Waiting:
+        interrupt_id = "i-1"
+    monkeypatch.setattr(approval_inbox, "discover_waiting_for_thread", lambda *a, **k: [Waiting()])
+    with running(BoardObservation(catalog, tmp_path, connections)) as base:
+        page = requests.get(base + "/").text
+        assert "Respond to this approval</a>" in page
+        assert "interrupt <code>i-1</code>" in page
 
 
 def test_distinct_routes_escaping_and_exact_json():
@@ -179,6 +248,16 @@ def test_browser_dom_and_narrow_screenshots(tmp_path):
         errors = []
         page.on("pageerror", lambda exc: errors.append(str(exc)))
         page.goto(base)
+        assert page.get_by_role("heading", name="What Cordboard shows here").count() == 1
+        assert page.get_by_role("link", name="Recorded Run: passed", exact=True).count() == 1
+        assert page.get_by_role("link", name="No recorded Runs yet.", exact=False).count() == 0  # prose, not a link
+        page.screenshot(path=str(tmp_path / "index-desktop.png"), full_page=True)
+        page.set_viewport_size({"width": 375, "height": 667})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        page.screenshot(path=str(tmp_path / "index-narrow.png"), full_page=True)
+        page.keyboard.press("Tab")
+        assert page.locator(":focus").count() == 1
+        page.set_viewport_size({"width": 1280, "height": 900})
         page.get_by_role("link", name="g", exact=True).last.click()
         assert page.get_by_role("img", name="Published topology for g").count() == 1
         page.get_by_label("Status / declared outcome").fill("failed")

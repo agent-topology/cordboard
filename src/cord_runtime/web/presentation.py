@@ -92,6 +92,31 @@ def timeline(run):
     return rows
 
 
+LIVE_STATUS_PURPOSE = {
+    "pending": "queued", "running": "in progress", "interrupted": "waiting on approval",
+    "success": "finished successfully", "error": "failed", "timeout": "timed out",
+}
+
+
+def scenario_summary(run):
+    """A plain-English purpose for one Run, derived only from vocabulary the
+    shared model already exposes (declared Step/Attempt outcomes or Aegra
+    status) -- never a graph-specific interpretation of its state (AGENTS.md
+    no-descriptors rule)."""
+    if "start_ns" in run:
+        steps = run.get("steps", [])
+        if any(step.get("outcome") == "awaiting_approval" or step.get("awaiting_resume") for step in steps):
+            return "Recorded Run: paused, awaiting approval"
+        attempts = [a["outcome"] for step in steps for a in step.get("attempts", [])]
+        if len(attempts) > 1:
+            return f"Recorded Run: {len(attempts)} Attempts ({', '.join(attempts)})"
+        if attempts:
+            return f"Recorded Run: {attempts[0]}"
+        return "Recorded Run: no declared Step outcomes"
+    purpose = LIVE_STATUS_PURPOSE.get(run.get("aegra_status"), run.get("aegra_status") or "unknown status")
+    return f"Run: {purpose}"
+
+
 def matches(run, subject, status):
     subject_value = run.get("subject_id", run.get("subject", "")) or ""
     outcomes = {s["outcome"] for s in run.get("steps", [])}

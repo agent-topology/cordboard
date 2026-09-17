@@ -27,13 +27,15 @@ from .presentation import (
     layout,
     matches,
     run_url,
+    scenario_summary,
     timeline,
 )
 
 ROOT = files("cord_runtime.web")
 ENV = Environment(loader=FileSystemLoader(str(ROOT / "templates")), autoescape=select_autoescape())
 ENV.globals.update(graph_url=graph_url, run_url=run_url, execute_url=execute_url, approval_url=approval_url,
-                   topology_labels=TOPOLOGY_LABELS, layout=layout, timeline=timeline)
+                   topology_labels=TOPOLOGY_LABELS, layout=layout, timeline=timeline,
+                   scenario_summary=scenario_summary)
 ENV.filters["duration"] = duration
 ENV.filters["tojson"] = lambda value, indent=None: json.dumps(value, indent=indent)
 
@@ -238,7 +240,8 @@ def make_server(observation, host="127.0.0.1", port=0, *, reminder_after=300.0, 
                 action_slot = self._action_slot(graph, run) if run is not None else None
                 self.reply(ENV.get_template("page.html").render(
                     catalog=catalog, graph=graph, run=run, runs=runs, subject=subject, status=status,
-                    diagnostics=observation.diagnostics(), error=None, action_slot=action_slot),
+                    diagnostics=observation.diagnostics(), error=None, action_slot=action_slot,
+                    action_slot_for=self._action_slot),
                     "text/html; charset=utf-8")
             except LookupError:
                 self.error(404, "View not found", as_json)
