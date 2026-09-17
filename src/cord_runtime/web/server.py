@@ -22,6 +22,7 @@ from .presentation import (
     NODE_STATUS_LABELS,
     TOPOLOGY_LABELS,
     approval_url,
+    describe,
     duration,
     execute_url,
     graph_url,
@@ -38,7 +39,7 @@ ENV = Environment(loader=FileSystemLoader(str(ROOT / "templates")), autoescape=s
 ENV.globals.update(graph_url=graph_url, run_url=run_url, execute_url=execute_url, approval_url=approval_url,
                    topology_labels=TOPOLOGY_LABELS, node_status_labels=NODE_STATUS_LABELS,
                    layout=layout, run_topology=run_topology, timeline=timeline,
-                   scenario_summary=scenario_summary)
+                   scenario_summary=scenario_summary, describe=describe)
 ENV.filters["duration"] = duration
 ENV.filters["tojson"] = lambda value, indent=None: json.dumps(value, indent=indent)
 
@@ -191,7 +192,7 @@ def make_server(observation, host="127.0.0.1", port=0, *, reminder_after=300.0, 
                 catalog=observation.snapshot(), waiting=waiting, diagnostics=observation.diagnostics()),
                 "text/html; charset=utf-8")
 
-        def _render_approval_detail(self, target, as_json, *, status=200, message=None):
+        def _render_approval_detail(self, target, as_json, *, status=200, message=None, submission_result=None):
             alias, thread_id, interrupt_id = target
             waiting = approval_inbox.discover_waiting_for_thread(
                 observation.board, alias, thread_id,
@@ -205,7 +206,8 @@ def make_server(observation, host="127.0.0.1", port=0, *, reminder_after=300.0, 
             self.reply(ENV.get_template("approval_detail.html").render(
                 catalog=observation.snapshot(), alias=alias, thread_id=thread_id, interrupt_id=interrupt_id,
                 waiting=match, has_authority=has_authority, csrf_token=csrf_token, message=message,
-                diagnostics=observation.diagnostics()), "text/html; charset=utf-8", status)
+                submission_result=submission_result, diagnostics=observation.diagnostics()),
+                "text/html; charset=utf-8", status)
 
         def do_GET(self):
             url = urlsplit(self.path)
@@ -354,10 +356,9 @@ def make_server(observation, host="127.0.0.1", port=0, *, reminder_after=300.0, 
             if as_json:
                 self.reply(json.dumps({"status": result.status, "reason": result.reason}), "application/json")
                 return
-            message = f"{result.status}: {result.reason}" if result.reason else result.status
             status_code = 200 if result.status == "resumed" else 409
             self._render_approval_detail((alias, thread_id, interrupt_id), as_json,
-                                         status=status_code, message=message)
+                                         status=status_code, submission_result=result)
 
         def do_POST(self):
             url = urlsplit(self.path)

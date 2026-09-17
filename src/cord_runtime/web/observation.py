@@ -3,13 +3,16 @@ from pathlib import Path
 import threading
 import time
 
-from cord_runtime.archive_health import read_active_spans
+from cord_runtime.archive_health import HealthStatus, archive_health, read_active_spans
+from cord_runtime.archive_query import ArchiveError
 from cord_runtime.backends.aegra import AegraExecutionBackend
 from cord_runtime.connections import load_connections
 from cord_runtime.live_reconciliation import LiveRun, reconcile
 from cord_runtime.run_continuity import load_run_continuity
 from cord_runtime.topology import check_freshness
 from cord_runtime.viewer import build_catalog, build_execution_tree
+
+from .presentation import describe
 
 
 class Observation:
@@ -110,10 +113,27 @@ class Observation:
         return catalog
 
     def read_archive(self):
-        spans, incomplete = read_active_spans(list(self.archives)) if self.archives else ({}, ())
+        """Read spans, classifying archive health through the same finite
+        vocabulary `archive_health` already defines (#71) instead of hand
+        -rolled diagnostic strings -- FAILED (a corrupt complete record) is
+        reported here as a distinguishable, actionable state rather than
+        propagating an `ArchiveError` into a whole-page 503."""
+        if not self.archives:
+            with self.lock:
+                self.archive_diagnostics = []
+            return {}
+        paths = list(self.archives)
+        health = archive_health(paths)
+        try:
+            spans, _incomplete = read_active_spans(paths)
+        except ArchiveError:
+            spans = {}
         with self.lock:
-            self.archive_diagnostics = (["Archive write incomplete; showing complete records"] if incomplete
-                                        else ["No recorded spans yet"] if self.archives and not spans else [])
+            self.archive_diagnostics = (
+                [] if health.status == HealthStatus.HEALTHY else
+                [f"{describe('archive_health', health.status.value)['explain']} "
+                 f"{describe('archive_health', health.status.value)['action']}"]
+            )
         return spans
 
     def diagnostics(self):

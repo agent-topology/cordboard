@@ -148,6 +148,41 @@ def test_rejected_response_via_browser(tmp_path, monkeypatch):
     assert len(resume_posts) == 1  # only the original execute submission, no resume attempt
 
 
+def test_rejected_response_reason_is_labeled_and_bounded(tmp_path, monkeypatch):
+    """The HTML respond path renders the cataloged `submission_result` label
+    and explanation (#71), and never forwards the boundary's own `reason`
+    unbounded -- a misbehaving auth_endpoint cannot flood the page."""
+    add_connection(tmp_path, "demo", ENDPOINT, auth_endpoint=AUTH_ENDPOINT)
+    long_reason = "x" * 500
+    script = _base_script(accept=False)
+    script["/auth/authorize"] = FakeResponse(200, {"accepted": False, "reason": long_reason})
+    _install(monkeypatch, script)
+    observation = Observation(tmp_path)
+    with running(observation) as base:
+        with requests.Session() as session:
+            headers, cookie = _origin_and_cookies(session, base)
+            form_page = session.get(base + "/connections/demo/graphs/g/execute", headers=headers).text
+            nonce = form_page.split('name="nonce" value="')[1].split('"')[0]
+            body = {"csrf_token": cookie, "nonce": nonce, "assistant": "demo-assistant",
+                    "subject": "sub-1", "input": "{}", "context": ""}
+            session.post(base + "/connections/demo/graphs/g/execute", data=body,
+                        headers=headers, allow_redirects=False)
+            detail_page = session.get(base + "/approvals/demo/t-1/int-1", headers=headers).text
+            revision = detail_page.split('name="revision" value="')[1].split('"')[0]
+            respond_body = {"csrf_token": cookie, "revision": revision,
+                           "approver": "mallory", "response_value": "true"}
+            response = session.post(base + "/approvals/demo/t-1/int-1", data=respond_body,
+                                    headers=headers, allow_redirects=False)
+    observation.close()
+    page = response.text
+    assert response.status_code == 409
+    assert 'data-submission-status="rejected"' in page
+    assert "Rejected." in page
+    assert "configured authorization boundary declined" in page
+    assert ("x" * 200) in page
+    assert ("x" * 201) not in page  # bounded, never the full raw boundary text
+
+
 def test_unknown_transport_outcome_via_browser(tmp_path, monkeypatch):
     playwright = pytest.importorskip("playwright.sync_api")
     add_connection(tmp_path, "demo", ENDPOINT, auth_endpoint=AUTH_ENDPOINT)

@@ -1,0 +1,37 @@
+{# Shared, evidence-backed state presentation (#71): one macro per reusable
+   fragment so every occurrence of a cataloged state renders the same
+   label/explanation/evidence/action instead of drifting copies. #}
+
+{% macro detail(family, key) %}
+{% set info = describe(family, key) %}
+<details class="state-detail"><summary>What does this mean?</summary>
+<p>{{ info.explain }}</p>
+<p class="evidence">Evidence: {{ info.evidence }}</p>
+<p>{{ info.action }}</p>
+</details>
+{% endmacro %}
+
+{% macro legend(family, keys) %}
+<details class="state-detail"><summary>What do these statuses mean?</summary>
+<dl>
+{% for key in keys %}{% set info = describe(family, key) %}
+<dt>{{ info.icon }} {{ info.label }}</dt><dd>{{ info.explain }} {{ info.action }}</dd>
+{% endfor %}
+</dl>
+</details>
+{% endmacro %}
+
+{# `slot` is either None (not relevant to this Run at all -- renders nothing)
+   or a dict with a `status` (ready/ambiguous/no_authority/none); a caller in
+   a context that already knows an approval is expected substitutes
+   {'status': 'none'} for a bare None so the reason still renders (#71). #}
+{% macro action_slot_body(slot) %}
+{% if slot %}
+{% if slot.status == 'ready' %}<p><a href="{{ slot.url }}">Respond to this approval</a> · interrupt <code>{{ slot.interrupt_id }}</code></p>
+{% elif slot.status == 'ambiguous' %}<p>Multiple pending interrupts on this Thread — <a href="/approvals">resolve from the inbox</a>.</p>
+{% elif slot.status == 'no_authority' %}<p class="notice-inline">No approval authority configured for this deployment.</p>
+{% else %}<p>No waiting interrupt currently matches.</p>
+{% endif %}
+{% set info = describe('action_slot', slot.status) %}<p class="evidence">Evidence: {{ info.evidence }}</p>
+{% endif %}
+{% endmacro %}

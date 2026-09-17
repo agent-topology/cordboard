@@ -159,6 +159,51 @@ over the unchanged `build_execution_tree`/`_graph_view` outputs: it adds no
 new field to the shared catalog, so `?format=json` on every Graph/Run route is
 byte-identical to before.
 
+## Uncertainty and recovery states (#71)
+
+Every finite status value the shared read models already expose --
+`topology_status`, `node_status`, Deployment `reachable`, a Run's
+`source` (recorded/live/ingestion_pending/ingestion_failed), the Aegra
+`aegra_status` vocabulary, the approval `action_slot` status, an approval
+`submission_result` status, and `archive_health`/`collector_health` -- is
+bound once, in `cord_runtime.web.presentation.STATE_CATALOG`, to a stable
+label, a plain-language explanation, an evidence/ownership cue naming the
+module that produced the fact, and a safe next action or an explicit
+statement that none is needed (`describe(family, key)`). `TOPOLOGY_LABELS`
+and `NODE_STATUS_LABELS` are now derived from this same catalog instead of
+a separate copy, so the SVG badges and the new disclosures can never drift.
+Templates render each occurrence through `templates/_state.html`'s shared
+macros (`state.detail`, `state.legend`, `state.action_slot_body`) as a
+`<details>` disclosure next to the existing badge/status text, so the
+default view stays as compact as before and the explanation is one click
+away. A value absent from the catalog is never guessed: `describe` returns
+an explicit "this is a contract gap" action instead of inventing one
+(Blockers and handoff).
+
+Two real gaps surfaced while enumerating this vocabulary and were fixed as
+part of the same change, not left as follow-on debt:
+
+- `Observation.read_archive` bypassed `archive_health`'s own PENDING/EMPTY/
+  INCOMPLETE/FAILED/HEALTHY classification and hand-rolled two ad hoc
+  diagnostic strings that conflated PENDING with EMPTY and had no FAILED
+  case at all -- a corrupt complete archive record's `ArchiveError`
+  propagated uncaught into a whole-page `503`. It now classifies through
+  `archive_health` directly, so FAILED renders as a labeled, actionable
+  diagnostic and execution stays visible instead of the page going down.
+- The approval respond path (`_handle_respond_post`) built its HTML message
+  as `f"{result.status}: {result.reason}"`, forwarding a rejecting
+  `auth_endpoint`'s own `reason` string into the page unbounded. It now
+  renders the cataloged `submission_result` label/explanation/action and
+  only shows the boundary's `reason` as a clearly labeled, 200-character-
+  bounded secondary line.
+
+`collector_health` (`reachable`/`unavailable`) is in the catalog for
+forward compatibility but is not wired to a live probe: `connections.py`
+has no per-connection Collector health endpoint field today, and adding one
+is a connection-scoped product decision (ADR-0014) out of scope for this
+presentation-only change. This is a recorded contract gap, not a silent
+omission.
+
 ## Execution submission and approval controls (#49, ADR-0019)
 
 `GET/POST /connections/{alias}/graphs/{graph_id}/execute` renders and accepts
@@ -338,6 +383,34 @@ shared-model and local DOM tests.
   that suite's migration and final artifact acceptance external; this is local
   mocked-rendering evidence only, consistent with the #48/#49/#69 evidence
   above.
+
+### Executed evidence — 2026-09-17 (#71)
+
+- Focused new/updated suite: `uv run --locked --group proxy --group web-test
+  pytest -q tests/test_web.py tests/test_web_controls.py` -- **44 passed**
+  (Chromium browser tests included, no skips), covering four new
+  `test_web.py` cases (state-catalog completeness, the `describe` contract-gap
+  fallback, incomplete-archive visibility, and corrupt-archive FAILED
+  visibility instead of a 503) plus one new `test_web_controls.py` case
+  (the rejected-response reason is cataloged and bounded), and every
+  pre-existing case unchanged.
+- Full service-free suite: `uv run --locked --group proxy --group web-test
+  pytest -q -m 'not collector and not aegra and not langfuse'` -- **625
+  passed, 36 deselected**, 48.40 seconds (five net-new tests over the #70
+  baseline of 620; zero regressions).
+- `uv build --wheel` passed: `cord_runtime-0.0.1-py3-none-any.whl` SHA256
+  `50bb2a737844230e1d3e24fd0f5d70c4f61f2eac8fd089e7a8ca32db0ffa4aaa`, with the
+  updated `page.html`/`_state.html`/`presentation.py`/`observation.py`/
+  `server.py`/`viewer.css` confirmed present inside the archive. Installed
+  non-editably into an isolated `uv venv --python 3.12`; `uv pip check` passed
+  (58 packages compatible), and the installed package's `describe`/
+  `STATE_CATALOG` import and run correctly from the wheel, not from the
+  source tree.
+- No real Testbed/browser-acceptance run against `cordboard-testbed` was
+  executed for this change -- ADR-0016's control-plane/Testbed boundary keeps
+  that suite's migration and final artifact acceptance external; this is
+  local mocked-rendering evidence only, consistent with the #48/#49/#69/#70
+  evidence above.
 
 Reproduction after the external Testbed's documented candidate installation and
 `scripts/start-environment`:

@@ -1,6 +1,7 @@
 """HTTP, rendering and shared-model contracts for the packaged browser surface."""
 from contextlib import contextmanager
 import json
+from pathlib import Path
 import threading
 
 import pytest
@@ -10,7 +11,15 @@ from cord_runtime.live_reconciliation import LiveRun
 from cord_runtime.run_continuity import record_submission
 from cord_runtime.viewer import build_catalog, build_execution_tree
 from cord_runtime.web.observation import Observation
-from cord_runtime.web.presentation import graph_url, layout, run_topology, scenario_summary, timeline
+from cord_runtime.web.presentation import (
+    STATE_CATALOG,
+    describe,
+    graph_url,
+    layout,
+    run_topology,
+    scenario_summary,
+    timeline,
+)
 from cord_runtime.web.server import make_server, serve
 from test_viewer import _document, _run_tree, _merge, _span
 
@@ -351,10 +360,60 @@ def test_browser_dom_and_narrow_screenshots(tmp_path):
         browser.close()
 
 
+def test_state_catalog_entries_are_all_complete():
+    """Every cataloged state has the four facts #71 requires: a stable
+    label, an explanation, an evidence/ownership cue, and a safe next
+    action or an explicit statement that none is needed."""
+    for family, entries in STATE_CATALOG.items():
+        for key, entry in entries.items():
+            for field in ("label", "explain", "evidence", "action"):
+                value = entry.get(field)
+                assert value, f"{family}.{key} is missing '{field}'"
+
+
+def test_describe_reports_an_uncataloged_state_as_an_explicit_contract_gap():
+    """A value the catalog does not know is a visible gap, never a guessed
+    explanation or action (#71 Blockers and handoff)."""
+    info = describe("topology_status", "some_future_status_not_yet_cataloged")
+    assert info["label"] == "some_future_status_not_yet_cataloged"
+    assert "contract gap" in info["action"]
+    assert describe("nonexistent_family", "anything")["evidence"] == "not classified"
+
+
 def test_empty_archive_is_visible_before_execution(tmp_path):
     observation = Observation(tmp_path, [tmp_path])
     assert observation.snapshot() == {"graphs": []}
-    assert observation.diagnostics() == ["No recorded spans yet"]
+    [message] = observation.diagnostics()
+    assert "No archive files exist yet" in message
+    assert "No action needed" in message
+    observation.close()
+
+
+_ARCHIVE_FIXTURES = Path(__file__).parent / "fixtures/escalations"
+_ARCHIVE_COMPLETE_LINE = (_ARCHIVE_FIXTURES / "window.otlp.jsonl").read_text().splitlines()[0]
+
+
+def test_incomplete_archive_write_is_visible_and_distinguishable(tmp_path):
+    (tmp_path / "archive-2026-01-01.otlp.jsonl").write_text(_ARCHIVE_COMPLETE_LINE[:10])
+    observation = Observation(tmp_path, [tmp_path])
+    assert observation.snapshot() == {"graphs": []}
+    [message] = observation.diagnostics()
+    assert "still in progress" in message
+    observation.close()
+
+
+def test_corrupt_archive_record_is_a_distinguishable_failed_state_not_a_503(tmp_path):
+    """archive_health's FAILED classification (#45/#71), not an uncaught
+    ArchiveError 503ing the whole page: execution stays visible/empty and the
+    failure is a labeled, bounded diagnostic instead."""
+    record = json.loads(_ARCHIVE_COMPLETE_LINE)
+    record["resourceSpans"][0]["scopeSpans"][0]["spans"][0]["spanId"] = "not-hex"
+    (tmp_path / "archive-2026-01-01.otlp.jsonl").write_text(json.dumps(record) + "\n")
+    observation = Observation(tmp_path, [tmp_path])
+    assert observation.snapshot() == {"graphs": []}  # no exception propagates
+    [message] = observation.diagnostics()
+    assert "failed validation" in message
+    assert "Check the archive files" in message
     observation.close()
 
 
