@@ -230,6 +230,21 @@ authority on its own. See [the viewer guide](docs/browser-viewer.md) for the
 route table and local browser-test evidence.
 Browser and installed-wheel evidence, including the #48 interrupt-fixture
 limitation, is recorded in the viewer guide.
+[First-run orientation](docs/browser-viewer.md#first-run-orientation-69) (#69)
+now states what Cordboard connects and records on `/` and renders each
+catalog entry's recorded/live Runs as explicit, human-readable choices --
+`cord_runtime.web.presentation.scenario_summary`, derived only from the same
+declared Step/Attempt outcomes and Aegra status the Graph/Run pages already
+expose -- linking directly to the existing `/execute` form and, where a
+matching authorized interrupt exists, the existing `/approvals/...` response
+form. This adds no new domain classification and no mutation route: it is a
+rendering-only change over the unchanged `build_catalog`/`_action_slot`
+outputs, so `?format=json` on every route is unchanged. Local evidence
+(615 passed, 36 deselected; installed-wheel `uv pip check`; Chromium
+DOM/screenshot checks at 1280×900 and 375×667) is recorded in the viewer
+guide; this closes the Slice 6 comprehension gap the four deterministic
+scenarios' empty states, UUID-only labels, and separate controls left open.
+No `cordboard-testbed` browser-acceptance run was executed for this change.
 
 The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
 the implemented core/domain libraries and Omiologic Aegra deployment. These are

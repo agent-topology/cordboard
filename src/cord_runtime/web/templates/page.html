@@ -12,7 +12,7 @@
 <a class="graph-link {% if graph == item %}selected{% endif %}" href="{{ graph_url(item) }}">
 <small>{{ item.deployment_alias if item.deployment_alias is not none else item.topology_status }}</small>
 <strong>{{ item.graph_id }}</strong></a>
-{% else %}<p>No connections or recorded graphs.</p>{% endfor %}
+{% else %}<p>No connections or recorded graphs yet. Register one with <code>cord add</code>.</p>{% endfor %}
 </nav>
 <main id="main" tabindex="-1">
 <div id="connection-alert" role="alert">{% if error %}{{ error }}{% endif %}</div>
@@ -21,16 +21,37 @@
 {% for message in diagnostics %}<p role="alert">{{ message }}</p>{% endfor %}
 {% if error %}<h1>Observation unavailable</h1><a href="/">Retry observation</a>
 {% elif not graph %}
-<p class="eyebrow">Workspace</p><h1>Deployment overview</h1><p class="intro">Connected graphs and their execution records.</p>
+<p class="eyebrow">Workspace</p><h1>What Cordboard shows here</h1>
+<p class="intro">Cordboard connects to registered Graph deployments and records what they execute.
+Each card below is one connection or recorded graph. Open a card for its published topology, or
+pick one of its Runs directly to see what happened and, where an approval is waiting and
+authorized, respond to it. Exact graph, Run, Thread and interrupt identifiers stay available
+next to each entry.</p>
 <div class="cards">
 {% for item in catalog.graphs %}
 <article><small>{{ item.deployment_alias if item.deployment_alias is not none else 'Unattributed execution' }}</small>
 <h2><a href="{{ graph_url(item) }}">{{ item.graph_id }}</a></h2>
 {% set badge = topology_labels[item.topology_status] %}<span class="badge">{{ badge[0] }} {{ badge[1] }}</span>
-<p>{{ item.runs|length }} recorded Runs · {{ item.live_runs|length }} live observations</p>
-{% if item.reachable == false %}<p role="alert">Deployment disconnected</p>{% endif %}
+{% if item.reachable == false %}<span role="alert">Deployment disconnected</span>{% endif %}
+{% if item.deployment_alias is not none %}<p><a href="{{ execute_url(item) }}">Submit an execution</a></p>{% endif %}
+{% set item_runs = item.runs + item.live_runs %}
+{% if item_runs %}
+<ul class="scenario-list">
+{% for entry in item_runs %}
+{% set slot = action_slot_for(item, entry) %}
+<li><a href="{{ run_url(item, entry) }}">{{ scenario_summary(entry) }}</a>
+<span class="run-meta"><code>{{ entry.run_id }}</code>{% if entry.aegra_status %} · {{ entry.aegra_status }}{% endif %}{% if entry.source %} · {{ entry.source }}{% endif %}{% if slot and slot.thread_id %} · Thread <code>{{ slot.thread_id }}</code>{% endif %}</span>
+{% if slot and slot.status == 'ready' %}<p><a href="{{ slot.url }}">Respond to this approval</a> · interrupt <code>{{ slot.interrupt_id }}</code></p>
+{% elif slot and slot.status == 'ambiguous' %}<p>Multiple pending interrupts on this Thread — <a href="/approvals">resolve from the inbox</a>.</p>
+{% elif slot and slot.status == 'no_authority' %}<p class="notice-inline">No approval authority configured for this deployment.</p>
+{% endif %}</li>
+{% endfor %}
+</ul>
+{% else %}
+<p>No recorded Runs yet.</p>
+{% endif %}
 </article>
-{% else %}<article><h2>No graphs yet</h2><p>No connections or recorded Runs. Register a deployment with cord add, or select an archive when starting the viewer.</p></article>{% endfor %}
+{% else %}<article><h2>No connections or recorded graphs yet</h2><p>Register a deployment with <code>cord add &lt;alias&gt; &lt;endpoint&gt;</code>, then reload — or point <code>cord serve --archive &lt;path&gt;</code> at an existing archive to browse recorded Runs.</p></article>{% endfor %}
 </div>
 {% else %}
 <p class="eyebrow">{{ graph.deployment_alias if graph.deployment_alias is not none else 'Unattributed execution' }}</p>
