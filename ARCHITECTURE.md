@@ -260,6 +260,32 @@ visible regardless. This adds no new field to the shared catalog, so
 installed-wheel `uv pip check`; Chromium DOM checks including the new
 diagram at 1280×900 and 375×667) is recorded in the viewer guide. No
 `cordboard-testbed` browser-acceptance run was executed for this change.
+Every finite viewer status value (`topology_status`, `node_status`,
+Deployment `reachable`, a Run's recorded/live/ingestion source, the Aegra
+status vocabulary, the approval `action_slot` status, an approval
+`submission_result` status, and `archive_health`/`collector_health`) is now
+bound once, in `cord_runtime.web.presentation.STATE_CATALOG`, to a stable
+label, a plain-language explanation, an evidence/ownership cue, and a safe
+next action or an explicit no-action reason (`describe(family, key)`), with
+`TOPOLOGY_LABELS`/`NODE_STATUS_LABELS` now derived from it rather than kept
+as a separate copy (#71). Enumerating this vocabulary surfaced and fixed two
+real gaps: `Observation.read_archive` now classifies through
+`archive_health` directly instead of two ad hoc diagnostic strings, so a
+corrupt archive record renders as a labeled, actionable FAILED diagnostic
+with execution still visible rather than an uncaught `ArchiveError` 503ing
+the whole page; and the approval respond path no longer forwards a
+rejecting `auth_endpoint`'s own `reason` into the page unbounded, rendering
+the cataloged label/explanation/action with the boundary's `reason` kept as
+a clearly labeled, 200-character-bounded secondary line. `collector_health`
+is cataloged for forward compatibility but is not wired to a live probe --
+`connections.py` has no per-connection Collector health endpoint field
+today, and adding one is a connection-scoped product decision (ADR-0014)
+left as an explicit, recorded contract gap rather than added silently. This
+adds no new field to the shared catalog, so `?format=json` on every route is
+unchanged. Local evidence (625 passed, 36 deselected; installed-wheel `uv
+pip check`; the `describe`/`STATE_CATALOG` import running from the wheel;
+Chromium DOM checks) is recorded in the viewer guide. No `cordboard-testbed`
+browser-acceptance run was executed for this change.
 
 The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
 the implemented core/domain libraries and Omiologic Aegra deployment. These are

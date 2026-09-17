@@ -1,3 +1,4 @@
+{% import "_state.html" as state %}
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,6 +20,15 @@
 <h1>Approval</h1>
 <p class="intro">{{ alias }} · Thread {{ thread_id }} · Interrupt {{ interrupt_id }}</p>
 {% if message %}<p role="alert">{{ message }}</p>{% endif %}
+{% if submission_result %}
+{% set info = describe('submission_result', submission_result.status) %}
+<div class="notice" role="alert" data-submission-status="{{ submission_result.status }}">
+<p><strong>{{ info.label }}.</strong> {{ info.explain }}</p>
+<p class="evidence">Evidence: {{ info.evidence }}</p>
+<p>{{ info.action }}</p>
+{% if submission_result.reason %}<p class="notice-inline">Boundary detail: {{ submission_result.reason[:200] }}</p>{% endif %}
+</div>
+{% endif %}
 {% if not waiting %}
 <p>This interrupt is no longer waiting — it may already have been answered, resumed elsewhere, or expired.
 Return to the <a href="/approvals">inbox</a> for the current list.</p>

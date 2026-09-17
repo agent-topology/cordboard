@@ -1,3 +1,4 @@
+{% import "_state.html" as state %}
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -31,20 +32,20 @@ next to each entry.</p>
 {% for item in catalog.graphs %}
 <article><small>{{ item.deployment_alias if item.deployment_alias is not none else 'Unattributed execution' }}</small>
 <h2><a href="{{ graph_url(item) }}">{{ item.graph_id }}</a></h2>
-{% set badge = topology_labels[item.topology_status] %}<span class="badge">{{ badge[0] }} {{ badge[1] }}</span>
-{% if item.reachable == false %}<span role="alert">Deployment disconnected</span>{% endif %}
+{% set badge = topology_labels[item.topology_status] %}<span class="badge" data-topology-status="{{ item.topology_status }}">{{ badge[0] }} {{ badge[1] }}</span>
+{{ state.detail('topology_status', item.topology_status) }}
+{% if item.reachable == false %}<span role="alert">Deployment disconnected</span>{{ state.detail('reachability', item.reachable) }}{% endif %}
 {% if item.deployment_alias is not none %}<p><a href="{{ execute_url(item) }}">Submit an execution</a></p>{% endif %}
 {% set item_runs = item.runs + item.live_runs %}
 {% if item_runs %}
 <ul class="scenario-list">
 {% for entry in item_runs %}
 {% set slot = action_slot_for(item, entry) %}
+{% set source = entry.source if entry.source else 'recorded' %}
 <li><a href="{{ run_url(item, entry) }}">{{ scenario_summary(entry) }}</a>
 <span class="run-meta"><code>{{ entry.run_id }}</code>{% if entry.aegra_status %} · {{ entry.aegra_status }}{% endif %}{% if entry.source %} · {{ entry.source }}{% endif %}{% if slot and slot.thread_id %} · Thread <code>{{ slot.thread_id }}</code>{% endif %}</span>
-{% if slot and slot.status == 'ready' %}<p><a href="{{ slot.url }}">Respond to this approval</a> · interrupt <code>{{ slot.interrupt_id }}</code></p>
-{% elif slot and slot.status == 'ambiguous' %}<p>Multiple pending interrupts on this Thread — <a href="/approvals">resolve from the inbox</a>.</p>
-{% elif slot and slot.status == 'no_authority' %}<p class="notice-inline">No approval authority configured for this deployment.</p>
-{% endif %}</li>
+{{ state.detail('run_source', source) }}
+{{ state.action_slot_body(slot) }}</li>
 {% endfor %}
 </ul>
 {% else %}
@@ -59,6 +60,8 @@ next to each entry.</p>
 {% set badge = topology_labels[graph.topology_status] %}
 <p><span class="badge" data-topology-status="{{ graph.topology_status }}">{{ badge[0] }} {{ badge[1] }}</span>
 {% if graph.reachable == false %}<span role="alert">Deployment disconnected</span>{% endif %}</p>
+{{ state.detail('topology_status', graph.topology_status) }}
+{% if graph.reachable is not none %}{{ state.detail('reachability', graph.reachable) }}{% endif %}
 {% for warning in graph.topology_warnings %}<p class="notice">{{ warning }}</p>{% endfor %}
 {% if graph.unmatched_node_names %}<p class="notice">Unmatched nodes: {{ graph.unmatched_node_names|join(', ') }}</p>{% endif %}
 {% if not run %}
@@ -94,14 +97,17 @@ next to each entry.</p>
 <a href="{{ graph_url(graph) }}">← All executions</a>
 <h2>Run {{ run.run_id }}</h2>
 <p>Subject: {{ run.subject_id if 'subject_id' in run else run.subject or 'Unknown' }}</p>
-<p class="badge">{{ run.source if 'source' in run else 'recorded' }}{% if run.aegra_status %} · {{ run.aegra_status }}{% endif %}</p>
-{% if run.source == 'ingestion_failed' %}<p role="alert">Ingestion failed: no durable record arrived within the reconciliation deadline.</p>{% endif %}
+{% set run_source = run.source if 'source' in run else 'recorded' %}
+<p class="badge">{{ run_source }}{% if run.aegra_status %} · {{ run.aegra_status }}{% endif %}</p>
+{{ state.detail('run_source', run_source) }}
+{% if run.aegra_status %}{{ state.detail('live_status', run.aegra_status) }}{% endif %}
 {% if 'start_ns' in run %}
 <p>Recorded execution: {{ run.execution_ns|duration }} · Known approval wait: {{ run.approval_wait_ns|duration }}</p>
 {% if run.timeline_incomplete %}<p class="notice">Timeline incomplete — open or unknown wait; no duration is invented.</p>{% endif %}
 <section aria-labelledby="run-topology-title"><h2 id="run-topology-title">Observed execution path</h2>
 {% set path = run_topology(graph.topology_structure, run) %}
 {% if path %}
+{{ state.legend('node_status', ['not_observed', 'passed', 'failed', 'paused', 'repeated']) }}
 <svg class="topology" role="img" aria-labelledby="run-topology-caption" viewBox="0 0 {{ path.width }} {{ path.height }}">
 <title id="run-topology-caption">Observed execution path for Run {{ run.run_id }}</title>
 <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#536b79"/></marker></defs>
@@ -133,19 +139,13 @@ next to each entry.</p>
 {% if step.awaiting_resume %}<p class="notice">Awaiting resume — open approval wait, duration unknown.</p>{% endif %}
 {% if step.resumed_from %}<p>Resumed from {{ step.resumed_from }} · Approval wait: {{ step.approval_wait_ns|duration }}</p>{% endif %}
 {% if step.outcome == 'awaiting_approval' %}<div class="cord-action-slot" data-run-id="{{ run.run_id }}" data-thread-id="{{ action_slot.thread_id if action_slot else '' }}" data-interrupt-id="{{ action_slot.interrupt_id if action_slot and action_slot.status == 'ready' else '' }}">
-{% if action_slot and action_slot.status == 'ready' %}<p><a href="{{ action_slot.url }}">Respond to this approval</a></p>
-{% elif action_slot and action_slot.status == 'ambiguous' %}<p>Multiple pending interrupts on this Thread — <a href="/approvals">resolve from the inbox</a>.</p>
-{% elif action_slot and action_slot.status == 'no_authority' %}<p class="notice">No approval authority configured for this deployment.</p>
-{% else %}<p>No waiting interrupt currently matches.</p>{% endif %}
+{{ state.action_slot_body(action_slot or {'status': 'none'}) }}
 </div>{% endif %}
 <ol>{% for attempt in step.attempts %}<li>Attempt {{ attempt.number }} · {{ attempt.outcome }} · {{ (attempt.end_ns-attempt.start_ns)|duration }}{% if attempt.tier %} · Tier {{ attempt.tier }}{% endif %}</li>{% else %}<li>No recorded Attempts.</li>{% endfor %}</ol></details>
 {% else %}<p>No recorded Steps.</p>{% endfor %}</details></section>
 {% else %}<p>Live identity and status only. Run / Step / Attempt timing will appear when the archive arrives.</p>
 {% if run.aegra_status == 'interrupted' %}<div class="cord-action-slot" data-run-id="{{ run.run_id }}" data-thread-id="{{ action_slot.thread_id if action_slot else run.thread_id }}" data-interrupt-id="{{ action_slot.interrupt_id if action_slot and action_slot.status == 'ready' else '' }}">
-{% if action_slot and action_slot.status == 'ready' %}<p><a href="{{ action_slot.url }}">Respond to this approval</a></p>
-{% elif action_slot and action_slot.status == 'ambiguous' %}<p>Multiple pending interrupts on this Thread — <a href="/approvals">resolve from the inbox</a>.</p>
-{% elif action_slot and action_slot.status == 'no_authority' %}<p class="notice">No approval authority configured for this deployment.</p>
-{% else %}<p>No waiting interrupt currently matches.</p>{% endif %}
+{{ state.action_slot_body(action_slot or {'status': 'none'}) }}
 </div>{% endif %}
 {% endif %}
 {% endif %}
