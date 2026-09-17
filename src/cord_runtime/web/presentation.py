@@ -12,6 +12,11 @@ TOPOLOGY_LABELS = {
     "no_connection": ("◇", "No connection"), "ambiguous": ("≠", "Ambiguous"),
 }
 
+NODE_STATUS_LABELS = {
+    "not_observed": ("—", "Not observed"), "passed": ("✓", "Passed"),
+    "failed": ("×", "Failed"), "paused": ("⏸", "Paused"), "repeated": ("↻", "Repeated"),
+}
+
 
 def graph_url(graph):
     gid = quote(graph["graph_id"], safe="")
@@ -66,6 +71,44 @@ def layout(structure):
             "nodes": [{"id": node, "x": positions[node][0], "y": positions[node][1]} for node in nodes],
             "edges": [{**edge, "start": positions[edge["source"]], "end": positions[edge["target"]]}
                       for edge in edges]}
+
+
+def _node_status(node_steps):
+    if not node_steps:
+        return "not_observed"
+    if any(step["awaiting_resume"] for step in node_steps):
+        return "paused"
+    if len(node_steps) > 1:
+        return "repeated"
+    return "failed" if node_steps[0]["outcome"] in ("failed", "halted") else "passed"
+
+
+def run_topology(structure, run):
+    """Overlay one Run's observed Step evidence onto its topology layout (#70).
+
+    A Node with more than one Step -- a same-Node retry, or a pause whose
+    resuming Step re-executes the same Node -- keeps every Step listed under
+    that Node rather than collapsing them into one fabricated outcome; a
+    Step whose `node` has no match in `structure` is never guessed onto a
+    Node by name and is surfaced separately as `unmatched_steps` instead.
+    Returns `None`, exactly like `layout`, when there is no current
+    correlated topology to overlay onto -- absent/stale/invalid/ambiguous
+    topology never receives a guessed path (ADR-0015).
+    """
+    diagram = layout(structure)
+    if diagram is None:
+        return None
+    node_ids = {node["id"] for node in structure["nodes"]}
+    by_node: dict[str, list[dict]] = {}
+    for step in run.get("steps", []):
+        by_node.setdefault(step["node"], []).append(step)
+    for node in diagram["nodes"]:
+        node_steps = by_node.get(node["id"], [])
+        node["steps"] = node_steps
+        node["status"] = _node_status(node_steps)
+    diagram["unmatched_steps"] = [step for name, group in by_node.items()
+                                  if name not in node_ids for step in group]
+    return diagram
 
 
 def timeline(run):

@@ -130,6 +130,35 @@ graphs" prose. None of this adds a new domain classification: it only
 rephrases the same `build_catalog`/`_action_slot` outputs the Graph and Run
 pages already render, so `?format=json` is unchanged.
 
+## Observed execution path over topology (#70)
+
+Each Run page now renders an "Observed execution path" section overlaying that
+Run's own recorded Steps onto the same published topology diagram the Graph
+page draws (`cord_runtime.web.presentation.run_topology`, reusing `layout`
+unchanged). Only the current, correlated topology (`graph.topology_structure`,
+already withheld for absent/unreachable/invalid/stale/ambiguous/no-connection
+per ADR-0011/0015) is ever overlaid; every other status renders the same
+"Topology unavailable for correlation" fallback the Graph page uses, and the
+Run's own timeline/tree below stay unconditionally visible -- an uncorrelated
+topology never hides a Run.
+
+Each topology Node gets one of five states from that Run's own Steps alone,
+never a second domain classification: `not_observed` (no Step touched it),
+`passed`/`failed` (its one Step's declared outcome), `paused` (a Step still
+`awaiting_resume`), or `repeated` (more than one Step touched the Node --
+a same-Node retry, or a pause whose resuming Step re-executes the same Node).
+A `repeated` or `paused` Node keeps every one of its Steps listed, in
+recorded order, rather than collapsing them into one fabricated outcome. A
+recorded Step whose Node has no match in the topology is never guessed onto a
+Node by name; it is surfaced under the diagram as its own explicit warning
+instead. Each state has a non-color icon glyph (`NODE_STATUS_LABELS`) on the
+node, a `data-node-status` attribute, and a full-text "Execution path text
+alternative" `<details>` list mirroring the SVG -- the same accessible pattern
+`layout`'s topology diagram already uses. This is a rendering-only projection
+over the unchanged `build_execution_tree`/`_graph_view` outputs: it adds no
+new field to the shared catalog, so `?format=json` on every Graph/Run route is
+byte-identical to before.
+
 ## Execution submission and approval controls (#49, ADR-0019)
 
 `GET/POST /connections/{alias}/graphs/{graph_id}/execute` renders and accepts
@@ -193,10 +222,18 @@ loopback binding, responsive DOM, keyboard focus and polling fallback, plus
 purely from declared outcomes/Aegra status, the authorized-inbox action link
 (ready/ambiguous/no-authority) surfaced directly on `/`, the bounded empty-
 catalog/empty-graph next actions, and exact JSON parity with the unchanged
-`build_catalog` model.
+`build_catalog` model. It also covers (#70) `run_topology` marking only
+observed Nodes and withholding without a current correlated topology,
+preserving a paused Node's own Step outcome, preserving repeated same-Node
+Step executions instead of collapsing them, surfacing an unmatched Step's
+Node without guessing, the Run page's non-color text-alternative rendering
+for each state, an uncorrelated topology never hiding the Run's timeline/tree,
+and exact JSON parity with the unchanged `run` model.
 The browser test writes desktop/narrow screenshots (including the `/` index
 itself) to pytest's temporary folder and asserts the orientation heading and
-a named scenario link are present and keyboard-reachable at both widths.
+a named scenario link are present and keyboard-reachable at both widths, and
+(#70) that each Run page's "Observed execution path" diagram is present and
+narrow-viewport-safe alongside the existing timeline.
 It needs the optional web-test group; absent Playwright is an explicit skip,
 not browser acceptance.
 
@@ -275,6 +312,32 @@ shared-model and local DOM tests.
   that suite's migration and final artifact acceptance external; this is local
   mocked-rendering evidence only, consistent with the #48/#49 evidence above.
 - `git diff --check` passed on the changed files.
+
+### Executed evidence — 2026-09-17 (#70)
+
+- Focused new/updated suite: `uv run --locked --group proxy --group web-test
+  pytest -q tests/test_web.py` -- **30 passed** (Chromium DOM/screenshot tests
+  included, no skips), covering the six new/updated observed-path tests plus
+  every pre-existing case unchanged (catalog fixture's topology Nodes changed
+  from `alpha`/`omega` to `draft`/`verify` to actually correlate against the
+  fixture's recorded `draft` Steps; no other fixture-consuming test asserted
+  on the old names).
+- Full service-free suite: `uv run --locked --group proxy --group web-test
+  pytest -q -m 'not collector and not aegra and not langfuse'` -- **620
+  passed, 36 deselected**, 43.70 seconds (five net-new tests over the #69
+  baseline of 615; zero regressions).
+- `uv build --wheel` passed: `cord_runtime-0.0.1-py3-none-any.whl` SHA256
+  `243d19f94c41f719aa37f56b2e5605187c2f4eb66813e3ba3e45665d8da5e333`, with the
+  updated `page.html`/`presentation.py`/`viewer.css`/`server.py` confirmed
+  present inside the archive. Installed non-editably into an isolated `uv venv
+  --python 3.12`; `uv pip check` passed (58 packages compatible), and the
+  installed package's `run_topology`/`NODE_STATUS_LABELS` import and run
+  correctly from the wheel, not from the source tree.
+- No real Testbed/browser-acceptance run against `cordboard-testbed` was
+  executed for this change -- ADR-0016's control-plane/Testbed boundary keeps
+  that suite's migration and final artifact acceptance external; this is local
+  mocked-rendering evidence only, consistent with the #48/#49/#69 evidence
+  above.
 
 Reproduction after the external Testbed's documented candidate installation and
 `scripts/start-environment`:
