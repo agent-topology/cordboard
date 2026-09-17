@@ -342,6 +342,20 @@ now concrete integration inputs, but their existence is not Cordboard integratio
 evidence: Omiologic's issue graph still uses a no-op observer, and its topology
 command generates files rather than serving the proposed discovery endpoint.
 
+[The real-entity pilot](docs/real-entity-pilot.md) (#74) turns that inspected
+deployment into actual integration evidence: Cordboard connected to Omiologic's
+already-running server (its own process, its own Postgres, untouched by
+Cordboard per ADR-0016) at commit `6dcf2e56ca3c015961c4a226e2025c178ec2d5b8`, and
+submitted one explicit Run against its dependency-free `readiness` graph with a
+fresh Subject and thread, which completed `status: success` through the public
+Aegra backend. Topology and telemetry evidence are correctly absent/not
+configured rather than fabricated -- this revision does not serve its generated
+topology at the well-known path, and no OTLP archive is configured for the
+connection -- and approval/authorization is recorded as unqualified because
+`readiness` has no interrupt seam. No `cord_runtime` source changed; this
+Feature only exercised the generic connection/execution/observation surfaces
+#73 already proved.
+
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
 [docs/artifacts/cordboard.html](docs/artifacts/cordboard.html) summarizes the
