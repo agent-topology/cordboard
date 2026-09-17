@@ -87,6 +87,9 @@ replacement orchestration framework are outside the design's scope.
 The [Slice 1–5 retrospective](docs/slice1-5-retrospective.md) records implementation
 gaps that informed the completed [Testbed/web-viewer milestone](https://github.com/agent-topology/cordboard/milestone/8),
 including Collector delivery evidence and optional workflow-core integration.
+The [Slice 6–9 operator-readiness roadmap](docs/slice6-9-roadmap.md) records the
+next outcome progression from a playable first run through an independently
+maintained entity, with GitHub milestones and issues for delivery.
 
 | Document | Purpose |
 | --- | --- |

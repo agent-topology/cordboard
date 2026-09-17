@@ -9,6 +9,12 @@ It prioritizes an artifact-installed synthetic execution/Collector/web-viewer
 path independent of Omiologic availability. These follow-ups are planned, not
 additional implemented capabilities.
 
+The [Slice 6–9 operator-readiness roadmap](docs/slice6-9-roadmap.md) now owns
+the next direction: a playable first run, visually understandable execution,
+independent Deployment onboarding, and one maintained-entity operating loop.
+Its milestones and issues are plans, not additional implemented capabilities;
+only its first contract Task is initially ready for execution.
+
 Cordboard has a [minimal executable graph](docs/minimal-graph.md) with
 in-memory execution records (#4), plus a separate archive integration (#5):
 `cord-runtime`, OTel instrumentation, redaction, and Collector persistence.
