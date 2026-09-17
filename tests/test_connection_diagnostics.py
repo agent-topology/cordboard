@@ -168,8 +168,8 @@ def test_telemetry_collector_always_unsupported(tmp_path, monkeypatch):
 
 # --- managed_lifecycle (optional) -------------------------------------------
 
-def _diagnose_lifecycle(tmp_path, monkeypatch, connection):
-    monkeypatch.setattr(cli, "_probe", lambda _: {"reachable": True, "graphs": []})
+def _diagnose_lifecycle(tmp_path, monkeypatch, connection, *, reachable=True):
+    monkeypatch.setattr(cli, "_probe", lambda _: {"reachable": reachable, "graphs": []})
     monkeypatch.setattr(diag, "check_freshness",
                         lambda *a, **k: FreshnessCheck(status="absent", reading=TopologyReading(status="absent")))
     return diag.diagnose_connection(tmp_path, "aegra-local", connection)
@@ -199,6 +199,22 @@ def test_lifecycle_running_is_ready(tmp_path, monkeypatch):
     assert result.capabilities.managed_lifecycle.status == RUNNING
 
 
+def test_lifecycle_running_but_unreachable_is_stale_not_a_false_ready(tmp_path, monkeypatch):
+    """The tracked record still claims RUNNING, but this same connection's
+    execution probe (the required capability, checked independently above)
+    just found it unreachable: the tracked process crashed outside
+    Cordboard's control. This must surface as a distinguishable, truthful
+    "stale" fact rather than a contradictory "ready" -- the next execution's
+    `ensure_started` re-verifies and relaunches it without a manual state-file
+    edit (#75); this diagnostic only makes that staleness visible."""
+    _write_lifecycle(tmp_path, "aegra-local", RUNNING, pid=123)
+    connection = {"endpoint": "http://x", "launch": ["true"], "idle_after": 600.0}
+    result = _diagnose_lifecycle(tmp_path, monkeypatch, connection, reachable=False)
+    lifecycle = result.capabilities.managed_lifecycle
+    assert lifecycle.state == diag.UNAVAILABLE
+    assert lifecycle.status == "stale"
+
+
 def test_lifecycle_stopped_is_still_ready_restarts_on_demand(tmp_path, monkeypatch):
     _write_lifecycle(tmp_path, "aegra-local", STOPPED)
     connection = {"endpoint": "http://x", "launch": ["true"], "idle_after": 600.0}
@@ -216,6 +232,18 @@ def test_lifecycle_start_failed_is_unavailable(tmp_path, monkeypatch):
     assert lifecycle.status == START_FAILED
     # Sanitized: the raw last_error string never appears in the bounded fact.
     assert lifecycle.detail is None
+
+
+def test_lifecycle_stopped_and_unreachable_is_still_plain_stopped_not_stale(tmp_path, monkeypatch):
+    """"stale" only distinguishes a RUNNING record contradicted by an
+    unreachable probe; a deliberately STOPPED (idle-swept) Deployment being
+    unreachable is expected, not a crash to flag."""
+    _write_lifecycle(tmp_path, "aegra-local", STOPPED)
+    connection = {"endpoint": "http://x", "launch": ["true"], "idle_after": 600.0}
+    result = _diagnose_lifecycle(tmp_path, monkeypatch, connection, reachable=False)
+    lifecycle = result.capabilities.managed_lifecycle
+    assert lifecycle.state == diag.READY
+    assert lifecycle.status == STOPPED
 
 
 def test_lifecycle_never_calls_ensure_started(tmp_path, monkeypatch):

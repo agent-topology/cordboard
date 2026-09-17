@@ -356,6 +356,34 @@ connection -- and approval/authorization is recorded as unqualified because
 Feature only exercised the generic connection/execution/observation surfaces
 #73 already proved.
 
+[Making the recurring local operator loop recoverable](docs/local-operator-recovery.md)
+(#75) supplies the real restart/disconnect operator session #75's own
+refinement gate required and #74's continuously-running pilot never produced.
+Reading the existing implementation first showed most of the outcome already
+built and independently test-covered (live reachability probing rather than
+cached state, restart-safe `run_continuity`/`pending_completions`/
+`live_reconciliation`/`approval_expiry`/`response_dedupe`, and external
+Deployments never touched implicitly); the one real, demonstrated gap was
+`deployment_lifecycle.ensure_started` trusting a stored `RUNNING` record
+without re-verifying the tracked process was still alive, so a managed
+Deployment that crashed outside Cordboard's control (killed, OOM, host
+restart) wedged every subsequent submission until an operator waited out
+`idle_after` and ran `cord deployment sweep`, or edited
+`deployment_lifecycle.json` by hand. `ensure_started` now re-verifies with a
+bounded liveness probe before trusting that record, falling through to the
+same relaunch path a never-started Deployment already takes;
+`connection_diagnostics._managed_lifecycle` reports the resulting
+contradiction as a new, cataloged `stale` status instead of a false `ready`.
+Reinstalling the package over an existing board confirmed board state
+(`.cordboard/*.json`, outside the installed package) is untouched by
+construction; the additive-only field convention `cord_runtime.connections`
+already documents is recorded as the current compatibility guarantee, with a
+hypothetical breaking schema change's unbounded `KeyError` left as a named,
+not-yet-built gap rather than speculative migration infrastructure. No new
+CLI subcommand, HTTP route, or JSON shape was added. Local evidence: 650
+passed, 5 skipped, 36 deselected (`uv run --locked pytest -m "not collector
+and not langfuse and not aegra"`).
+
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
 [docs/artifacts/cordboard.html](docs/artifacts/cordboard.html) summarizes the

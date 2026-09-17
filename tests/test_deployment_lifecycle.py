@@ -48,6 +48,14 @@ def _failing_health(endpoint):
     return False
 
 
+def _alive(endpoint):
+    return True
+
+
+def _dead(endpoint):
+    return False
+
+
 # --- external connections are never started or stopped --------------------
 
 def test_external_connection_is_never_started(tmp_path):
@@ -85,9 +93,9 @@ def test_already_running_deployment_is_not_relaunched_but_bumps_active_runs(tmp_
         return 4242
 
     ensure_started(tmp_path, "local", MANAGED_CONNECTION, now=NOW,
-                    launch=counting_launch, health_check=_ok_health)
+                    launch=counting_launch, health_check=_ok_health, is_alive=_alive)
     result = ensure_started(tmp_path, "local", MANAGED_CONNECTION, now=NOW + 1,
-                             launch=counting_launch, health_check=_ok_health)
+                             launch=counting_launch, health_check=_ok_health, is_alive=_alive)
     assert result["status"] == RUNNING
     assert len(calls) == 1
     assert load_lifecycle(tmp_path)["local"]["active_runs"] == 2
@@ -117,6 +125,39 @@ def test_a_start_failure_can_be_retried_later(tmp_path):
     result = ensure_started(tmp_path, "local", MANAGED_CONNECTION, now=NOW + 10,
                              launch=_ok_launch, health_check=_ok_health)
     assert result["status"] == RUNNING
+
+
+# --- a stored RUNNING record whose tracked process crashed (#75) -----------
+
+def test_a_stale_running_record_is_relaunched_not_trusted(tmp_path):
+    """The tracked process can crash outside Cordboard's control between one
+    `ensure_started` call and the next. A stale RUNNING record must not wedge
+    the Deployment as unusable until an operator edits the state file or
+    waits out `idle_after` -- the next call relaunches it instead."""
+    ensure_started(tmp_path, "local", MANAGED_CONNECTION, now=NOW,
+                    launch=lambda alias, launch: 111, health_check=_ok_health, is_alive=_alive)
+    relaunched = []
+
+    def relaunch(alias, launch):
+        relaunched.append(1)
+        return 222
+
+    result = ensure_started(tmp_path, "local", MANAGED_CONNECTION, now=NOW + 1,
+                             launch=relaunch, health_check=_ok_health, is_alive=_dead)
+    assert result == {"status": RUNNING, "pid": 222}
+    assert relaunched == [1]
+    record = load_lifecycle(tmp_path)["local"]
+    assert record["pid"] == 222
+    assert record["active_runs"] == 1  # a fresh claim, not a bump of the dead one's count
+
+
+def test_a_stale_running_record_that_fails_to_relaunch_is_recorded_start_failed(tmp_path):
+    ensure_started(tmp_path, "local", MANAGED_CONNECTION, now=NOW,
+                    launch=_ok_launch, health_check=_ok_health, is_alive=_alive)
+    result = ensure_started(tmp_path, "local", MANAGED_CONNECTION, now=NOW + 1,
+                             launch=_failing_launch, health_check=_ok_health, is_alive=_dead)
+    assert result["status"] == START_FAILED
+    assert load_lifecycle(tmp_path)["local"]["status"] == START_FAILED
 
 
 # --- idle shutdown -----------------------------------------------------------
@@ -153,9 +194,9 @@ def test_a_deployment_with_an_active_run_is_never_stopped_even_when_idle_by_cloc
 def test_one_graph_going_idle_does_not_stop_a_sibling_graphs_deployment(tmp_path):
     """Two Graphs share one Deployment alias; active_runs is tracked per alias."""
     ensure_started(tmp_path, "local", MANAGED_CONNECTION, now=NOW,
-                    launch=_ok_launch, health_check=_ok_health)  # Graph A starts it
+                    launch=_ok_launch, health_check=_ok_health, is_alive=_alive)  # Graph A starts it
     ensure_started(tmp_path, "local", MANAGED_CONNECTION, now=NOW,
-                    launch=_ok_launch, health_check=_ok_health)  # Graph B bumps active_runs to 2
+                    launch=_ok_launch, health_check=_ok_health, is_alive=_alive)  # Graph B bumps active_runs to 2
     release_active(tmp_path, "local", MANAGED_CONNECTION, now=NOW + 700)  # Graph A finishes and goes idle
     stopped = stop_idle(tmp_path, {"local": MANAGED_CONNECTION}, now=NOW + 1_400, stop=lambda a, r: None)
     assert stopped == []  # Graph B's claim is still held
@@ -231,3 +272,23 @@ def test_default_stop_terminates_the_real_process(tmp_path, tiny_server):
     stopped = stop_idle(tmp_path, {"local": tiny_server}, now=NOW + 601)
     assert stopped == ["local"]
     assert _wait_for_exit(result["pid"], timeout=5.0)
+
+
+def test_default_is_alive_relaunches_after_a_real_process_is_killed(tmp_path, tiny_server):
+    """The real-process analogue of `test_a_stale_running_record_is_relaunched_not_trusted`:
+    kill the tracked process out from under Cordboard (a crash, not a `cord`-initiated
+    stop) and confirm the default liveness probe -- not a fake -- detects it and
+    `ensure_started` relaunches instead of wedging on the dead pid (#75)."""
+    first = ensure_started(tmp_path, "local", tiny_server, now=NOW, health_timeout=10.0)
+    assert first["status"] == RUNNING
+    os.kill(first["pid"], 9)
+    assert _wait_for_exit(first["pid"], timeout=5.0)
+
+    second = ensure_started(tmp_path, "local", tiny_server, now=NOW + 1, health_timeout=10.0)
+    try:
+        assert second["status"] == RUNNING
+        assert second["pid"] != first["pid"]
+        os.kill(second["pid"], 0)  # the new process is genuinely alive
+    finally:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.kill(second["pid"], 15)

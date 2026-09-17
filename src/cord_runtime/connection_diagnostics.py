@@ -24,7 +24,7 @@ from typing import Any
 
 from cord_runtime.archive_health import HealthStatus, archive_health
 from cord_runtime.connections import is_managed
-from cord_runtime.deployment_lifecycle import START_FAILED, load_lifecycle
+from cord_runtime.deployment_lifecycle import RUNNING, START_FAILED, load_lifecycle
 from cord_runtime.topology import ABSENT, INVALID, UNREACHABLE, check_freshness
 from cord_runtime.viewer import CURRENT, STALE, correlate_topology
 
@@ -121,13 +121,21 @@ def _telemetry_collector() -> CapabilityFact:
     return CapabilityFact(required=False, state=UNSUPPORTED, status="unsupported")
 
 
-def _managed_lifecycle(board_dir: Path, alias: str, connection: dict) -> CapabilityFact:
+def _managed_lifecycle(board_dir: Path, alias: str, connection: dict, *, execution_ready: bool) -> CapabilityFact:
     if not is_managed(connection):
         return CapabilityFact(required=False, state=NOT_CONFIGURED, status="external")
     record = load_lifecycle(board_dir).get(alias)
     if record is None:
         return CapabilityFact(required=False, state=READY, status="never_started")
     status = record["status"]
+    if status == RUNNING and not execution_ready:
+        # The tracked record still claims this managed process is running,
+        # but the same connection's own execution probe (above) just found
+        # it unreachable: the tracked process crashed outside Cordboard's
+        # control. Report the contradiction rather than a false "ready" --
+        # `deployment_lifecycle.ensure_started` re-verifies and relaunches
+        # this on the next submission, without any manual state-file edit (#75).
+        return CapabilityFact(required=False, state=UNAVAILABLE, status="stale")
     return CapabilityFact(required=False, state=UNAVAILABLE if status == START_FAILED else READY, status=status)
 
 
@@ -147,11 +155,12 @@ def diagnose_connection(board_dir: Path, alias: str, connection: dict, *,
     a per-connection or per-graph stored setting).
     """
     endpoint = connection["endpoint"]
+    execution = _execution(endpoint)
     capabilities = Capabilities(
-        execution=_execution(endpoint),
+        execution=execution,
         topology=_topology(board_dir, endpoint, timeout=timeout),
         telemetry=Telemetry(archive=_telemetry_archive(archive_paths), collector=_telemetry_collector()),
-        managed_lifecycle=_managed_lifecycle(board_dir, alias, connection),
+        managed_lifecycle=_managed_lifecycle(board_dir, alias, connection, execution_ready=execution.state == READY),
         approval_authorization=_approval_authorization(connection),
     )
     checked_at = (now or datetime.now(UTC)).isoformat()
