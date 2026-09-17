@@ -304,11 +304,37 @@ contract gap (ADR-0014) rather than guessing at one. Text output reuses
 `collector_health.unsupported`, and two new `lifecycle_status`/
 `approval_authorization` families, so the same vocabulary the browser viewer
 renders now also renders in the CLI; `--json` shares the identical
-`ConnectionDiagnostics` fact tree. No HTTP route was added: #73 (Slice 8's
-onboarding flow) is expected to call `diagnose_connection` directly once its
-own UI contract is settled. Local evidence: 643 passed, 5 skipped, 36
-deselected (`uv run --locked pytest -m "not collector and not langfuse and
-not aegra"`).
+`ConnectionDiagnostics` fact tree. No HTTP route was added. Local evidence:
+643 passed, 5 skipped, 36 deselected (`uv run --locked pytest -m "not
+collector and not langfuse and not aegra"`).
+
+#73 (Slice 8's onboarding flow) closes the one real gap between the
+already-existing `cord add` / `cord diagnose` / `cord sync` / `cord
+graph-map` / `cord serve` command sequence and a first observable Run: `GET
+.../execute`'s `_render_execute` (`cord_runtime/web/server.py`) now calls
+`diagnose_connection` directly -- the same dependency-free composition #72
+added -- instead of calling `AegraExecutionBackend.list_assistants()` and
+silently swallowing a `RuntimeError` into an empty assistant list. When
+`capabilities.execution.state != "ready"`, `execute.html` renders that
+capability's `describe("reachability", ...)` entry (icon/label/explain/
+action) and offers no submit control, so a disconnected Deployment's execute
+page reads the identical bounded vocabulary `cord diagnose` already prints on
+the CLI. `page.html`'s existing `reachability` detail (#71) already covered
+the per-graph/empty-catalog states this issue's scope anticipated changing;
+regression-checked, not newly built. No new HTTP route, CLI subcommand, or
+JSON shape was added; `?format=json`/`Accept: application/json` on `/execute`
+is unchanged. [docs/onboarding.md](docs/onboarding.md) walks an operator
+through the full command sequence for both the successful path and the
+missing-required-contract path, using the existing `aegra/opaque.json` /
+`examples/opaque_graph.py` fixture. Local evidence: `uv run --locked pytest
+tests/test_web.py tests/test_web_controls.py tests/test_connection_diagnostics.py
+tests/test_cli.py` (147 passed, 5 skipped) and the full service-free suite
+(645 passed, 5 skipped, 36 deselected, `-m "not collector and not langfuse
+and not aegra"`). The manual browser walkthrough against a live
+`examples.aegra_server`/Postgres/Aegra process was not executed as part of
+this change; the pytest-level coverage above exercises the same HTTP surface
+with the upstream Aegra call scripted, the same pattern `tests/test_web_controls.py`
+already established for #49.
 
 The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
 the implemented core/domain libraries and Omiologic Aegra deployment. These are

@@ -20,6 +20,11 @@ topology, telemetry, lifecycle, and approval readiness through passive checks
 only (#72). `cord new` and `cord up`'s manifest/drift handling remain planned
 (#11, #16).
 
+See [docs/onboarding.md](onboarding.md) for the full operator walkthrough --
+`cord add` through a first observable Run in [`cord serve`](browser-viewer.md)'s
+browser viewer, including the bounded diagnosis an operator sees when a
+Deployment isn't reachable (#73).
+
 ## Storage
 
 Connections are stored per board (default: the current directory) at

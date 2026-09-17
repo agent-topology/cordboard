@@ -7,6 +7,7 @@ import threading
 import pytest
 import requests
 
+from cord_runtime.connections import add_connection
 from cord_runtime.live_reconciliation import LiveRun
 from cord_runtime.run_continuity import record_submission
 from cord_runtime.viewer import build_catalog, build_execution_tree
@@ -133,6 +134,75 @@ def test_index_action_slot_links_directly_to_a_ready_approval(tmp_path, monkeypa
         page = requests.get(base + "/").text
         assert "Respond to this approval</a>" in page
         assert "interrupt <code>i-1</code>" in page
+
+
+def test_execute_page_shows_unavailable_execution_diagnosis_and_no_submit_control(tmp_path):
+    """#73: `_render_execute` diagnoses execution through `diagnose_connection`
+    instead of swallowing a probe failure into a bare empty form; the browser
+    shows the same bounded ``execution: unavailable`` vocabulary `cord
+    diagnose` prints on the CLI (`web.presentation.describe('reachability', ...)`),
+    and offers no submit control."""
+    add_connection(tmp_path, "broken", "http://127.0.0.1:1")  # nothing listening; refused immediately.
+    observation = Observation(tmp_path)
+    # This graph_id was seen on a prior successful probe (`self.probed`'s cache,
+    # `Observation.snapshot`); the deployment has since gone unreachable -- the
+    # same "existing recorded execution stays visible" case `reachability`'s
+    # own catalog action text describes.
+    observation.probed = {"broken": {"graphs": ["opaque-graph"]}}
+    with running(observation) as base:
+        page = requests.get(base + "/connections/broken/graphs/opaque-graph/execute").text
+        expected = describe("reachability", False)
+        assert 'data-execution-state="unavailable"' in page
+        assert expected["label"] in page and expected["action"] in page
+        assert "The last probe of this Deployment" in page  # expected["explain"], HTML-escaped apostrophe aside
+        assert "No registered Assistants were reported" not in page
+        assert "<form" not in page and "Submit execution</button>" not in page
+        # The as_json branch's request/response shape is unchanged (#73 scope: no new JSON shape).
+        json_response = requests.get(base + "/connections/broken/graphs/opaque-graph/execute",
+                                     headers={"Accept": "application/json"})
+        assert json_response.json() == {}
+
+
+def test_execute_page_keeps_the_reachable_but_no_assistants_message_distinct(tmp_path, monkeypatch):
+    """A deployment `diagnose_connection` finds `ready` (reachable) but whose
+    live Assistant listing fails or is empty for this graph is a different,
+    still-valid case from #73's `execution: unavailable` diagnosis -- it keeps
+    its own pre-existing message, not the unavailable-execution one."""
+    endpoint = "http://127.0.0.1:9"
+    add_connection(tmp_path, "demo", endpoint)
+    responses = {
+        "/health": lambda: (200, {}),
+        "/.well-known/agent-topology.manifest.json": lambda: (404, {}),
+        "/assistants": iter([(200, {"assistants": [{"assistant_id": "a", "graph_id": "g", "name": "A"}]}),
+                             (200, {"assistants": [{"assistant_id": "a", "graph_id": "g", "name": "A"}]}),
+                             (500, {})]),  # snapshot probe, diagnose_connection probe, then list_assistants fails
+    }
+
+    class FakeResponse:
+        def __init__(self, status_code, payload):
+            self.status_code, self._payload = status_code, payload
+
+        def json(self):
+            return self._payload
+
+    real_request = requests.Session.request
+
+    def fake_request(self, method, url, **kwargs):
+        if not url.startswith(endpoint):
+            return real_request(self, method, url, **kwargs)
+        for suffix, source in responses.items():
+            if url.endswith(suffix):
+                status, payload = next(source) if hasattr(source, "__next__") else source()
+                return FakeResponse(status, payload)
+        raise AssertionError(f"unexpected request: {method} {url}")
+
+    monkeypatch.setattr(requests.Session, "request", fake_request)
+    observation = Observation(tmp_path)
+    with running(observation) as base:
+        page = requests.get(base + "/connections/demo/graphs/g/execute").text
+        assert "No registered Assistants were reported by this deployment" in page
+        assert 'data-execution-state' not in page
+        assert "<form" not in page
 
 
 def test_distinct_routes_escaping_and_exact_json():
