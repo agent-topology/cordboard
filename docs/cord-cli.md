@@ -15,8 +15,10 @@ topology document through `cord graph-map`'s explicit association (#43).
 a connection's topology snapshot (#43). `cord
 deployment sweep` stops idle managed Deployments (#17;
 [signal-routing.md](signal-routing.md) has the full dedupe/concurrency/
-lazy-startup contract). `cord new` and `cord up`'s manifest/drift handling
-remain planned (#11, #16).
+lazy-startup contract). `cord diagnose` reports one connection's execution,
+topology, telemetry, lifecycle, and approval readiness through passive checks
+only (#72). `cord new` and `cord up`'s manifest/drift handling remain planned
+(#11, #16).
 
 ## Storage
 
@@ -187,6 +189,40 @@ $ cord view --watch aegra-local:9f3c...:a1b2...
 Graph minimal-graph  (aegra-local, reachable, topology: absent)
   Live Run a1b2... (thread 9f3c...) [live, running]
 ```
+
+### `cord diagnose <alias> [--archive <path>]... [--json]`
+
+Reports one registered connection's readiness across execution (required)
+and every optional capability -- topology, telemetry archive/collector
+health, managed lifecycle, and approval authorization -- without submitting a
+Run, resuming an interrupt, refreshing a topology snapshot, or starting/
+stopping a Deployment (#72). Each capability reports a bounded `state`
+(`ready`, `unavailable`, `unsupported`, or `not_configured`) plus its own
+finer-grained `status`; a missing optional capability is never treated as
+connection failure ([ADR-0015](decisions/0015-never-block-connection.md)).
+`--archive` (repeatable) mirrors `cord view`'s own flag -- an archive location
+is a session input, not a stored per-connection setting
+([ADR-0014](decisions/0014-no-graph-descriptors.md)); without it,
+`telemetry.archive` reports `not_configured`. `telemetry.collector` always
+reports `unsupported`: connections have no per-connection Collector health
+endpoint field today. `--json` prints the same facts as one JSON object
+(`ConnectionDiagnostics`, see `cord_runtime.connection_diagnostics`).
+
+```sh
+$ cord diagnose aegra-local
+aegra-local	http://127.0.0.1:2026	checked 2026-09-17T12:00:00+00:00
+  execution [required] -> ready: Connected — The last probe of this Deployment's endpoint succeeded.
+  topology [optional] -> not_configured: Absent — No topology document is published at this Deployment's well-known path.
+  telemetry.archive [optional] -> not_configured: Archive not checked — No archive path was given to this diagnostic.
+  telemetry.collector [optional] -> unsupported: Collector health not supported — Connections do not yet declare a per-connection Collector health endpoint, so this capability has no public contract to probe.
+  managed_lifecycle [optional] -> not_configured: Unmanaged — This connection has no launch command; Cordboard never starts or stops it.
+  approval_authorization [optional] -> not_configured: No approval authority — This connection has no auth_endpoint configured, so approval is refused by default (ADR-0019).
+```
+
+Exit status follows only the required `execution` capability: 0 if
+`ready`, 1 otherwise (see "Status and exit codes" below) -- an optional
+capability's `unavailable`/`unsupported`/`not_configured` state never fails
+the command.
 
 ### `cord run <alias> <assistant> <subject> <input.json> [--context <context.json>] [--timeout <seconds>]`
 

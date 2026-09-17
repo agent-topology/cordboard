@@ -286,6 +286,29 @@ unchanged. Local evidence (625 passed, 36 deselected; installed-wheel `uv
 pip check`; the `describe`/`STATE_CATALOG` import running from the wheel;
 Chromium DOM checks) is recorded in the viewer guide. No `cordboard-testbed`
 browser-acceptance run was executed for this change.
+A new `cord diagnose <alias>` command
+([docs/cord-cli.md](docs/cord-cli.md#cord-diagnose-alias---archive-path---json))
+composes one registered connection's readiness across execution (required)
+and topology/telemetry-archive/telemetry-collector/managed-lifecycle/
+approval-authorization (optional) into one bounded `ready`/`unavailable`/
+`unsupported`/`not_configured` result per capability
+(`cord_runtime.connection_diagnostics.diagnose_connection`, #72). It composes
+`cli._probe`, `topology.check_freshness`+`viewer.correlate_topology`,
+`archive_health.archive_health`, and `deployment_lifecycle.load_lifecycle`
+rather than reimplementing any of them, and never calls `ensure_started`,
+`refresh_snapshot`, or `entity_auth`'s `authorize()` -- every check is a
+read-only probe or a local file/JSON read. `telemetry.collector` still
+reports `unsupported`, matching #71's already-recorded Collector-endpoint
+contract gap (ADR-0014) rather than guessing at one. Text output reuses
+`web.presentation.describe()`, extended with `archive_health.not_configured`,
+`collector_health.unsupported`, and two new `lifecycle_status`/
+`approval_authorization` families, so the same vocabulary the browser viewer
+renders now also renders in the CLI; `--json` shares the identical
+`ConnectionDiagnostics` fact tree. No HTTP route was added: #73 (Slice 8's
+onboarding flow) is expected to call `diagnose_connection` directly once its
+own UI contract is settled. Local evidence: 643 passed, 5 skipped, 36
+deselected (`uv run --locked pytest -m "not collector and not langfuse and
+not aegra"`).
 
 The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
 the implemented core/domain libraries and Omiologic Aegra deployment. These are
