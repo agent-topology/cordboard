@@ -15,6 +15,15 @@ independent Deployment onboarding, and one maintained-entity operating loop.
 Its milestones and issues are plans, not additional implemented capabilities;
 only its first contract Task is initially ready for execution.
 
+That first contract Task ([#66](https://github.com/agent-topology/cordboard/issues/66),
+[ADR-0020](docs/decisions/0020-playground-launch-contract.md)) fixes the
+playground's entry command, artifact boundary, and process/fixture/board/
+archive ownership. It confirms rather than changes ADR-0016/ADR-0018's
+ownership split. [docs/playground.md](docs/playground.md) records the
+resulting command sequence as a planned contract; no code from it is
+implemented yet — that is #67 (entry path, in `cordboard-testbed`) and #68
+(black-box qualification).
+
 Cordboard has a [minimal executable graph](docs/minimal-graph.md) with
 in-memory execution records (#4), plus a separate archive integration (#5):
 `cord-runtime`, OTel instrumentation, redaction, and Collector persistence.

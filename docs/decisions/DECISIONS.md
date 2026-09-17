@@ -32,6 +32,25 @@
 | **0017** | **ExecutionBackend 식별자·상태·결과 계약 확정** | **Accepted** | **[0017-execution-backend-contract.md](0017-execution-backend-contract.md)** |
 | **0018** | **브라우저 관측 표면 — 서버/프론트엔드 스택, 공개 read/update 라우트, 접근성 시각 상태 확정** | **Accepted** | **[0018-browser-viewer-contract.md](0018-browser-viewer-contract.md)** |
 | **0019** | **브라우저 실행 제출/승인 controls — 세션·CSRF 경계, entity 권한 포트, POST 라우트, 중복 제출 방지 확정** | **Accepted** | **[0019-web-execution-and-approval-controls.md](0019-web-execution-and-approval-controls.md)** |
+| **0020** | **플레이그라운드 아티팩트, 소유권, 런치 계약** | **Accepted** | **[0020-playground-launch-contract.md](0020-playground-launch-contract.md)** |
+
+---
+
+## 플레이그라운드 런치 계약 승인, #66 readiness 핸드오프 (2026-09-17)
+
+**0020 · Accepted · [플레이그라운드 아티팩트·소유권·런치 계약](0020-playground-launch-contract.md)**
+
+[#66](https://github.com/agent-topology/cordboard/issues/66)은 첫 사용 조작자가
+provider credential이나 Testbed 내부 지식 없이 idle topology·성공·실패 후 재시도·대기
+중 승인 네 시나리오가 채워진 loopback 뷰어에 도달하는 하나의 진입 명령을 확정하는
+Task였다. 이 결정은 ADR-0016(Testbed 소유 실프로세스)·ADR-0018 §7(`cord serve` 시작
+계약)의 소유권을 바꾸지 않는다 — 이미 존재하는 `cordboard-testbed`의
+`scripts/start-environment`·`environments/minimal/` 픽스처와 `verify-browser-artifact.py`가
+증명한 조립을, CI 단언이 아니라 조작자가 탐색할 수 있는 세션으로 다시 조립하는 방법만
+새로 정했다. 신규 `scripts/run-playground`(Testbed 저장소, 코드 구현은 #67)가 그 진입
+명령이고, archive 디렉터리는 acceptance의 "매 세션 새 디렉터리" 정책과 달리 고정·재사용
+경로다. 코드 변경은 없다 — [`docs/playground.md`](../playground.md)가 조작자용 실행
+가이드를, 이 ADR이 근거와 기각된 대안을 기록한다.
 
 ---
 
