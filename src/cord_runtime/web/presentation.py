@@ -272,11 +272,19 @@ STATE_CATALOG = {
             "evidence": "cord_runtime.archive_health",
             "action": "No action needed.",
         },
+        "not_configured": {
+            "label": "Archive not checked",
+            "explain": "No archive path was given to this diagnostic.",
+            "evidence": "cord diagnose --archive input",
+            "action": "Pass --archive to check delivered execution telemetry, if this "
+                      "Deployment's Collector writes one.",
+        },
     },
-    # Wired into the catalog for forward compatibility, but not yet probed
-    # live: connections.py has no per-connection Collector health endpoint
-    # field today, and adding one is a connection-scoped product decision
-    # (ADR-0014) outside this presentation-only change (#71 contract gap).
+    # connections.py has no per-connection Collector health endpoint field
+    # today; adding one is a connection-scoped product decision (ADR-0014)
+    # this presentation-only change does not make (#71/#72 contract gap).
+    # "unsupported" is therefore the only live value -- never guessed from
+    # the execution endpoint or invented heuristically (#72 Blockers).
     "collector_health": {
         "reachable": {
             "label": "Collector reachable",
@@ -290,6 +298,68 @@ STATE_CATALOG = {
             "evidence": "cord_runtime.collector_health",
             "action": "Check the Collector process; exported telemetry may not be recorded until "
                       "it recovers.",
+        },
+        "unsupported": {
+            "label": "Collector health not supported",
+            "explain": "Connections do not yet declare a per-connection Collector health "
+                      "endpoint, so this capability has no public contract to probe.",
+            "evidence": "cord_runtime.connections (no collector endpoint field)",
+            "action": "No action available — a per-connection Collector endpoint is an "
+                      "undocumented contract (ADR-0014 decision required); do not add a "
+                      "heuristic probe.",
+        },
+    },
+    "lifecycle_status": {
+        "external": {
+            "label": "Unmanaged",
+            "explain": "This connection has no launch command; Cordboard never starts or "
+                      "stops it.",
+            "evidence": "cord_runtime.connections.is_managed",
+            "action": "No action needed — add --launch when registering the connection to "
+                      "opt into managed startup/idle shutdown, if desired.",
+        },
+        "never_started": {
+            "label": "Managed, not yet started",
+            "explain": "This connection is managed, but Cordboard has not started it in this "
+                      "board yet.",
+            "evidence": "cord_runtime.deployment_lifecycle (no lifecycle record)",
+            "action": "No action needed — it starts on demand at first execution.",
+        },
+        "running": {
+            "label": "Managed, running",
+            "explain": "Cordboard's managed lifecycle reports this Deployment as running.",
+            "evidence": "cord_runtime.deployment_lifecycle",
+            "action": "No action needed.",
+        },
+        "stopped": {
+            "label": "Managed, stopped (idle)",
+            "explain": "Cordboard stopped this Deployment after it went idle beyond its "
+                      "declared idle_after.",
+            "evidence": "cord_runtime.deployment_lifecycle",
+            "action": "No action needed — it restarts on demand at the next execution.",
+        },
+        "start_failed": {
+            "label": "Managed, start failed",
+            "explain": "The managed Deployment failed to start or become healthy on its "
+                      "last launch attempt.",
+            "evidence": "cord_runtime.deployment_lifecycle",
+            "action": "Check the Deployment's launch command and logs, then retry.",
+        },
+    },
+    "approval_authorization": {
+        "configured": {
+            "label": "Approval authority configured",
+            "explain": "This connection has an auth_endpoint configured for approval-"
+                      "response authorization.",
+            "evidence": "connection record (auth_endpoint)",
+            "action": "No action needed.",
+        },
+        "not_configured": {
+            "label": "No approval authority",
+            "explain": "This connection has no auth_endpoint configured, so approval is "
+                      "refused by default (ADR-0019).",
+            "evidence": "connection record (auth_endpoint)",
+            "action": "Configure auth_endpoint for this connection to enable approval.",
         },
     },
 }

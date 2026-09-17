@@ -20,6 +20,7 @@ import requests
 from cord_runtime.aegra_client import execute
 from cord_runtime.archive_query import ArchiveError, read_spans
 from cord_runtime.backends.aegra import AegraExecutionBackend
+from cord_runtime.connection_diagnostics import diagnose_connection
 from cord_runtime.connections import (
     InvalidConnection,
     add_connection,
@@ -35,6 +36,7 @@ from cord_runtime.run_continuity import UnknownThread, logical_run, record_submi
 from cord_runtime.signals import InvalidSignal, file_signal, manual_signal, schedule_signal
 from cord_runtime.topology import VALID, check_freshness, refresh_snapshot
 from cord_runtime.viewer import build_catalog, build_execution_tree, format_catalog_text
+from cord_runtime.web.presentation import describe
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
@@ -145,6 +147,56 @@ def _probe(endpoint: str) -> dict:
         except (requests.RequestException, ValueError, KeyError, TypeError):
             pass
     return {"reachable": reachable, "graphs": graphs}
+
+
+_DIAGNOSTIC_FAMILIES = {
+    "execution": "reachability",
+    "topology": "topology_status",
+    "managed_lifecycle": "lifecycle_status",
+    "approval_authorization": "approval_authorization",
+}
+
+
+def _describe_capability(name: str, fact) -> dict:
+    if name == "execution":
+        return describe("reachability", fact.status == "reachable")
+    family = "archive_health" if name == "telemetry.archive" else (
+        "collector_health" if name == "telemetry.collector" else _DIAGNOSTIC_FAMILIES[name])
+    return describe(family, fact.status)
+
+
+def _format_diagnostics_text(diagnostics) -> str:
+    lines = [f"{diagnostics.alias}\t{diagnostics.endpoint}\tchecked {diagnostics.checked_at}"]
+    facts = [
+        ("execution", diagnostics.capabilities.execution),
+        ("topology", diagnostics.capabilities.topology),
+        ("telemetry.archive", diagnostics.capabilities.telemetry.archive),
+        ("telemetry.collector", diagnostics.capabilities.telemetry.collector),
+        ("managed_lifecycle", diagnostics.capabilities.managed_lifecycle),
+        ("approval_authorization", diagnostics.capabilities.approval_authorization),
+    ]
+    for name, fact in facts:
+        entry = _describe_capability(name, fact)
+        scope = "required" if fact.required else "optional"
+        lines.append(f"  {name} [{scope}] -> {fact.state}: {entry['label']} — {entry['explain']}")
+    return "\n".join(lines)
+
+
+def cmd_diagnose(args: argparse.Namespace) -> int:
+    board_dir = _board_dir(args)
+    try:
+        connections = load_connections(board_dir)
+    except InvalidConnection as exc:
+        return _fail(str(exc), EXIT_USAGE)
+    if args.alias not in connections:
+        return _fail(f"unknown alias '{args.alias}'", EXIT_USAGE)
+    diagnostics = diagnose_connection(board_dir, args.alias, connections[args.alias],
+                                      archive_paths=tuple(args.archive), timeout=_PROBE_TIMEOUT)
+    if args.json:
+        print(json.dumps(diagnostics.as_dict()))
+    else:
+        print(_format_diagnostics_text(diagnostics))
+    return EXIT_OK if diagnostics.capabilities.execution.state == "ready" else EXIT_FAILURE
 
 
 def cmd_list(args: argparse.Namespace) -> int:
@@ -540,6 +592,15 @@ def build_parser() -> argparse.ArgumentParser:
     list_cmd = sub.add_parser("list", help="Show reachability and graphs for registered deployments")
     list_cmd.add_argument("alias", nargs="?", default=None)
     list_cmd.set_defaults(func=cmd_list)
+
+    diagnose = sub.add_parser(
+        "diagnose", help="Report execution, topology, telemetry, lifecycle, and approval readiness (#72)")
+    diagnose.add_argument("alias")
+    diagnose.add_argument("--archive", type=Path, action="append", default=[],
+                          help="Archive directory or *.otlp.jsonl[.gz] file to check telemetry delivery "
+                               "against (repeatable); omit to report telemetry.archive as not_configured")
+    diagnose.add_argument("--json", action="store_true", help="Print the diagnostic as one JSON object")
+    diagnose.set_defaults(func=cmd_diagnose)
 
     view = sub.add_parser("view", help="Show the catalog: Graphs, topology, and recorded execution")
     view.add_argument("alias", nargs="?", default=None)
