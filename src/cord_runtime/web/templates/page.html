@@ -99,6 +99,30 @@ next to each entry.</p>
 {% if 'start_ns' in run %}
 <p>Recorded execution: {{ run.execution_ns|duration }} · Known approval wait: {{ run.approval_wait_ns|duration }}</p>
 {% if run.timeline_incomplete %}<p class="notice">Timeline incomplete — open or unknown wait; no duration is invented.</p>{% endif %}
+<section aria-labelledby="run-topology-title"><h2 id="run-topology-title">Observed execution path</h2>
+{% set path = run_topology(graph.topology_structure, run) %}
+{% if path %}
+<svg class="topology" role="img" aria-labelledby="run-topology-caption" viewBox="0 0 {{ path.width }} {{ path.height }}">
+<title id="run-topology-caption">Observed execution path for Run {{ run.run_id }}</title>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#536b79"/></marker></defs>
+{% for edge in path.edges %}
+<path class="edge" d="M {{ edge.start[0] }} {{ edge.start[1]+18 }} L {{ edge.end[0] }} {{ edge.end[1]-18 }}" marker-end="url(#arrow)"><title>{{ edge.source }} → {{ edge.target }} · {{ edge.kind }}</title></path>
+{% endfor %}
+{% for node in path.nodes %}
+{% set label = node_status_labels[node.status] %}
+<g data-node-status="{{ node.status }}"><rect x="{{ node.x-100 }}" y="{{ node.y-18 }}" width="200" height="36" rx="8"/>
+<text x="{{ node.x-88 }}" y="{{ node.y+5 }}" class="status-icon" aria-hidden="true">{{ label[0] }}</text>
+<text x="{{ node.x+10 }}" y="{{ node.y+5 }}" text-anchor="middle">{{ node.id[:18] }}{% if node.id|length > 18 %}…{% endif %}</text>
+<title>{{ node.id }} — {{ label[1] }}{% if node.steps %} ({{ node.steps|length }} Step{{ 's' if node.steps|length != 1 else '' }}){% endif %}</title></g>
+{% endfor %}
+</svg>
+<details><summary>Execution path text alternative</summary><ul>
+{% for node in path.nodes %}<li>{{ node.id }} — {{ node_status_labels[node.status][1] }}{% for step in node.steps %} · Step {{ loop.index }}: {{ step.outcome }}{% if step.awaiting_resume %} (awaiting resume){% endif %}{% endfor %}</li>{% endfor %}
+</ul>
+<ul>{% for edge in path.edges %}<li>{{ edge.source }} → {{ edge.target }} ({{ edge.kind }})</li>{% endfor %}</ul></details>
+{% for step in path.unmatched_steps %}<p class="notice">Recorded Node '{{ step.node }}' has no match in this Run's topology.</p>{% endfor %}
+{% else %}<p>Topology unavailable for correlation. Execution records remain visible.</p>{% endif %}
+</section>
 <section><h2>Execution timeline</h2><p>Bars share the recorded Run time axis. Exact boundaries are available per row.</p>
 <div class="timeline">{% for row in timeline(run) %}
 <div class="timeline-row"><span>{{ row.label }}</span><div class="track"><span class="bar {{ row.kind }}" style="margin-left:{{ row.left }}%;width:{{ row.width }}%"></span></div>

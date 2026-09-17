@@ -245,6 +245,21 @@ DOM/screenshot checks at 1280×900 and 375×667) is recorded in the viewer
 guide; this closes the Slice 6 comprehension gap the four deterministic
 scenarios' empty states, UUID-only labels, and separate controls left open.
 No `cordboard-testbed` browser-acceptance run was executed for this change.
+Each Run page now also renders an [observed execution path over
+topology](docs/browser-viewer.md#observed-execution-path-over-topology-70)
+(#70): `cord_runtime.web.presentation.run_topology` overlays that Run's own
+recorded Steps onto the unchanged `layout` topology diagram, marking each
+Node `not_observed`/`passed`/`failed`/`paused`/`repeated` from that Run's
+Steps alone, keeping every Step under a `repeated` or `paused` Node listed
+rather than collapsed, and surfacing a Step whose Node has no topology match
+as its own warning instead of guessing. It overlays only the current,
+correlated topology; every other status keeps the existing "Topology
+unavailable for correlation" fallback and the Run's timeline/tree stay
+visible regardless. This adds no new field to the shared catalog, so
+`?format=json` is unchanged. Local evidence (620 passed, 36 deselected;
+installed-wheel `uv pip check`; Chromium DOM checks including the new
+diagram at 1280×900 and 375×667) is recorded in the viewer guide. No
+`cordboard-testbed` browser-acceptance run was executed for this change.
 
 The [2026-09-15 internal dependency review](docs/internal-dependencies.md) records
 the implemented core/domain libraries and Omiologic Aegra deployment. These are

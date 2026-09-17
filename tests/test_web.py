@@ -8,9 +8,9 @@ import requests
 
 from cord_runtime.live_reconciliation import LiveRun
 from cord_runtime.run_continuity import record_submission
-from cord_runtime.viewer import build_catalog
+from cord_runtime.viewer import build_catalog, build_execution_tree
 from cord_runtime.web.observation import Observation
-from cord_runtime.web.presentation import graph_url, layout, scenario_summary, timeline
+from cord_runtime.web.presentation import graph_url, layout, run_topology, scenario_summary, timeline
 from cord_runtime.web.server import make_server, serve
 from test_viewer import _document, _run_tree, _merge, _span
 
@@ -65,7 +65,8 @@ def catalog_fixture():
                                      "reachable": True}}, {}, spans)
     for graph in catalog["graphs"]:
         graph["topology_status"] = "current"
-        graph["topology_structure"] = _document(["main"])["graphs"][0]["structure"]
+        # "draft" matches the recorded Steps (#70); "verify" stays unobserved.
+        graph["topology_structure"] = _document(["main"], nodes=("draft", "verify"))["graphs"][0]["structure"]
     return catalog
 
 
@@ -154,6 +155,77 @@ def test_topology_states_keep_execution(state):
         assert f'data-topology-status="{state}"' in response.text
         assert "Run r" in response.text
         assert "Topology unavailable for correlation" in response.text
+        # An uncorrelated topology never hides the Run itself (#70 AC4): the
+        # observed-path section falls back but the timeline/tree stay intact.
+        run_response = requests.get(base + graph_url(graph) + "/runs/r")
+        assert "Observed execution path" in run_response.text
+        assert "Topology unavailable for correlation" in run_response.text
+        assert "Execution timeline" in run_response.text
+
+
+def test_run_topology_marks_only_observed_nodes_and_withholds_without_correlation():
+    catalog = catalog_fixture()
+    graph = catalog["graphs"][0]
+    run = next(r for r in graph["runs"] if r["run_id"] == "success")
+    path = run_topology(graph["topology_structure"], run)
+    by_id = {node["id"]: node for node in path["nodes"]}
+    assert by_id["draft"]["status"] == "passed" and len(by_id["draft"]["steps"]) == 1
+    assert by_id["verify"]["status"] == "not_observed" and by_id["verify"]["steps"] == []
+    assert path["unmatched_steps"] == []
+    assert run_topology(None, run) is None
+
+
+def test_run_topology_shows_a_paused_node_without_collapsing_its_evidence():
+    catalog = catalog_fixture()
+    graph = catalog["graphs"][0]
+    run = next(r for r in graph["runs"] if r["run_id"] == "interrupt")
+    path = run_topology(graph["topology_structure"], run)
+    node = next(n for n in path["nodes"] if n["id"] == "draft")
+    assert node["status"] == "paused" and node["steps"][0]["outcome"] == "awaiting_approval"
+
+
+def test_run_topology_preserves_repeated_same_node_executions_instead_of_collapsing():
+    trace_id = "b" * 32
+    spans = dict([
+        _span("run", span_id="2001", parent_id=None, trace_id=trace_id, graph_id="g", run_id="loop"),
+        _span("step", span_id="2002", parent_id="2001", trace_id=trace_id, graph_id="g", run_id="loop",
+              node="draft", outcome="passed", start=1100, end=1300),
+        _span("step", span_id="2003", parent_id="2001", trace_id=trace_id, graph_id="g", run_id="loop",
+              node="draft", outcome="failed", start=1400, end=1600),
+    ])
+    run = build_execution_tree(spans)[0]
+    structure = _document(["main"], nodes=("draft",))["graphs"][0]["structure"]
+    path = run_topology(structure, run)
+    node = path["nodes"][0]
+    assert node["status"] == "repeated"
+    assert [step["outcome"] for step in node["steps"]] == ["passed", "failed"]
+
+
+def test_run_topology_surfaces_unmatched_steps_without_guessing_a_node():
+    spans = _run_tree("g", "r", node="undeclared")
+    run = build_execution_tree(spans)[0]
+    structure = _document(["main"], nodes=("draft",))["graphs"][0]["structure"]
+    path = run_topology(structure, run)
+    assert path["nodes"][0]["steps"] == [] and path["nodes"][0]["status"] == "not_observed"
+    assert [step["node"] for step in path["unmatched_steps"]] == ["undeclared"]
+
+
+def test_run_page_relates_observed_nodes_to_topology_with_a_text_alternative():
+    catalog = catalog_fixture()
+    graph = catalog["graphs"][0]
+    with running(StaticObservation(catalog)) as base:
+        page = requests.get(base + graph_url(graph) + "/runs/success").text
+        assert "Observed execution path" in page
+        assert 'data-node-status="passed"' in page and 'data-node-status="not_observed"' in page
+        assert "draft — Passed" in page  # non-color text alternative (#70)
+        assert "verify — Not observed" in page
+        page = requests.get(base + graph_url(graph) + "/runs/interrupt").text
+        assert 'data-node-status="paused"' in page
+        assert "(awaiting resume)" in page
+        # The shared JSON model is unaffected by the new HTML overlay (JSON stability).
+        run = next(r for r in graph["runs"] if r["run_id"] == "success")
+        response = requests.get(base + graph_url(graph) + "/runs/success?format=json")
+        assert response.json() == json.loads(json.dumps(run))
 
 
 def test_tree_timeline_filters_and_read_only():
@@ -267,6 +339,7 @@ def test_browser_dom_and_narrow_screenshots(tmp_path):
         for run in ("success", "retry", "interrupt"):
             page.goto(base + "/connections/demo/graphs/g/runs/" + run)
             assert page.get_by_role("heading", name="Execution timeline").count() == 1
+            assert page.get_by_role("img", name=f"Observed execution path for Run {run}").count() == 1
             page.screenshot(path=str(tmp_path / f"{run}-desktop.png"), full_page=True)
             page.set_viewport_size({"width": 375, "height": 667})
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")

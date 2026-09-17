@@ -19,6 +19,7 @@ from cord_runtime.entity_auth import HttpEntityAuthBoundary
 
 from .observation import Observation
 from .presentation import (
+    NODE_STATUS_LABELS,
     TOPOLOGY_LABELS,
     approval_url,
     duration,
@@ -26,6 +27,7 @@ from .presentation import (
     graph_url,
     layout,
     matches,
+    run_topology,
     run_url,
     scenario_summary,
     timeline,
@@ -34,7 +36,8 @@ from .presentation import (
 ROOT = files("cord_runtime.web")
 ENV = Environment(loader=FileSystemLoader(str(ROOT / "templates")), autoescape=select_autoescape())
 ENV.globals.update(graph_url=graph_url, run_url=run_url, execute_url=execute_url, approval_url=approval_url,
-                   topology_labels=TOPOLOGY_LABELS, layout=layout, timeline=timeline,
+                   topology_labels=TOPOLOGY_LABELS, node_status_labels=NODE_STATUS_LABELS,
+                   layout=layout, run_topology=run_topology, timeline=timeline,
                    scenario_summary=scenario_summary)
 ENV.filters["duration"] = duration
 ENV.filters["tojson"] = lambda value, indent=None: json.dumps(value, indent=indent)
