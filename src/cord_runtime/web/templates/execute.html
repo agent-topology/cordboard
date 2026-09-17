@@ -1,3 +1,4 @@
+{% import "_state.html" as state %}
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -20,7 +21,12 @@
 <p class="intro">{{ graph.deployment_alias }} · {{ graph.graph_id }}</p>
 {% for message in diagnostics %}<p role="alert">{{ message }}</p>{% endfor %}
 {% if message %}<p role="alert">{{ message }}</p>{% endif %}
-{% if not assistants %}<p class="notice">No registered Assistants were reported by this deployment. Check
+{% if execution.state != 'ready' %}
+{% set label = describe('reachability', execution.status == 'reachable') %}
+<p class="notice" role="alert" data-execution-state="{{ execution.state }}">
+<span class="badge">{{ label.icon }} {{ label.label }}</span> {{ label.explain }} {{ label.action }}</p>
+{{ state.detail('reachability', execution.status == 'reachable') }}
+{% elif not assistants %}<p class="notice">No registered Assistants were reported by this deployment. Check
 the deployment is reachable, then reload this page.</p>
 {% else %}
 <form class="stacked" method="post" action="{{ execute_url(graph) }}">

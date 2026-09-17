@@ -242,6 +242,19 @@ values and response payloads live only for the request/response render, never
 written to the board beyond the existing identifier-only `response_dedupe`/
 `run_continuity` records, and the server never logs a request body.
 
+`_render_execute` now calls `connection_diagnostics.diagnose_connection`
+directly (#72's composition, reused as anticipated) before deciding what to
+render. When `capabilities.execution.state != "ready"`, the page renders that
+capability's `describe("reachability", ...)` entry -- the identical
+icon/label/explanation/action `cord diagnose` prints on the CLI for the same
+connection -- and offers no submit control, instead of calling
+`AegraExecutionBackend.list_assistants()` and silently turning a probe
+failure into an empty form. This adds no new route or JSON shape: the
+existing `?format=json`/`Accept: application/json` branch on `/execute` is
+unchanged (#73). See [docs/onboarding.md](onboarding.md) for the full
+operator walkthrough from a registered Deployment endpoint to a first
+observable Run, including this diagnosis path.
+
 ## Verification
 
 Milestone 8 review (2026-09-16): the service-free suite with `proxy` and

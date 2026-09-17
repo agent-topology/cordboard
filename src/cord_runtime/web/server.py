@@ -15,6 +15,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from cord_runtime import approval_inbox, run_continuity
 from cord_runtime.aegra_client import execute as execute_run
 from cord_runtime.backends.aegra import AegraExecutionBackend
+from cord_runtime.connection_diagnostics import diagnose_connection
 from cord_runtime.entity_auth import HttpEntityAuthBoundary
 
 from .observation import Observation
@@ -172,13 +173,20 @@ def make_server(observation, host="127.0.0.1", port=0, *, reminder_after=300.0, 
             if as_json:
                 self.reply(json.dumps({"error": message} if message else {}), "application/json", status)
                 return
-            try:
-                assistants = [item for item in AegraExecutionBackend(connection["endpoint"]).list_assistants()
-                              if item.get("graph_id") == graph_id]
-            except RuntimeError:
+            execution = diagnose_connection(observation.board, alias, connection,
+                                            archive_paths=tuple(observation.archives)).capabilities.execution
+            if execution.state == "ready":
+                try:
+                    assistants = [item for item in AegraExecutionBackend(connection["endpoint"]).list_assistants()
+                                  if item.get("graph_id") == graph_id]
+                except RuntimeError:
+                    assistants = []
+            else:
+                # Unavailable execution is diagnosed below the same way `cord diagnose` reports it
+                # (#73); the deployment is not re-probed a second time for a form that cannot submit.
                 assistants = []
             self.reply(ENV.get_template("execute.html").render(
-                catalog=catalog, graph=graph, assistants=assistants, csrf_token=csrf_token,
+                catalog=catalog, graph=graph, assistants=assistants, execution=execution, csrf_token=csrf_token,
                 nonce=new_nonce(), message=message, diagnostics=observation.diagnostics()),
                 "text/html; charset=utf-8", status)
 
