@@ -149,7 +149,7 @@ UNKNOWN_BRANCH_INTERPRETATION = {
     "nodes": [{"nodeId": "draft", "branch": {"status": "unknown"}}],
 }
 UNRECOGNIZED_REVISION_INTERPRETATION = {
-    "version": "2",
+    "version": "3",
     "nodes": [{"nodeId": "draft", "branch": {"status": "known", "value": "all-declared"}}],
 }
 
@@ -237,8 +237,9 @@ def test_gaps_and_producer_limitations_pass_through_unchanged():
 
 # --- R3: static interrupt inside a direct fan-out ---------------------------
 
-def test_parallel_interrupt_confirmed_with_recognized_interpretation():
-    doc = document([_fanout_graph(interpretation=CONFIRMED_INTERPRETATION)])
+@pytest.mark.parametrize("version", ["1", "2"])
+def test_parallel_interrupt_confirmed_with_recognized_interpretation(version):
+    doc = document([_fanout_graph(interpretation={**CONFIRMED_INTERPRETATION, "version": version})])
     warnings = parallel_interrupt_warnings(doc)
     assert len(warnings) == 1
     warning = warnings[0]
@@ -256,8 +257,9 @@ def test_parallel_interrupt_unconfirmed_without_interpretation_extension():
     assert warnings[0].confirmed is False
 
 
-def test_parallel_interrupt_unconfirmed_when_branch_status_unknown():
-    doc = document([_fanout_graph(interpretation=UNKNOWN_BRANCH_INTERPRETATION)])
+@pytest.mark.parametrize("version", ["1", "2"])
+def test_parallel_interrupt_unconfirmed_when_branch_status_unknown(version):
+    doc = document([_fanout_graph(interpretation={**UNKNOWN_BRANCH_INTERPRETATION, "version": version})])
     warnings = parallel_interrupt_warnings(doc)
     assert len(warnings) == 1
     assert warnings[0].confirmed is False

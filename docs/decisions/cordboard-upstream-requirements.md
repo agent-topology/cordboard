@@ -8,7 +8,35 @@
 
 ---
 
-## 현재 상태 — beta.4 게시, Cordboard pin 갱신 (2026-09-16)
+## 현재 상태 — beta.4 소비자 채택과 후속 정책 확인 (2026-09-17)
+
+[게시 릴리스](https://github.com/agent-topology/agent-topology/releases/tag/v0.1.0-beta.4)의
+`published_at`은 2026-09-17T01:15:56Z다. 아래 9월 16일 기록은 pin 갱신 이력이며,
+이번에는 PyPI의 spec/producer `0.1.0b4`를 함께 사용해 실제 중첩 문서를 검증했다.
+[구현·검증 기록](../topology-beta4.md)에 재현 명령과 남은 경계를 적었다.
+
+| 항목 | 확인 결과와 Cordboard 반영 |
+|---|---|
+| AT-1 부모 소실 | 게시본에서 해결. depth 0/1/2, 동일 자식의 복수 호출 위치에서 부모 유지·명시적 자식 주소를 검증했다. 기존 `graph_map`으로 선택한 부모의 실행 대조가 가능하다. 자식의 재귀 UI·런타임 호출 위치 대조는 아직 없다 |
+| AT-2·AT-3 해석 | R3가 revision `"1"`과 `"2"`의 동일한 branch 계약을 읽도록 수정했다. 알 수 없는 revision/branch는 계속 확인 불가 경고다. sentinel을 숨기는 기능이나 코어 필드 승격은 추가하지 않았다 |
+| AT-4 joins / AT-5 이름·id | beta.3에서 정리된 결론 유지. 이번에 새로 풀린 제한이 아니다 |
+| AT-6 버전 범위 | beta.4 Python 생산자는 여전히 LangGraph 1.2.10–1.2.11. 지원 범위가 넓어진 것은 아니다 |
+| CLI depth | beta.4 `agt describe --depth N`으로 API와 같은 확장 깊이를 요청할 수 있다. 팩터리 호출 기능은 없고 import-safe compiled-object export가 필요하다 |
+
+**beta.4와 별개의 후속 소스 정책:** #163은
+[upstream ADR-0013](https://github.com/agent-topology/agent-topology/blob/93e0ccc5a9245d7ff03911c496b2a28502ac700b/docs/decisions/0013-sentinel-branch-promotion-bar-unmet-compatibility-floor.md)으로
+닫혔다. 코어 승격은 보류하되 기존 revision의 의미를 바꾸지 않고, 미지원 revision은
+불투명하게 읽으며, 제거에는 ADR·릴리스·마이그레이션 안내를 요구한다. #164도
+[버전 평가 정책](https://github.com/agent-topology/agent-topology/blob/main/docs/reference/langgraph-version-policy.md)으로
+닫혔다. 안정 릴리스의 7일 내 평가 목표와 exact-version 검증 근거를 명시한 것이며,
+beta.4의 허용 버전을 바꾸지 않는다. 아래 “정책 없음/미정”은 당시 이력으로 읽는다.
+
+동적 `interrupt()` 탐지, 승인 유효성, 실제 effect/retry 증거는 여전히 topology 밖이다.
+ADR-0014·0015의 문서 소유권·연결 비차단 계약도 그대로다.
+
+---
+
+## 이전 상태 — beta.4 게시, Cordboard pin 갱신 (2026-09-16)
 
 `agent-topology-spec` 0.1.0b4가 PyPI에 게시됐다 —
 [v0.1.0-beta.4 릴리스](https://github.com/agent-topology/agent-topology/releases/tag/v0.1.0-beta.4),

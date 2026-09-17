@@ -3,6 +3,19 @@ revision = 3
 requires-python = "==3.12.*"
 
 [[package]]
+name = "agent-topology-langgraph"
+version = "0.1.0b4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "agent-topology-spec" },
+    { name = "langgraph" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f3/e6/b8936ab4cbc6e4df01f0aeb68c37c91db7c8b30bb7af97c7590a8d0a95d1/agent_topology_langgraph-0.1.0b4.tar.gz", hash = "sha256:d97b1796fa611185e0117fce87cc319b254504598b3531253e829e77c0bdaf51", size = 23980, upload-time = "2026-09-16T00:18:23.614Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/19/6e/410a6f2dc0d260d3c96360b28848a1b70c31578ec3233d921ee73b289eb0/agent_topology_langgraph-0.1.0b4-py3-none-any.whl", hash = "sha256:57c91c26e6a244774d4960783dd90f070f477c4a100b1c61d9b6f3b9e2a00c27", size = 13269, upload-time = "2026-09-16T00:18:22.439Z" },
+]
+
+[[package]]
 name = "agent-topology-spec"
 version = "0.1.0b4"
 source = { registry = "https://pypi.org/simple" }
@@ -316,6 +329,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "agent-topology-langgraph" },
     { name = "pytest" },
 ]
 proxy = [
@@ -341,7 +355,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = "==9.1.1" }]
+dev = [
+    { name = "agent-topology-langgraph", specifier = "==0.1.0b4" },
+    { name = "pytest", specifier = "==9.1.1" },
+]
 proxy = [{ name = "litellm", extras = ["proxy"], specifier = "==1.87.0" }]
 web-test = [{ name = "playwright", specifier = "==1.58.0" }]
 

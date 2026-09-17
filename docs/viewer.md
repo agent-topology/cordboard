@@ -90,6 +90,21 @@ no matching `graph_map` entry (including a record from before this field
 existed, read as an empty mapping) still shows its presence and
 warnings/gaps, but withholds Node structure rather than guessing.
 
+## Expanded beta.4 documents
+
+A positive-depth document contains the root plus its materialized children in
+`graphs[]`. Set `cord graph-map <alias> <document_graph_id> <graph_id>` for
+the structure to correlate, even when the extra entries are only children.
+The retained parent Node now matches its recorded Step; child Nodes are not
+flattened into that parent's namespace. Child `subgraphId` values are document
+references, not runtime Graph identities or checkpoint namespaces.
+
+R3 reads branch facts from experimental revisions `"1"` and `"2"`, including
+materialized child graphs. Unknown revisions and unknown branch facts still
+produce unconfirmed warnings. After changing the published expansion depth,
+run `cord sync <alias>`: the changed structure hash remains stale until that
+explicit refresh. See [beta.4 adoption and verification](topology-beta4.md).
+
 ## Unmatched execution evidence
 
 A recorded Step whose `cord.node.name` is not among a correlated topology's

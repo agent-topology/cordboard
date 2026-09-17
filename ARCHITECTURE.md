@@ -625,15 +625,16 @@ The beta.3 baseline lost parents at positive depth. Published beta.4
 with retained parent nodes and child `graphs[]` entries referenced by
 `subgraphId`. Positive-depth hashes changed, and materialized graphs use
 experimental interpretation revision `"2"`. Follow references rather than
-parsing graph IDs; unknown interpretation revisions remain opaque --
-`cord_runtime.topology.RECOGNIZED_INTERPRETATION_VERSION` still only
-recognizes `"1"`, so a materialized child's revision-`"2"` facts are read as
-unconfirmed rather than an error (ADR-0015), not yet as recognized data.
-Whether to recognize revision `"2"` is separate follow-up work, not decided
-by this pin bump. Depth-0 output is unchanged and the full non-external test
-suite (611 passed, 36 deselected) passed against beta.4 with no source
-changes beyond the pin. See the
-[versioned review](docs/internal-dependencies.md#topology-beta3-baseline-versus-beta4-candidate).
+parsing graph IDs. Cordboard now recognizes experimental interpretation
+revisions `"1"` and `"2"` for R3 branch facts; unknown revisions remain opaque
+and produce an unconfirmed warning (ADR-0015). Expanded documents continue
+to use the existing explicit `graph_map`: map the desired document-local
+Graph to the execution Graph, without flattening child Nodes or inferring
+runtime identity from `subgraphId`. Parent Node correlation works at positive
+depth; recursive child rendering and runtime child-call attribution remain
+unimplemented. The producer is pinned to `agent-topology-langgraph==0.1.0b4`
+in the dev group only, for real depth-0/1/2 consumer regressions. See the
+[beta.4 adoption record](docs/topology-beta4.md) for evidence and remaining limits.
 
 ## Catalog validation
 

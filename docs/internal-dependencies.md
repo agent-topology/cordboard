@@ -6,6 +6,17 @@ inspected source. Release information comes from checked-in release records and
 local tags; registries and remote branch tips were not re-queried. No dependency
 pins, upstream source, services, or external business state were changed.
 
+## 2026-09-17 addendum — beta.4 consumer adoption
+
+The [adoption record](topology-beta4.md) supersedes the revision-1-only
+limitation below: Cordboard now consumes branch facts from revisions 1 and 2
+and replays actual published producer output at depths 0/1/2. The existing
+runtime spec pin was already beta.4; the producer is now a dev-only exact pin.
+Upstream #163 and #164 are closed through documented compatibility and
+version-evaluation policies, separately from beta.4's unchanged LangGraph
+support range. See the [current upstream requirements](decisions/cordboard-upstream-requirements.md).
+No other dependency or entity integration status was requalified.
+
 ## 2026-09-16 addendum — beta.4 published, Cordboard pin bumped
 
 `agent-topology-spec` 0.1.0b4 is now published on PyPI as

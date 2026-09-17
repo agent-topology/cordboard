@@ -29,10 +29,11 @@ WELL_KNOWN_PATH = "/.well-known/agent-topology.manifest.json"
 SNAPSHOTS_DIRNAME = ".cordboard"
 SNAPSHOTS_FILENAME = "topology-snapshots.json"
 
-# The agent-topology x-topology-interpretation revision this reader
-# understands (AT-2/AT-3, experimental). A missing or different revision is
-# opaque, not an error: R3 falls back to "cannot confirm".
-RECOGNIZED_INTERPRETATION_VERSION = "1"
+# The agent-topology x-topology-interpretation revisions this reader
+# understands (AT-2/AT-3, experimental). Revision 2 preserves revision 1's
+# branch contract and adds materialized-child facts. A missing or different
+# revision is opaque, not an error: R3 falls back to "cannot confirm".
+RECOGNIZED_INTERPRETATION_VERSIONS = ("1", "2")
 
 ABSENT = "absent"
 UNREACHABLE = "unreachable"
@@ -127,10 +128,10 @@ class ParallelInterruptWarning:
 
 
 def _branch_interpretation(graph: dict[str, Any]) -> dict[str, str]:
-    """nodeId -> known branch value, only for the recognized interpretation
-    revision. Any other revision, or a malformed extension, is opaque."""
+    """nodeId -> known branch value for recognized interpretation revisions.
+    Any other revision, or a malformed extension, is opaque."""
     extension = graph.get("x-topology-interpretation")
-    if not isinstance(extension, dict) or extension.get("version") != RECOGNIZED_INTERPRETATION_VERSION:
+    if not isinstance(extension, dict) or extension.get("version") not in RECOGNIZED_INTERPRETATION_VERSIONS:
         return {}
     result: dict[str, str] = {}
     for node in extension.get("nodes") or []:
