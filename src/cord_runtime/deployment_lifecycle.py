@@ -109,6 +109,20 @@ def _default_health_check(endpoint: str, *, health_timeout: float) -> bool:
         time.sleep(_HEALTH_POLL_INTERVAL)
 
 
+_LIVENESS_PROBE_TIMEOUT = 1.0
+
+
+def _default_is_alive(endpoint: str) -> bool:
+    # One bounded, non-looping probe -- distinct from `_default_health_check`,
+    # which polls up to `health_timeout` for a *freshly launched* process to
+    # become healthy. Here the record already claims RUNNING; this only
+    # confirms that claim is still true right now (#75).
+    try:
+        return requests.get(endpoint + "/health", timeout=_LIVENESS_PROBE_TIMEOUT).status_code == 200
+    except requests.RequestException:
+        return False
+
+
 def _default_stop(alias: str, record: dict) -> None:
     pid = record.get("pid")
     if pid is not None:
@@ -117,14 +131,24 @@ def _default_stop(alias: str, record: dict) -> None:
 
 
 def ensure_started(board_dir: Path, alias: str, connection: dict, *, now: float,
-                    launch=None, health_check=None, health_timeout: float = 30.0) -> dict:
+                    launch=None, health_check=None, health_timeout: float = 30.0, is_alive=None) -> dict:
     """Start ``alias`` if it declares a ``launch`` command and is not already
-    tracked as running; mark it active either way. Returns
+    tracked as running and reachable; mark it active either way. Returns
     ``{"status": "external"}`` for an unmanaged connection (never started or
     stopped here), ``{"status": "running", ...}`` once started (or already
     running) with the active-claim count bumped, or
     ``{"status": "start_failed", "error": ...}`` when the launch or health
     check did not succeed -- the caller must not submit a Run in that case.
+
+    A stored ``RUNNING`` record is re-verified with ``is_alive`` before it is
+    trusted: the tracked process can have crashed outside Cordboard's control
+    (killed, OOM, host restart) between one call and the next, and a stale
+    record would otherwise wedge the Deployment as unusable until an operator
+    manually edits `deployment_lifecycle.json` or waits out `idle_after` and
+    runs `cord deployment sweep` -- exactly the hidden state repair this
+    recovery loop must not require (#75). A record that fails this recheck
+    falls through to a fresh launch attempt below, the same as one that was
+    never started.
     """
     launch_command = connection.get("launch")
     if not launch_command:
@@ -134,10 +158,11 @@ def ensure_started(board_dir: Path, alias: str, connection: dict, *, now: float,
     health_check = health_check or (
         lambda endpoint: _default_health_check(endpoint, health_timeout=health_timeout)
     )
+    is_alive = is_alive or _default_is_alive
 
     data = load_lifecycle(board_dir)
     record = data.get(alias)
-    if record is not None and record["status"] == RUNNING:
+    if record is not None and record["status"] == RUNNING and is_alive(connection["endpoint"]):
         record["active_runs"] += 1
         record["last_active"] = now
         _write_atomic(lifecycle_path(board_dir), data)

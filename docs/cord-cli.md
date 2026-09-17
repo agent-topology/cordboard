@@ -229,6 +229,14 @@ Exit status follows only the required `execution` capability: 0 if
 capability's `unavailable`/`unsupported`/`not_configured` state never fails
 the command.
 
+A managed connection's `managed_lifecycle` reports `unavailable: stale`
+instead of a false `ready: running` when its tracked record still claims
+`running` but this same connection's `execution` probe just found it
+unreachable -- the tracked process crashed outside Cordboard's control (a
+kill, an OOM, a host restart). No action is needed: the next execution's
+`ensure_started` re-verifies and relaunches it, without any manual edit to
+`deployment_lifecycle.json` ([local operator recovery](local-operator-recovery.md), #75).
+
 ### `cord run <alias> <assistant> <subject> <input.json> [--context <context.json>] [--timeout <seconds>]`
 
 Invokes `assistant` (an explicit assistant id or graph id — the caller's

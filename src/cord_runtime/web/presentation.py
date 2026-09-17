@@ -331,6 +331,15 @@ STATE_CATALOG = {
             "evidence": "cord_runtime.deployment_lifecycle",
             "action": "No action needed.",
         },
+        "stale": {
+            "label": "Managed, tracked as running but unreachable",
+            "explain": "Cordboard's managed lifecycle record still says this Deployment is "
+                      "running, but its execution probe just found it unreachable -- the "
+                      "tracked process crashed outside Cordboard's control.",
+            "evidence": "cord_runtime.deployment_lifecycle + execution reachability",
+            "action": "No action needed — the next execution re-verifies and restarts it "
+                      "automatically; no state file requires manual editing.",
+        },
         "stopped": {
             "label": "Managed, stopped (idle)",
             "explain": "Cordboard stopped this Deployment after it went idle beyond its "
