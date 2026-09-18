@@ -642,8 +642,10 @@ Second, a child that a graph calls through a wrapper function can be
 materialized when the graph calls Python `declare_children`. The child is then
 selectable through the existing `graph_map`, and R3 covers its static
 interrupts. Declarations are extraction-time metadata, not runtime identity.
-Child-call attribution therefore remains unimplemented, as do recursive
-rendering and the Python-only/LangGraph 1.2.10–1.2.11 bounds. The producer is
+Child-call attribution therefore remains unimplemented, as does recursive
+rendering. LangGraph version support belongs to each graph's producer, not
+to Cordboard: Python supports 1.2.10–1.2.11 and TypeScript LangGraph.js
+supports 1.4.*. Cordboard consumes the published JSON either way. The producer is
 pinned to `agent-topology-langgraph==0.1.0b5` in the dev group only, for real
 consumer regressions. See the [beta.5 adoption record](docs/topology-beta5.md)
 for evidence and remaining limits.
@@ -800,8 +802,9 @@ The [upstream requirements](docs/decisions/cordboard-upstream-requirements.md)
 record each `agent-topology` finding against its measured `0.1.0b3` behavior,
 the 2026-09-15 candidate-source update, the 2026-09-16 publication update, and
 the 2026-09-18 beta.5 adoption. AT-1 is addressed and published in beta.4.
-beta.5's join-identity and declared-child fixes are adopted, and AT-6's
-supported range is unchanged. After ADR-0014 and ADR-0015 none of them can block a connection;
+beta.5's join-identity and declared-child fixes are adopted. AT-6 is a
+producer-side range (Python 1.2.10–1.2.11, TypeScript LangGraph.js 1.4.*),
+not a Cordboard constraint. After ADR-0014 and ADR-0015 none of them can block a connection;
 they affect viewer and warning quality only. `agent-topology-spec==0.1.0b4`
 is pinned as a direct dependency (#11) for schema validation and
 structure-hash comparison;

@@ -42,14 +42,23 @@ beta.4. Documents from graphs that never used these shapes are not affected.
   registers no campaign graph and does not serve the well-known document
   ([real entity pilot](real-entity-pilot.md)). The real-consumer claim is
   upstream's evidence, not Cordboard's.
-- **Scope of the producer fix.** Only the Python producer has
-  `declare_children`. Join escaping covers only the source segment. For
-  example, an ID containing `:` is not covered. In Python, a join whose
-  sources collide with LangGraph's own `+` channel naming still fails inside
-  LangGraph before topology extraction.
-- **Unchanged boundaries.** Python LangGraph support is still 1.2.10–1.2.11.
-  Dynamic `interrupt()` calls, approval validity and effects remain outside
-  static topology. Sentinel and branch facts remain experimental.
+- **Unchanged topology boundaries.** Dynamic `interrupt()` calls, approval
+  validity and effects remain outside static topology. Sentinel and branch
+  facts remain experimental.
+
+## Producer-side facts, not Cordboard constraints
+
+These facts describe how a graph produces its document. Cordboard consumes
+whatever valid JSON a graph publishes and does not follow or enforce them.
+
+- **LangGraph versions differ by language.** The Python producer supports
+  LangGraph 1.2.10–1.2.11. The TypeScript producer supports LangGraph.js 1.4.*.
+- **`declare_children` is Python-only in beta.5.** A TypeScript graph that
+  wraps its child call cannot declare the relationship yet.
+- **Join escaping covers only the source segment.** For example, an ID
+  containing `:` is not covered. In Python, a join whose sources collide with
+  LangGraph's own `+` channel naming still fails inside LangGraph before
+  topology extraction.
 
 ## Operator migration
 

@@ -26,7 +26,8 @@ spec pin은 그대로 두고, dev 그룹의 생산자 pin만 b4에서 b5로 올�
 | wrapper 뒤의 자식 (업스트림 #179/#185, campaign R2) | **풀림, 조건 있음.** beta.4에서는 노드 함수 안에서 `child.invoke`로 호출하는 자식이 모든 depth에서 `identity-unavailable`이었다. beta.5에서 entity가 Python `declare_children`을 호출하면 양수 depth에서 자식이 별도 `graphs[]`로 나온다. 기존 `graph_map`으로 선택할 수 있고, 자식 안의 정적 interrupt에도 R3가 적용된다. 선언은 추출 시점 메타데이터일 뿐이며 런타임 식별자가 아니다 |
 | 런타임 자식 호출 귀속·재귀 렌더링 | **여전히 미구현.** 업스트림은 선언을 런타임 호출과 대조하지 않는다. 재귀 렌더링은 원래 Cordboard 쪽 작업이었다 |
 | 실제 entity | campaign-agent#63이 여섯 호출 위치에 선언을 채택했다. 하지만 Cordboard가 연결하는 entity 중 그 그래프를 제공하는 곳은 아직 없다. Omiologic에는 campaign 그래프가 등록돼 있지 않고 well-known 문서도 없다. 실제 소비자 검증은 업스트림 근거로만 인용한다 |
-| AT-6·동적 interrupt | 변화 없음. Python LangGraph 1.2.10–1.2.11. `declare_children`은 Python에만 있다 |
+| 동적 interrupt | 변화 없음. 정적 topology 밖이다 |
+| AT-6 LangGraph 버전 | **Cordboard 제약이 아니다.** 언어마다 생산자의 지원 범위가 다르다. Python은 LangGraph 1.2.10–1.2.11, TypeScript는 LangGraph.js 1.4.*다. `declare_children`도 Python 생산자에만 있다. 둘 다 graph 쪽 생산자의 사실이며, Cordboard는 게시된 JSON을 그대로 소비한다 |
 
 ---
 
@@ -253,6 +254,11 @@ cordboard는 "그래프마다 자기 의존성"을 원칙으로 두는데(ADR-00
 
 > **2026-09-16 정정.** "지원 범위 확장 정책"은 여전히 없다 —
 > [agent-topology#164](https://github.com/agent-topology/agent-topology/issues/164)로 올렸다.
+
+> **2026-09-18 정정.** 위 "현재 1.2.10–1.2.11"은 Python 생산자의 범위다. LangGraph 버전은
+> 언어마다 다르다. Python은 1.2.10–1.2.11, TypeScript LangGraph.js는 1.4.*를 지원한다.
+> 이 범위는 graph가 고르는 생산자의 사실이지, Cordboard가 따르거나 강제할 제약이 아니다.
+> Cordboard는 생산자를 설치하지 않고 게시된 문서만 소비한다.
 
 ---
 
