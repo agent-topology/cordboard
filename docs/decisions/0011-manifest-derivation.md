@@ -365,3 +365,13 @@ spec pin을 실제로 그 버전으로 올렸다(`pyproject.toml`/`uv.lock`, 코
 이제 후보가 아니라 Cordboard가 실제로 소비하는 spec의 동작이다. `RECOGNIZED_INTERPRETATION_VERSION`이
 revision `"2"`를 인식하도록 바꾸는 것은 이 정정의 범위가 아니라 별도 결정이다 — Cordboard는
 여전히 그 revision을 불투명하게 취급한다. [근거](../internal-dependencies.md).
+
+## 정정 — revision 2 인식과 선언된 자식 (2026-09-18)
+
+위 2026-09-16 정정의 "revision `"2"`는 불투명" 문장은 2026-09-17 beta.4 채택으로 대체됐다.
+R3는 revision `"1"`과 `"2"`를 모두 인식한다([beta.4 채택 기록](../topology-beta4.md)).
+beta.5 생산자는 부모 노드 함수가 `child.invoke`로 호출하는 자식도 materialize할 수 있다.
+조건은 graph가 `declare_children`으로 그 관계를 명시하는 것이다. 이것도 결정 6의 경계 안에
+있다. 선언은 graph/entity가 소유하는 추출 시점 메타데이터이고, Cordboard는 자식 주소를
+런타임 식별자로 추론하지 않는다. 채택한 graph도 depth 0의 해시는 그대로이고, 양수 깊이의
+해시는 바뀌므로 명시적 sync 전까지 stale이다. [근거](../topology-beta5.md).

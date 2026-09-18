@@ -176,6 +176,16 @@ AT-1은 이제 "후보에서 해결"이 아니라 게시본에서 닫혔다. `RE
 [업스트림 요구사항 문서](cordboard-upstream-requirements.md)와
 [내부 의존성 점검](../internal-dependencies.md)의 같은 날짜 addendum을 따른다.
 
+**beta.4 소비자 채택 (2026-09-17)과 beta.5 생산자 수정 (2026-09-18)** — 2026-09-17 beta.4
+채택으로 R3는 revision `"1"`과 `"2"`를 모두 인식한다(`RECOGNIZED_INTERPRETATION_VERSIONS`).
+그래서 위 "`"1"`만 인식" 문장은 당시 이력이다. beta.5는 생산자만 바뀐 릴리스이고 spec pin은
+`0.1.0b4` 그대로다. 두 제한이 풀렸다. 첫째, 반복·순서만 다른 join 선언이 더는 무효 문서를
+만들지 않는다. 둘째, entity가 `declare_children`을 쓰면 wrapper 뒤의 자식도 `graph_map`으로
+선택할 수 있다. 런타임 자식 호출 귀속과 재귀 렌더링은 여전히 미구현이다. 코드 변경은 없고,
+dev 생산자 pin 갱신과 회귀 테스트만 추가했다(665 passed, 36 deselected). 새 플랫폼 결정이 아니다.
+상세는 [업스트림 요구사항 문서](cordboard-upstream-requirements.md)와
+[beta.5 채택 기록](../topology-beta5.md)을 따른다.
+
 **실측된 좋은 신호** — `agent-topology` beta.1 → beta.2에서 같은 그래프의 `structureHash`가
 동일했다(`d0b436…`). 포맷이 두 릴리스를 건너 안정적이었다는 증거다. beta.2 → beta.3에서도
 다른 예제 그래프의 해시가 같았다(`192398ec…`, 2026-09-12).

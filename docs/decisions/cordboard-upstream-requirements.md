@@ -8,7 +8,29 @@
 
 ---
 
-## 현재 상태 — beta.4 소비자 채택과 후속 정책 확인 (2026-09-17)
+## 현재 상태 — beta.5 생산자 수정 채택 (2026-09-18)
+
+beta.5는 생산자만 바뀐 릴리스다(소스
+[`dc03030`](https://github.com/agent-topology/agent-topology/commit/dc030305096444908b1ba19a3458a6d97c9cf90b)).
+`agent-topology-langgraph` 0.1.0b5만 새로 나왔고, `agent-topology-spec`은 0.1.0b4 그대로다.
+스키마·문서 포맷(`0.1`)·해시 알고리즘(`1`)도 바뀌지 않았다. 그래서 Cordboard의 런타임
+spec pin은 그대로 두고, dev 그룹의 생산자 pin만 b4에서 b5로 올렸다. `cord_runtime` 소스는
+바꾸지 않았다. 2026-09-18 확인 시점에 PyPI 아티팩트는 공개돼 있었다(2026-09-17T18:24Z).
+업스트림 문서는 "게시 완료"라고 적었지만, GitHub prerelease는 아직 draft였고 원격
+`v0.1.0-beta.5` 태그도 없었다. [채택·검증 기록](../topology-beta5.md)에 재현 명령과 남은
+경계를 적었다.
+
+| 항목 | 확인 결과와 Cordboard 반영 |
+|---|---|
+| join id 중복 (업스트림 #182) | **풀림.** beta.4에서는 같은 source 집합·target의 join을 반복하거나 순서만 바꿔 선언하면 같은 id의 join이 둘 생겼다. 검증기가 이 문서를 거부했으므로 Cordboard는 `invalid`로만 보고하고 그림을 그리지 못했다. beta.5에서는 join이 하나로 합쳐져 문서가 유효하고, 그림·대조·AND join 표시가 된다. Cordboard는 공개 `derived_join_edges`만 쓰고 join id를 파싱하지 않으므로, escape된 id에도 코드를 바꿀 필요가 없다 |
+| wrapper 뒤의 자식 (업스트림 #179/#185, campaign R2) | **풀림, 조건 있음.** beta.4에서는 노드 함수 안에서 `child.invoke`로 호출하는 자식이 모든 depth에서 `identity-unavailable`이었다. beta.5에서 entity가 Python `declare_children`을 호출하면 양수 depth에서 자식이 별도 `graphs[]`로 나온다. 기존 `graph_map`으로 선택할 수 있고, 자식 안의 정적 interrupt에도 R3가 적용된다. 선언은 추출 시점 메타데이터일 뿐이며 런타임 식별자가 아니다 |
+| 런타임 자식 호출 귀속·재귀 렌더링 | **여전히 미구현.** 업스트림은 선언을 런타임 호출과 대조하지 않는다. 재귀 렌더링은 원래 Cordboard 쪽 작업이었다 |
+| 실제 entity | campaign-agent#63이 여섯 호출 위치에 선언을 채택했다. 하지만 Cordboard가 연결하는 entity 중 그 그래프를 제공하는 곳은 아직 없다. Omiologic에는 campaign 그래프가 등록돼 있지 않고 well-known 문서도 없다. 실제 소비자 검증은 업스트림 근거로만 인용한다 |
+| AT-6·동적 interrupt | 변화 없음. Python LangGraph 1.2.10–1.2.11. `declare_children`은 Python에만 있다 |
+
+---
+
+## 이전 상태 — beta.4 소비자 채택과 후속 정책 확인 (2026-09-17)
 
 [게시 릴리스](https://github.com/agent-topology/agent-topology/releases/tag/v0.1.0-beta.4)의
 `published_at`은 2026-09-17T01:15:56Z다. 아래 9월 16일 기록은 pin 갱신 이력이며,

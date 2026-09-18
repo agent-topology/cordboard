@@ -105,6 +105,17 @@ produce unconfirmed warnings. After changing the published expansion depth,
 run `cord sync <alias>`: the changed structure hash remains stale until that
 explicit refresh. See [beta.4 adoption and verification](topology-beta4.md).
 
+## beta.5 producer output
+
+The beta.5 producer merges repeated or permuted join declarations into one
+join. Such documents were previously `invalid` and are now drawn, with one
+AND-join edge per source. A graph that calls its child through a wrapper
+function can publish that child as a separate `graphs[]` entry by calling
+`declare_children`. Select the parent or child with `cord graph-map` as above.
+The declaration does not give runtime identity, so child Steps are not
+attributed to the child graph. See
+[beta.5 adoption and verification](topology-beta5.md).
+
 ## Unmatched execution evidence
 
 A recorded Step whose `cord.node.name` is not among a correlated topology's

@@ -632,9 +632,21 @@ to use the existing explicit `graph_map`: map the desired document-local
 Graph to the execution Graph, without flattening child Nodes or inferring
 runtime identity from `subgraphId`. Parent Node correlation works at positive
 depth; recursive child rendering and runtime child-call attribution remain
-unimplemented. The producer is pinned to `agent-topology-langgraph==0.1.0b4`
-in the dev group only, for real depth-0/1/2 consumer regressions. See the
-[beta.4 adoption record](docs/topology-beta4.md) for evidence and remaining limits.
+unimplemented. See the [beta.4 adoption record](docs/topology-beta4.md).
+
+beta.5 changes only the producer. The spec pin stays `0.1.0b4`, and no
+`cord_runtime` source changed. It lifts two consumer limits. First, repeated or
+permuted join declarations previously produced schema-invalid documents, which
+Cordboard reported as `invalid`. They are now valid and drawn with one AND join.
+Second, a child that a graph calls through a wrapper function can be
+materialized when the graph calls Python `declare_children`. The child is then
+selectable through the existing `graph_map`, and R3 covers its static
+interrupts. Declarations are extraction-time metadata, not runtime identity.
+Child-call attribution therefore remains unimplemented, as do recursive
+rendering and the Python-only/LangGraph 1.2.10–1.2.11 bounds. The producer is
+pinned to `agent-topology-langgraph==0.1.0b5` in the dev group only, for real
+consumer regressions. See the [beta.5 adoption record](docs/topology-beta5.md)
+for evidence and remaining limits.
 
 ## Catalog validation
 
@@ -786,9 +798,10 @@ as executable specifications.
 
 The [upstream requirements](docs/decisions/cordboard-upstream-requirements.md)
 record each `agent-topology` finding against its measured `0.1.0b3` behavior,
-the 2026-09-15 candidate-source update, and the 2026-09-16 publication update;
-AT-1 is addressed and published in beta.4, and AT-6's supported range is
-unchanged. After ADR-0014 and ADR-0015 none of them can block a connection;
+the 2026-09-15 candidate-source update, the 2026-09-16 publication update, and
+the 2026-09-18 beta.5 adoption. AT-1 is addressed and published in beta.4.
+beta.5's join-identity and declared-child fixes are adopted, and AT-6's
+supported range is unchanged. After ADR-0014 and ADR-0015 none of them can block a connection;
 they affect viewer and warning quality only. `agent-topology-spec==0.1.0b4`
 is pinned as a direct dependency (#11) for schema validation and
 structure-hash comparison;

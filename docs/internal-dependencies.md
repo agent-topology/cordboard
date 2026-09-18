@@ -6,6 +6,19 @@ inspected source. Release information comes from checked-in release records and
 local tags; registries and remote branch tips were not re-queried. No dependency
 pins, upstream source, services, or external business state were changed.
 
+## 2026-09-18 addendum — beta.5 producer fixes adopted
+
+The [beta.5 adoption record](topology-beta5.md) moves the dev-only producer pin
+to `agent-topology-langgraph==0.1.0b5`. The runtime spec pin stays `0.1.0b4`,
+which beta.5 did not change, and no Cordboard source changed. Repeated or
+permuted join declarations now produce valid documents instead of invalid
+ones. Wrapped child calls also become selectable child graphs, but only when
+the graph calls `declare_children`. campaign-agent adopted the declaration
+upstream at commit `a1532d5e…`, which is newer than the `9112b72…` snapshot
+below. That snapshot was not re-inspected, and no entity Cordboard connects
+to serves campaign graphs yet. Runtime child-call attribution and the gaps
+listed below are unchanged.
+
 ## 2026-09-17 addendum — beta.4 consumer adoption
 
 The [adoption record](topology-beta4.md) supersedes the revision-1-only

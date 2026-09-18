@@ -4,15 +4,15 @@ requires-python = "==3.12.*"
 
 [[package]]
 name = "agent-topology-langgraph"
-version = "0.1.0b4"
+version = "0.1.0b5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-topology-spec" },
     { name = "langgraph" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f3/e6/b8936ab4cbc6e4df01f0aeb68c37c91db7c8b30bb7af97c7590a8d0a95d1/agent_topology_langgraph-0.1.0b4.tar.gz", hash = "sha256:d97b1796fa611185e0117fce87cc319b254504598b3531253e829e77c0bdaf51", size = 23980, upload-time = "2026-09-16T00:18:23.614Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/03/b06169081d904bef30b08df6f3e67b5b5148c59f3378312ff81da22aafd3/agent_topology_langgraph-0.1.0b5.tar.gz", hash = "sha256:cadb74edfe008c2182e7245cfe35fce83842104bac70d2fe74c77face9c02221", size = 30027, upload-time = "2026-09-17T18:24:14.606Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/19/6e/410a6f2dc0d260d3c96360b28848a1b70c31578ec3233d921ee73b289eb0/agent_topology_langgraph-0.1.0b4-py3-none-any.whl", hash = "sha256:57c91c26e6a244774d4960783dd90f070f477c4a100b1c61d9b6f3b9e2a00c27", size = 13269, upload-time = "2026-09-16T00:18:22.439Z" },
+    { url = "https://files.pythonhosted.org/packages/67/49/c6ceb8aa800f986596a7704cdc4c5a863488ed38e36251028dd8484093e1/agent_topology_langgraph-0.1.0b5-py3-none-any.whl", hash = "sha256:de0ac39f0938d6a73c6e30f48b7c5f09e22fb500d78ff78f90542805201112b5", size = 14485, upload-time = "2026-09-17T18:24:13.235Z" },
 ]
 
 [[package]]
@@ -356,7 +356,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "agent-topology-langgraph", specifier = "==0.1.0b4" },
+    { name = "agent-topology-langgraph", specifier = "==0.1.0b5" },
     { name = "pytest", specifier = "==9.1.1" },
 ]
 proxy = [{ name = "litellm", extras = ["proxy"], specifier = "==1.87.0" }]
