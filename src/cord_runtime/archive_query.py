@@ -13,6 +13,11 @@ from cord_runtime.execution import AttemptOutcome, StepOutcome, SEMCONV_VERSION
 
 WINDOW_NS = 56 * 86400 * 1_000_000_000
 IDENTITY = ("cord.graph.id", "cord.run.id", "cord.subject.id", "cord.subject.type")
+# Every Run root version this query still reads. A version bump only ever
+# widens this tuple (ADR-0021); it never silently drops a prior one without
+# an explicit decision (ADR-0002's #6 correction dropped 0.1.0 outright, on
+# the record, because it lacked Graph identity at all).
+SUPPORTED_RUN_VERSIONS = ("0.2.0", "0.3.0", SEMCONV_VERSION)
 
 
 class ArchiveError(ValueError):
@@ -155,6 +160,28 @@ def parent(spans, span, expected):
     return result
 
 
+def run_root(spans, step_span):
+    """Walk a Step's parent chain up to the Run span that owns it.
+
+    A Step's immediate parent is ordinarily the Run itself; a Step recorded
+    under a declared child-graph call (#86) instead nests under another
+    Step, any number of levels deep. Every hop's own identity/trace match is
+    validated separately, when that hop's turn comes up in `query_spans`'s
+    own loop over every span in the archive -- this walk only needs to find
+    the root, not re-verify a chain `query_spans` already checks span by span.
+    """
+    seen = set()
+    current = step_span
+    while role(current) != "run":
+        require(current["spanId"] not in seen, "cyclical span parentage")
+        seen.add(current["spanId"])
+        entry = spans.get(current.get("parentSpanId"))
+        require(entry is not None, "run ancestor is missing; supply complete Run trees")
+        current = entry[0]
+        require(role(current) in ("run", "step"), "invalid step parent hierarchy")
+    return current
+
+
 def query_spans(spans: dict, *, reference: int, top: int = 10) -> list[dict]:
     """Apply the archive contract to normalized, deduplicated complete trees."""
     require(type(top) is int and top > 0, "top must be a positive integer")
@@ -170,20 +197,31 @@ def query_spans(spans: dict, *, reference: int, top: int = 10) -> list[dict]:
                     "missing explicit Graph/Run/Subject identity; legacy archives require re-emission")
             if kind == "run":
                 require(not span.get("parentSpanId"), "Run must be a root span")
-                require(attrs.get("cord.semconv.version") in ("0.2.0", SEMCONV_VERSION),
+                require(attrs.get("cord.semconv.version") in SUPPORTED_RUN_VERSIONS,
                         "unsupported semantic convention version; re-emit with current instrumentation")
                 continue
             require(isinstance(attrs.get("cord.node.name"), str) and attrs["cord.node.name"].strip(),
                     "missing Node identity")
             if kind == "step":
                 require(attrs.get("cord.outcome") in tuple(x.value for x in StepOutcome), "invalid Step outcome")
-                parent(spans, span, "run")
+                parent_entry = spans.get(span.get("parentSpanId"))
+                require(parent_entry is not None, "step parent is missing; supply complete Run trees")
+                parent_kind = role(parent_entry[0])
+                require(parent_kind in ("run", "step"), "invalid step parent hierarchy")
+                parent_span = parent(spans, span, parent_kind)
+                if parent_kind == "step":
+                    # Nesting under another Step (#86) is only valid evidence
+                    # from an instrumentation version that could produce it;
+                    # a prior version's archive never had this shape, so
+                    # encountering it there is corruption, not new data.
+                    require(run_root(spans, parent_span)["attributes"].get("cord.semconv.version") == SEMCONV_VERSION,
+                            "nested Step under Step requires current cord.semconv.version")
                 continue
             require(type(attrs.get("cord.step.attempt")) is int and attrs["cord.step.attempt"] > 0,
                     "Attempt requires a positive attempt number")
             require(attrs.get("cord.outcome") in tuple(x.value for x in AttemptOutcome), "invalid Attempt outcome")
             step = parent(spans, span, "step")
-            root = parent(spans, step, "run")
+            root = run_root(spans, step)
             # Historical 0.2 records required Tier. New graphs need not use or
             # disclose models; any supplied Tier remains an opaque annotation.
             if root["attributes"].get("cord.semconv.version") == "0.2.0" or "cord.tier" in attrs:

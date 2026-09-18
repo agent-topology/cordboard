@@ -1,7 +1,7 @@
 """Run -> Step -> sibling Attempt instrumentation, without graph business logic."""
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from uuid import uuid4
 
@@ -9,7 +9,7 @@ from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.trace import NonRecordingSpan, SpanContext, Status, StatusCode, TraceFlags
 
-SEMCONV_VERSION = "0.3.0"
+SEMCONV_VERSION = "0.4.0"
 
 
 def span_id(span: trace.Span) -> str:
@@ -31,12 +31,71 @@ class AttemptOutcome(Enum):
     ESCALATED = "escalated"
 
 
+def _open_step(tracer: trace.Tracer, parent_span: trace.Span, base_attributes: dict, node: str,
+               outcome: StepOutcome, *, resumed_from: str | None, pause: tuple[type[BaseException], ...]):
+    """Shared span-opening logic for `Run.step` and `Step.child` (#86): only
+    the parent span and the base identity attributes differ between a
+    top-level Step and one nested under a declared child-graph call."""
+    if type(outcome) is not StepOutcome:
+        raise TypeError("expected StepOutcome")
+    if not node:
+        raise ValueError("node is required")
+    if resumed_from is not None and (not isinstance(resumed_from, str) or not resumed_from.strip()):
+        raise ValueError("resumed_from must be a non-empty span ID string")
+    attributes = {**base_attributes, "cord.node.name": node}
+    if resumed_from is not None:
+        attributes["cord.resumed_from"] = resumed_from
+    with tracer.start_as_current_span(
+        "step:" + node,
+        context=trace.set_span_in_context(parent_span, Context()),
+        attributes={**attributes, "cord.outcome": outcome.value},
+        record_exception=False, set_status_on_exception=False,
+    ) as span:
+        try:
+            yield Step(tracer, span, attributes, pause, base_attributes)
+        except pause:
+            # ADR-0008: interrupt() closes the Step here as awaiting_approval,
+            # not an error. Resume opens a new Step span; it never reopens
+            # this one, so the pause is never counted as this Step's duration.
+            span.set_attribute("cord.outcome", StepOutcome.AWAITING_APPROVAL.value)
+            raise
+        except BaseException:
+            span.set_attribute("cord.outcome", StepOutcome.FAILED.value)
+            span.set_status(Status(StatusCode.ERROR))
+            raise
+
+
 @dataclass(frozen=True)
 class Step:
     tracer: trace.Tracer
     span: trace.Span
     attributes: dict
     pause: tuple[type[BaseException], ...] = ()
+    # Identity attrs only (graph/run/subject), without this Step's own
+    # `cord.node.name` -- the base a nested child Step (#86) opens from,
+    # so a grandchild's own Node name never inherits an ancestor's.
+    base_attributes: dict = field(default_factory=dict)
+
+    @contextmanager
+    def child(self, node: str, outcome: StepOutcome, *,
+              resumed_from: str | None = None, pause: tuple[type[BaseException], ...] | None = None):
+        """Open a nested Step under this Step for a declared child-graph call (#86).
+
+        The parent Node here called a wrapped or directly bound child graph
+        (agent-topology beta.5 `declare_children`, or a topology `subgraphId`
+        the entity's own document already declares); this records that
+        child's own Node executions as Steps parented on this Step's span,
+        rather than as siblings under the Run. Never call this for a plain
+        retry or resume of the *same* Node -- that stays `Run.step`/
+        `resumed_from`. Requires the enclosing Run to use the current
+        `cord.semconv.version` (ADR-0021); a Run opened under a prior
+        instrumentation version cannot record this shape.
+
+        Same vocabulary and pause/resume behavior as `Run.step`; `pause`
+        defaults to this Step's own pause set when not overridden.
+        """
+        yield from _open_step(self.tracer, self.span, self.base_attributes, node, outcome,
+                               resumed_from=resumed_from, pause=self.pause if pause is None else pause)
 
     @contextmanager
     def attempt(self, number: int, tier: str | None = None,
@@ -112,33 +171,8 @@ class Run:
     @contextmanager
     def step(self, node: str, outcome: StepOutcome, *,
              resumed_from: str | None = None, pause: tuple[type[BaseException], ...] = ()):
-        if type(outcome) is not StepOutcome:
-            raise TypeError("expected StepOutcome")
-        if not node:
-            raise ValueError("node is required")
-        if resumed_from is not None and (not isinstance(resumed_from, str) or not resumed_from.strip()):
-            raise ValueError("resumed_from must be a non-empty span ID string")
-        attributes = {**self.attributes, "cord.node.name": node}
-        if resumed_from is not None:
-            attributes["cord.resumed_from"] = resumed_from
-        with self.tracer.start_as_current_span(
-            "step:" + node,
-            context=trace.set_span_in_context(self.span, Context()),
-            attributes={**attributes, "cord.outcome": outcome.value},
-            record_exception=False, set_status_on_exception=False,
-        ) as span:
-            try:
-                yield Step(self.tracer, span, attributes, pause)
-            except pause:
-                # ADR-0008: interrupt() closes the Step here as awaiting_approval,
-                # not an error. Resume opens a new Step span; it never reopens
-                # this one, so the pause is never counted as this Step's duration.
-                span.set_attribute("cord.outcome", StepOutcome.AWAITING_APPROVAL.value)
-                raise
-            except BaseException:
-                span.set_attribute("cord.outcome", StepOutcome.FAILED.value)
-                span.set_status(Status(StatusCode.ERROR))
-                raise
+        yield from _open_step(self.tracer, self.span, self.attributes, node, outcome,
+                               resumed_from=resumed_from, pause=pause)
 
 
 @contextmanager

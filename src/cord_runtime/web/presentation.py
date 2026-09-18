@@ -496,7 +496,7 @@ def _node_status(node_steps):
     return "failed" if node_steps[0]["outcome"] in ("failed", "halted") else "passed"
 
 
-def run_topology(structure, run):
+def run_topology(structure, run, subgraphs=None, path=()):
     """Overlay one Run's observed Step evidence onto its topology layout (#70).
 
     A Node with more than one Step -- a same-Node retry, or a pause whose
@@ -507,20 +507,55 @@ def run_topology(structure, run):
     Returns `None`, exactly like `layout`, when there is no current
     correlated topology to overlay onto -- absent/stale/invalid/ambiguous
     topology never receives a guessed path (ADR-0015).
+
+    A Step recorded under a declared child-graph call (#86,
+    `cord_runtime.execution.Step.child`) carries its own nested
+    `child_steps`. When that Step's Node names a `subgraphId` this same
+    document resolves (`subgraphs`, from `correlate_topology`), each such
+    occurrence gets its own attributed diagram in `diagram["child_calls"]`,
+    recursively -- one entry per (Node, occurrence), following `expansions`'
+    call-site convention, so two call sites and a same-Node retry each stay
+    a distinct entry rather than merging. With no declared reference, or one
+    this document cannot resolve, recorded `child_steps` are never guessed
+    onto a child Node: the entry's `status` says why (`undeclared` /
+    `unresolved`) and carries no diagram, and the caller renders them as
+    plain unattributed evidence instead.
     """
     diagram = layout(structure)
     if diagram is None:
         return None
+    subgraphs = subgraphs or {}
     node_ids = {node["id"] for node in structure["nodes"]}
+    subgraph_by_node = {node["id"]: node.get("subgraphId") for node in structure["nodes"]}
     by_node: dict[str, list[dict]] = {}
     for step in run.get("steps", []):
         by_node.setdefault(step["node"], []).append(step)
+    child_calls = []
     for node in diagram["nodes"]:
         node_steps = by_node.get(node["id"], [])
         node["steps"] = node_steps
         node["status"] = _node_status(node_steps)
+        address = subgraph_by_node.get(node["id"])
+        for occurrence, step in enumerate(node_steps):
+            child_steps = step.get("child_steps") or []
+            if not child_steps:
+                continue
+            key = "run-subgraph-" + "-".join(map(str, path + (node["id"], occurrence)))
+            entry = {"node": node["id"], "occurrence": occurrence, "key": key,
+                     "address": address, "status": "resolved", "diagram": None, "child_calls": []}
+            if address is None:
+                entry["status"] = "undeclared"
+            elif address not in subgraphs:
+                entry["status"] = "unresolved"
+            else:
+                nested = run_topology(subgraphs[address], {"steps": child_steps}, subgraphs,
+                                       path + (node["id"], occurrence))
+                entry["diagram"] = nested
+                entry["child_calls"] = nested["child_calls"] if nested else []
+            child_calls.append(entry)
     diagram["unmatched_steps"] = [step for name, group in by_node.items()
                                   if name not in node_ids for step in group]
+    diagram["child_calls"] = child_calls
     return diagram
 
 

@@ -384,6 +384,28 @@ CLI subcommand, HTTP route, or JSON shape was added. Local evidence: 650
 passed, 5 skipped, 36 deselected (`uv run --locked pytest -m "not collector
 and not langfuse and not aegra"`).
 
+[Attributing child-graph execution to its declared child topology](docs/decisions/0021-nested-step-child-attribution.md)
+(#86) closes the runtime half of #85's static recursive rendering: a Step may
+now nest under the parent Step that made a declared child-graph call
+(`cord_runtime.execution.Step.child`), recorded under a new Run semconv
+`0.4.0` that the archive query still reads alongside existing `0.2.0`/`0.3.0`
+records; nesting itself is only valid evidence under `0.4.0` (ADR-0021).
+`cord_runtime.viewer.build_execution_tree` carries this as each Step's own
+`child_steps`, unbounded in depth. `web.presentation.run_topology` overlays a
+Step's recorded `child_steps` onto its resolved child structure only when the
+calling Node's `subgraphId` resolves in the same current document (reusing
+`correlate_topology`/`expansions`'s existing call-site-keyed correlation, so
+two call sites of the same child and a retried child Step each stay a
+distinct, separately attributed entry); an undeclared wrapper, an unresolved
+reference, or a stale/absent topology instead renders that evidence as
+unattributed, never guessed (ADR-0015). This adds no new HTTP route or CLI
+subcommand. Local evidence:
+`tests/test_child_graph_attribution.py` replays a synthetic parent-and-child
+graph end to end (public helper → real archive contract → attributed tree)
+without a model, Docker, or real entity; the full service-free suite passed
+(685 passed, 6 skipped, 36 deselected,
+`uv run --locked pytest -q -m "not collector and not aegra and not langfuse"`).
+
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
 [docs/artifacts/cordboard.html](docs/artifacts/cordboard.html) summarizes the
@@ -563,6 +585,12 @@ Run (trace)
         └── Optional graph-internal operation span
 ```
 
+A Step may also nest under another Step (#86, [ADR-0021](docs/decisions/0021-nested-step-child-attribution.md)):
+`cord_runtime.execution.Step.child` records a declared child-graph call's own
+Node executions there, any number of levels deep, never as siblings of that
+Step's own Attempts. This shape is only valid under Run semconv `0.4.0`; a
+prior version's archive cannot produce it.
+
 Step Outcomes are `passed`, `repaired`, `failed`, `awaiting_approval`, and
 `halted`. Attempt Outcomes are `passed`, `failed`, and `escalated`.
 `escalated` belongs only to Attempts and is declared by the graph when it chooses
@@ -632,8 +660,13 @@ to use the existing explicit `graph_map`: map the desired document-local
 Graph to the execution Graph, without flattening child Nodes or inferring
 runtime identity from `subgraphId`. Parent Node correlation works at positive
 depth. The browser viewer expands the selected graph's children recursively
-from the same current document (#85, catalog `topology_subgraphs`); runtime
-child-call attribution remains unimplemented. See the [beta.4 adoption record](docs/topology-beta4.md).
+from the same current document (#85, catalog `topology_subgraphs`). Runtime
+child-call attribution is implemented (#86, ADR-0021, below): a Step may
+nest under another Step for a declared child-graph call
+(`cord_runtime.execution.Step.child`), and `web.presentation.run_topology`
+places a recorded child Step onto its resolved child structure only when
+the calling Node's `subgraphId` resolves in this same document; otherwise
+it renders as unattributed evidence. See the [beta.4 adoption record](docs/topology-beta4.md).
 
 beta.5 changes only the producer. The spec pin stays `0.1.0b4`, and no
 `cord_runtime` source changed. It lifts two consumer limits. First, repeated or
@@ -647,10 +680,14 @@ Recursive child rendering is now implemented
 ([#85](https://github.com/agent-topology/cordboard/issues/85)): when
 `graph_map` selects the parent, each Node with a resolvable `subgraphId`
 expands to its child's structure (see
-[the browser guide](docs/browser-viewer.md#materialized-child-graphs-85)). Child-call
-attribution needs a nested-Step archive contract, because Steps currently
-must be children of the Run; it is tracked in
-[#86](https://github.com/agent-topology/cordboard/issues/86). LangGraph version support belongs to each graph's producer, not
+[the browser guide](docs/browser-viewer.md#materialized-child-graphs-85)).
+Child-call attribution ([#86](https://github.com/agent-topology/cordboard/issues/86),
+[ADR-0021](docs/decisions/0021-nested-step-child-attribution.md)) closes the
+remaining gap: a nested-Step archive contract (Run semconv `0.4.0`, with
+`0.2.0`/`0.3.0` still readable) lets a Step nest under the parent Step that
+made a declared child-graph call, and the browser Run page overlays that
+evidence onto the resolved child structure rather than showing structure
+only. LangGraph version support belongs to each graph's producer, not
 to Cordboard: Python supports 1.2.10–1.2.11 and TypeScript LangGraph.js
 supports 1.4.*. Cordboard consumes the published JSON either way. The producer is
 pinned to `agent-topology-langgraph==0.1.0b5` in the dev group only, for real
@@ -705,7 +742,9 @@ routing rules. The optional LiteLLM example lives in `examples/model_proxy`;
 its `fast`/`deep` policy is not a platform contract.
 
 Run semconv `0.3.0` allows Attempts without `cord.tier` or any `gen_ai.*` data.
-The archive query also reads existing `0.2.0` records under their original Tier
+New Runs now use `0.4.0` (#86, ADR-0021), which additionally allows a Step to
+nest under another Step for a declared child-graph call; it changes nothing
+about Tier. The archive query also reads existing `0.2.0` records under their original Tier
 requirement. It counts graph-declared escalations without knowing model identity,
 Tier ordering, or the number of models the graph uses.
 

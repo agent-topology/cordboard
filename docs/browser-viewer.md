@@ -139,12 +139,26 @@ reports `invalid` and draws nothing; the marker is a defensive path. A
 reference back to an address already open above the call site is marked
 `cyclic` and not expanded again.
 
-The Run page keeps its overlay on the selected graph only. `run_topology` is
-unchanged, and a Step whose Node exists only in a child stays in
-`unmatched_steps`. The Run page lists the same child graphs as structure only,
-with no Step status. Attribution to child Nodes (#86) should build on
-`topology_subgraphs` and the parent Node's `subgraphId`, without changing
-this shape.
+Runtime attribution to child Nodes is implemented (#86,
+[ADR-0021](decisions/0021-nested-step-child-attribution.md)): a Step whose
+Node exists only in a child still stays in `unmatched_steps` when the *Run's
+own top-level* Steps don't match this graph's structure at all, but a
+declared child-graph call is a different case. `cord_runtime.execution.
+Step.child` records that call's own Node executions as nested `child_steps`
+on the calling Step; `run_topology(structure, run, subgraphs)` now takes
+`graph.topology_subgraphs` as a third argument and, per (Node, Step
+occurrence) call site, resolves the calling Node's `subgraphId` in
+`subgraphs` exactly the way `expansions` already does. A resolved call site
+gets its own attributed diagram, recursively, in `diagram["child_calls"]`
+(one entry per call site so two calls to the same child, or a same-Node
+retry, never merge); an undeclared wrapper or an address this document
+cannot resolve instead carries no diagram and a `status` of `undeclared` or
+`unresolved`, rendered as unattributed evidence, never guessed onto a Node.
+The Run page's former structure-only "Child graphs" listing is now this
+attributed rendering; the Graph page's own structure-only listing (no Run in
+scope) is unchanged. The plain-text "Run / Step / Attempt tree" also renders
+each Step's `child_steps` recursively, independent of whether any topology is
+available to correlate against.
 
 ## First-run orientation (#69)
 
@@ -324,7 +338,13 @@ preserving a paused Node's own Step outcome, preserving repeated same-Node
 Step executions instead of collapsing them, surfacing an unmatched Step's
 Node without guessing, the Run page's non-color text-alternative rendering
 for each state, an uncorrelated topology never hiding the Run's timeline/tree,
-and exact JSON parity with the unchanged `run` model.
+and exact JSON parity with the unchanged `run` model. It also covers (#86) a
+recorded child Step attributed onto its resolved child Node, two call sites
+of the same child staying separately attributed, and an undeclared or
+unresolved call site rendering as unattributed evidence rather than a guessed
+placement; `tests/test_child_graph_attribution.py` replays a synthetic
+parent-and-child graph through the real public helper and archive contract
+end to end.
 The browser test writes desktop/narrow screenshots (including the `/` index
 itself) to pytest's temporary folder and asserts the orientation heading and
 a named scenario link are present and keyboard-reachable at both widths, and

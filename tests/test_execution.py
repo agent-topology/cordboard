@@ -182,3 +182,82 @@ def test_run_rejects_negative_cascade_depth(traced):
     with pytest.raises(ValueError, match="cascade_depth"):
         with run(tracer, "urn:test:18", "fixture", graph_id="graph-b", cascade_depth=-1):
             pass
+
+
+# --- declared child-graph call attribution (ADR-0021, #86) ------------------
+
+def test_step_child_nests_under_the_parent_step_not_the_run(traced):
+    tracer, captured = traced
+    with run(tracer, "urn:test:86", "fixture", graph_id="parent-graph") as execution:
+        with execution.step("call-child", StepOutcome.PASSED) as parent_step:
+            with parent_step.child("left", StepOutcome.PASSED):
+                pass
+
+    parent_span, = named(captured, "step:call-child")
+    child_span, = named(captured, "step:left")
+    run_span, = named(captured, "run")
+    assert child_span.parent.span_id == parent_span.context.span_id
+    assert parent_span.parent.span_id == run_span.context.span_id
+    assert child_span.context.trace_id == run_span.context.trace_id
+
+
+def test_step_child_shares_run_identity_but_carries_its_own_node_name(traced):
+    tracer, captured = traced
+    with run(tracer, "urn:test:86", "fixture", graph_id="parent-graph") as execution:
+        with execution.step("call-child", StepOutcome.PASSED) as parent_step:
+            with parent_step.child("left", StepOutcome.PASSED):
+                pass
+
+    parent_span, = named(captured, "step:call-child")
+    child_span, = named(captured, "step:left")
+    for key in ("cord.graph.id", "cord.run.id", "cord.subject.id", "cord.subject.type"):
+        assert child_span.attributes[key] == parent_span.attributes[key]
+    assert child_span.attributes["cord.node.name"] == "left"
+    assert parent_span.attributes["cord.node.name"] == "call-child"
+
+
+def test_step_child_keeps_two_call_sites_and_a_grandchild_distinct(traced):
+    tracer, captured = traced
+    with run(tracer, "urn:test:86", "fixture", graph_id="parent-graph") as execution:
+        with execution.step("call-left", StepOutcome.PASSED) as left:
+            with left.child("a", StepOutcome.PASSED) as a:
+                with a.child("leaf", StepOutcome.PASSED):
+                    pass
+        with execution.step("call-right", StepOutcome.PASSED) as right:
+            with right.child("a", StepOutcome.PASSED):
+                pass
+
+    left_parent, = named(captured, "step:call-left")
+    right_parent, = named(captured, "step:call-right")
+    a_spans = named(captured, "step:a")
+    assert len(a_spans) == 2
+    left_a = next(s for s in a_spans if s.parent.span_id == left_parent.context.span_id)
+    right_a = next(s for s in a_spans if s.parent.span_id == right_parent.context.span_id)
+    assert left_a.context.span_id != right_a.context.span_id
+    leaf, = named(captured, "step:leaf")
+    assert leaf.parent.span_id == left_a.context.span_id
+
+
+def test_step_child_defaults_pause_to_the_parent_steps_own_pause_set(traced):
+    tracer, captured = traced
+    with run(tracer, "urn:test:86", "fixture", graph_id="parent-graph") as execution:
+        with pytest.raises(Paused):
+            with execution.step("call-child", StepOutcome.PASSED, pause=(Paused,)) as parent_step:
+                with parent_step.child("left", StepOutcome.PASSED):
+                    raise Paused("nested pause")
+
+    child_span, = named(captured, "step:left")
+    assert child_span.attributes["cord.outcome"] == StepOutcome.AWAITING_APPROVAL.value
+    assert child_span.status.status_code is not StatusCode.ERROR
+
+
+def test_step_child_rejects_the_same_shapes_as_run_step(traced):
+    tracer, _captured = traced
+    with run(tracer, "urn:test:86", "fixture", graph_id="parent-graph") as execution:
+        with execution.step("call-child", StepOutcome.PASSED) as parent_step:
+            with pytest.raises(TypeError):
+                with parent_step.child("left", AttemptOutcome.PASSED):
+                    pass
+            with pytest.raises(ValueError, match="node"):
+                with parent_step.child("", StepOutcome.PASSED):
+                    pass

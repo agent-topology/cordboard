@@ -32,14 +32,17 @@ beta.4. Documents from graphs that never used these shapes are not affected.
   [#85](https://github.com/agent-topology/cordboard/issues/85)).** The viewer
   still shows one selected graph per mapping. Following `subgraphId` within
   the current document needs nothing more from upstream.
-- **Child-call attribution (Cordboard work,
-  [#86](https://github.com/agent-topology/cordboard/issues/86)).** The archive
-  contract requires every Step's parent to be the Run, so a child execution has
-  no valid recorded shape. The attribution will come from Cordboard's own
-  recorded parent-Step parentage, combined with the parent Node's `subgraphId`.
-  It will not come from upstream runtime identity: `declare_children` is
-  extraction-time metadata, and checking that a declaration is correct remains
-  the entity's responsibility.
+- **Child-call attribution (Cordboard work, closed,
+  [#86](https://github.com/agent-topology/cordboard/issues/86),
+  [ADR-0021](decisions/0021-nested-step-child-attribution.md)).** The archive
+  contract now also allows a Step to nest under the parent Step that made a
+  declared child-graph call (`cord_runtime.execution.Step.child`), under a new
+  Run semconv `0.4.0`; `0.2.0`/`0.3.0` archives are read unchanged and cannot
+  produce this shape. Attribution comes entirely from Cordboard's own recorded
+  parent-Step parentage, combined with the parent Node's `subgraphId` in this
+  same document (`web.presentation.run_topology`) -- never from upstream
+  runtime identity: `declare_children` stays extraction-time metadata, and
+  checking that a declaration is correct remains the entity's responsibility.
 - **Real entity coverage.** campaign-agent adopted `declare_children` at all six
   wrapped call sites
   ([campaign-agent#63](https://github.com/milocosmopolitan/campaign-agent/pull/63)).

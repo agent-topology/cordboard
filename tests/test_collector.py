@@ -20,7 +20,7 @@ import requests
 from cord_runtime.archive_check import check
 from cord_runtime.archive_health import HealthStatus, archive_health
 from cord_runtime.collector_health import REACHABLE, UNAVAILABLE, check_collector_health, wait_for_collector_recovery
-from cord_runtime.execution import AttemptOutcome, StepOutcome, run
+from cord_runtime.execution import SEMCONV_VERSION, AttemptOutcome, StepOutcome, run
 from cord_runtime.telemetry import UNREACHABLE as EXPORT_UNREACHABLE
 from cord_runtime.telemetry import RedactingOTLPExporter, redact_request
 from conftest import CREDENTIAL, PRIVATE_KEY, ROOT
@@ -136,7 +136,7 @@ def test_actual_sdk_export_and_whole_archive(tmp_path, cli):
     assert step["parentSpanId"] == root["spanId"]
     assert all(s["parentSpanId"] == step["spanId"] for s in attempts)
     assert len({s["traceId"] for s in [root, step, *attempts]}) == 1
-    assert attributes(root)["cord.semconv.version"] == "0.3.0"
+    assert attributes(root)["cord.semconv.version"] == SEMCONV_VERSION
     assert [(attributes(s)["cord.tier"],attributes(s)["cord.outcome"]) for s in attempts] == [("fast","failed"),("fast","escalated"),("deep","passed")]
     assert all(attributes(s)["cord.run.id"] == attributes(root)["cord.run.id"] for s in [step, *attempts])
     assert all(attributes(s)["cord.subject.id"] == "urn:test:5" for s in [root, step, *attempts])

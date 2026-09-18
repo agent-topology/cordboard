@@ -8,9 +8,15 @@ import sys
 import pytest
 
 from cord_runtime.archive_query import ArchiveError, query, reference_ns
+from cord_runtime.execution import SEMCONV_VERSION
 
 FIXTURES = Path(__file__).parent / 'fixtures/escalations'
 REFERENCE = reference_ns('2026-09-12T00:00:00Z')
+# run-1 (graph "alpha") in window.otlp.jsonl: run 0000000000000001, its Step
+# "draft" 0000000000000002, Subject urn:test:6, trace 00..01.
+RUN_1_TRACE_ID = '00000000000000000000000000000001'
+RUN_1_RUN_SPAN_ID = '0000000000000001'
+RUN_1_STEP_SPAN_ID = '0000000000000002'
 
 
 def test_fixed_window_and_top_order():
@@ -144,3 +150,90 @@ def test_optional_tier_still_validated_when_present(tmp_path, tier):
         change_attr(spans[0], 'cord.tier', tier)
     with pytest.raises(ArchiveError, match='Attempt Tier'):
         query([write_mutation(tmp_path, mutate)], reference=REFERENCE)
+
+
+# --- nested Step under a declared child-graph call (ADR-0021, #86) ---------
+
+def _add_step(spans, *, span_id, parent_id, node, graph_id='alpha', run_id='run-1',
+              subject_type='fixture', subject_id='urn:test:6', outcome='passed',
+              start=1784332799999999998, end=1784332800000000003, resumed_from=None):
+    attrs = [
+        {'key': 'cord.graph.id', 'value': {'stringValue': graph_id}},
+        {'key': 'cord.run.id', 'value': {'stringValue': run_id}},
+        {'key': 'cord.subject.id', 'value': {'stringValue': subject_id}},
+        {'key': 'cord.subject.type', 'value': {'stringValue': subject_type}},
+        {'key': 'cord.node.name', 'value': {'stringValue': node}},
+        {'key': 'cord.outcome', 'value': {'stringValue': outcome}},
+    ]
+    if resumed_from is not None:
+        attrs.append({'key': 'cord.resumed_from', 'value': {'stringValue': resumed_from}})
+    spans.append({'traceId': RUN_1_TRACE_ID, 'spanId': span_id, 'parentSpanId': parent_id,
+                  'name': f'step:{node}', 'startTimeUnixNano': str(start), 'endTimeUnixNano': str(end),
+                  'attributes': attrs})
+
+
+def _bump_run_1_to_current_semconv(spans):
+    run_span = next(s for s in spans if s['spanId'] == RUN_1_RUN_SPAN_ID)
+    change_attr(run_span, 'cord.semconv.version', SEMCONV_VERSION)
+
+
+def test_nested_step_under_step_is_rejected_on_a_prior_semconv_version(tmp_path):
+    # window.otlp.jsonl's run-1 predates #86 (cord.semconv.version 0.2.0):
+    # a Step nested under a Step there is corruption, never new evidence.
+    def mutate(spans):
+        _add_step(spans, span_id='00000000000000f0', parent_id=RUN_1_STEP_SPAN_ID, node='child-a')
+    path = write_mutation(tmp_path, mutate)
+    with pytest.raises(ArchiveError, match='nested Step under Step requires current'):
+        query([path], reference=REFERENCE)
+
+
+def test_nested_step_under_step_is_accepted_under_current_semconv_version(tmp_path):
+    def mutate(spans):
+        _bump_run_1_to_current_semconv(spans)
+        _add_step(spans, span_id='00000000000000f0', parent_id=RUN_1_STEP_SPAN_ID, node='child-a')
+    path = write_mutation(tmp_path, mutate)
+    query([path], reference=REFERENCE)  # does not raise
+
+
+def test_nested_attempt_under_a_child_step_still_counts_escalation_by_its_own_node(tmp_path):
+    def mutate(spans):
+        _bump_run_1_to_current_semconv(spans)
+        _add_step(spans, span_id='00000000000000f0', parent_id=RUN_1_STEP_SPAN_ID, node='child-a')
+        spans.append({'traceId': RUN_1_TRACE_ID, 'spanId': '00000000000000f1', 'parentSpanId': '00000000000000f0',
+                      'name': 'attempt', 'startTimeUnixNano': '1784332800000000000',
+                      'endTimeUnixNano': '1784332800000000001',
+                      'attributes': [
+                          {'key': 'cord.graph.id', 'value': {'stringValue': 'alpha'}},
+                          {'key': 'cord.run.id', 'value': {'stringValue': 'run-1'}},
+                          {'key': 'cord.subject.id', 'value': {'stringValue': 'urn:test:6'}},
+                          {'key': 'cord.subject.type', 'value': {'stringValue': 'fixture'}},
+                          {'key': 'cord.node.name', 'value': {'stringValue': 'child-a'}},
+                          {'key': 'cord.outcome', 'value': {'stringValue': 'escalated'}},
+                          {'key': 'cord.step.attempt', 'value': {'intValue': 1}},
+                      ]})
+    path = write_mutation(tmp_path, mutate)
+    baseline = query([FIXTURES / 'window.otlp.jsonl'], reference=REFERENCE)
+    rows = query([path], reference=REFERENCE)
+    assert {'graph': 'alpha', 'node': 'child-a', 'count': 1} in rows
+    # The pre-existing, unrelated rows are unaffected by the added evidence.
+    assert all(row in rows for row in baseline if row['node'] != 'child-a')
+
+
+def test_nested_step_still_requires_matching_identity(tmp_path):
+    def mutate(spans):
+        _bump_run_1_to_current_semconv(spans)
+        _add_step(spans, span_id='00000000000000f0', parent_id=RUN_1_STEP_SPAN_ID,
+                  node='child-a', graph_id='other-graph')
+    path = write_mutation(tmp_path, mutate)
+    with pytest.raises(ArchiveError, match='identity mismatch'):
+        query([path], reference=REFERENCE)
+
+
+def test_nested_step_parented_on_an_attempt_is_an_invalid_hierarchy(tmp_path):
+    def mutate(spans):
+        _bump_run_1_to_current_semconv(spans)
+        # 0000000000000003 is one of run-1's own Attempt spans.
+        _add_step(spans, span_id='00000000000000f0', parent_id='0000000000000003', node='child-a')
+    path = write_mutation(tmp_path, mutate)
+    with pytest.raises(ArchiveError, match='invalid step parent hierarchy'):
+        query([path], reference=REFERENCE)
