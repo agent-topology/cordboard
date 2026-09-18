@@ -34,6 +34,32 @@
 | **0019** | **브라우저 실행 제출/승인 controls — 세션·CSRF 경계, entity 권한 포트, POST 라우트, 중복 제출 방지 확정** | **Accepted** | **[0019-web-execution-and-approval-controls.md](0019-web-execution-and-approval-controls.md)** |
 | **0020** | **플레이그라운드 아티팩트, 소유권, 런치 계약** | **Accepted** | **[0020-playground-launch-contract.md](0020-playground-launch-contract.md)** |
 | **0021** | **자식 그래프 실행은 Step 아래 중첩 Step으로 기록한다 — semconv 0.4.0** | **Accepted** | **[0021-nested-step-child-attribution.md](0021-nested-step-child-attribution.md)** |
+| **0022** | **LangGraph 콜백 seam으로 Run/Step을 기록한다 — 그래프 코드 변경 없이, 별도 배포로** | **Accepted** | **[0022-langgraph-callback-producer.md](0022-langgraph-callback-producer.md)** |
+
+---
+
+## LangGraph 콜백 producer 통합, 별도 배포 (2026-09-18)
+
+**0022 · Accepted · [LangGraph 콜백 producer](0022-langgraph-callback-producer.md)**
+
+[#89](https://github.com/agent-topology/cordboard/issues/89)가 요구한 결정이다.
+`agent-workflow-core`의 core observer(#52가 이미 기각)도, 그래프 코드가
+`cord_runtime`을 직접 호출하는 #28의 patternwork도 쓰지 않는다 — LangGraph의
+다른 공개 seam인 `BaseCallbackHandler`를 새 별도 배포
+`cord-langgraph-callbacks/`(`cord-runtime`을 의존하지 않음, 범위 지정
+`opentelemetry-api`/`langchain-core`뿐)로 감싼다. `graph:step:N` 콜백 태그와
+`langgraph_checkpoint_ns` 중첩만으로 그래프 코드를 전혀 건드리지 않고
+Run/Step 트리를 재구성하고, `GraphInterrupt`를 `awaiting_approval`로
+닫는다. 이슈 문구의 "`config["configurable"]["cord_subject"]`에서 읽는다"는
+서술은 실제 설치된 `langchain-core==1.6.3` 소스로 검증한 뒤 정정했다 —
+일반 콜백 핸들러는 `configurable`을 받지 못하므로, subject/graph_id는
+핸들러 생성자 인자다. 재개 연결(`cord.resumed_from`)은 그래프도 콜백도
+혼자 할 수 없어 엔티티가 `RunContinuation`/Step span id를 호출 경계 너머로
+직접 저장·전달해야 한다는 것을 실제 두 번의 `graph.invoke` 재현으로
+검증했다(`tests/test_langgraph_callbacks.py`). 격리 venv에서
+`redact-secret==0.1.0b4`/`opentelemetry-sdk==1.44.0`과 충돌 없이 설치됨을
+확인했다. 자세한 근거와 기각된 대안은 ADR-0022, 실행 증거와 엔티티 wiring
+가이드는 [`docs/langgraph-callbacks.md`](../langgraph-callbacks.md).
 
 ---
 

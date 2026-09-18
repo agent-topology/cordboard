@@ -406,6 +406,45 @@ without a model, Docker, or real entity; the full service-free suite passed
 (685 passed, 6 skipped, 36 deselected,
 `uv run --locked pytest -q -m "not collector and not aegra and not langfuse"`).
 
+[Recording Run/Step spans from LangGraph callbacks](docs/langgraph-callbacks.md)
+(#89, [ADR-0022](docs/decisions/0022-langgraph-callback-producer.md)) adds a
+second, callback-based producer alongside #28's graph-code-instrumented one:
+a new, separate distribution `cord-langgraph-callbacks/` (not a `cord-runtime`
+extra -- `cord-runtime` pins `redact-secret==0.1.0b1`/`opentelemetry-sdk==1.39.1`
+exactly, which an entity that has already resolved `redact-secret==0.1.0b4`
+cannot co-install) whose `CordCallbackHandler` maps LangGraph's own
+`graph:step:N`-tagged callback events and `langgraph_checkpoint_ns` nesting to
+Run/Step spans (no Attempt layer; a callback cannot see model-retry
+granularity) with zero change to the graph's own code. `GraphInterrupt` closes
+a Step as `awaiting_approval` with a non-error status, matching ADR-0008.
+Verifying the actual installed `langchain-core==1.6.3` source (not the issue's
+draft wording) found that a plain `BaseCallbackHandler` never receives
+`config["configurable"]` through its `metadata` argument, so Subject/Graph
+identity are constructor arguments the entity already knows, not something
+read out of callback events; ADR-0022 records this correction. Resume linkage
+(`cord.resumed_from`) is verified, not merely documented as unreachable: an
+entity that persists the handler's exposed `RunContinuation` and the
+interrupted Step's span id across its own call boundary (never through the
+graph's checkpointed state) supplies both back to a fresh handler on the
+resuming invocation, reopening the same trace without a second Run root span,
+exactly as ADR-0008's existing path does. `tests/test_langgraph_callbacks.py`
+(7 tests) exercises this against two zero-`cord_runtime`-import fixture
+graphs (`examples/callback_child_graph.py`, `examples/callback_interrupt_graph.py`),
+including passing the recorded spans through the real in-process
+`redact_secret` binding (ADR-0006) and the unmodified archive contract, and
+overlaying a recorded nested Step under its resolved child Node through the
+existing, unchanged `web.presentation.run_topology` (ADR-0021) against a real
+`agent-topology.langgraph.describe()` document shaped like omiologic's
+`channel_concept` (depth 1). A wheel built from the new package installed
+cleanly alongside `redact-secret==0.1.0b4`/`opentelemetry-sdk==1.44.0` in an
+isolated venv (`uv pip check`: all compatible), with no `TracerProvider`
+construction in its source. Local evidence: 692 passed, 6 skipped, 36
+deselected (`uv run --locked pytest -q -m "not collector and not aegra and
+not langfuse"`), up from the prior 685/685 baseline (#86). No
+`cordboard-testbed` browser-acceptance run was executed for this change; the
+entity wiring itself is tracked separately
+([omiologic-aegra#67](https://github.com/milocosmopolitan/omiologic-aegra)).
+
 [Accepted ADRs](docs/decisions/DECISIONS.md) record decisions and their rationale.
 Explicit corrections within an ADR take precedence over its older examples.
 [docs/artifacts/cordboard.html](docs/artifacts/cordboard.html) summarizes the
