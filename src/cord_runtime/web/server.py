@@ -26,6 +26,7 @@ from .presentation import (
     describe,
     duration,
     execute_url,
+    expansions,
     graph_url,
     layout,
     matches,
@@ -39,7 +40,7 @@ ROOT = files("cord_runtime.web")
 ENV = Environment(loader=FileSystemLoader(str(ROOT / "templates")), autoescape=select_autoescape())
 ENV.globals.update(graph_url=graph_url, run_url=run_url, execute_url=execute_url, approval_url=approval_url,
                    topology_labels=TOPOLOGY_LABELS, node_status_labels=NODE_STATUS_LABELS,
-                   layout=layout, run_topology=run_topology, timeline=timeline,
+                   layout=layout, run_topology=run_topology, timeline=timeline, expansions=expansions,
                    scenario_summary=scenario_summary, describe=describe)
 ENV.filters["duration"] = duration
 ENV.filters["tojson"] = lambda value, indent=None: json.dumps(value, indent=indent)

@@ -1,0 +1,49 @@
+{# Published topology diagrams and their materialized child graphs (#85).
+   Child structure comes only from the same current document's `graphs[]`,
+   reached through `subgraphId`; it is display structure and never carries
+   Step status. #}
+
+{% macro diagram(layout_, caption_id, caption, entries=[]) %}
+<svg class="topology" role="img" aria-labelledby="{{ caption_id }}" viewBox="0 0 {{ layout_.width }} {{ layout_.height }}">
+<title id="{{ caption_id }}">{{ caption }}</title>
+<defs><marker id="{{ caption_id }}-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#536b79"/></marker></defs>
+{% for edge in layout_.edges %}
+<path class="edge" d="M {{ edge.start[0] }} {{ edge.start[1]+18 }} L {{ edge.end[0] }} {{ edge.end[1]-18 }}" marker-end="url(#{{ caption_id }}-arrow)"><title>{{ edge.source }} → {{ edge.target }} · {{ edge.kind }}</title></path>
+{% endfor %}
+{% for node in layout_.nodes %}
+{% set entry = entries|selectattr('node', 'equalto', node.id)|first %}
+{% if entry %}
+<a href="#{{ entry.key }}" data-expands="{{ entry.key }}"><g data-subgraph-status="{{ entry.status }}"><rect x="{{ node.x-100 }}" y="{{ node.y-18 }}" width="200" height="36" rx="8"/>
+<text x="{{ node.x-88 }}" y="{{ node.y+5 }}" class="status-icon" aria-hidden="true">{{ '▸' if entry.status == 'resolved' else '?' }}</text>
+<text x="{{ node.x+10 }}" y="{{ node.y+5 }}" text-anchor="middle">{{ node.id[:18] }}{% if node.id|length > 18 %}…{% endif %}</text>
+<title>{{ node.id }} — {{ subgraph_phrase(entry) }}</title></g></a>
+{% else %}
+<g><rect x="{{ node.x-100 }}" y="{{ node.y-18 }}" width="200" height="36" rx="8"/><text x="{{ node.x }}" y="{{ node.y+5 }}" text-anchor="middle">{{ node.id[:22] }}{% if node.id|length > 22 %}…{% endif %}</text><title>{{ node.id }}</title></g>
+{% endif %}
+{% endfor %}
+</svg>
+{% endmacro %}
+
+{% macro subgraph_phrase(entry) %}{% if entry.status == 'resolved' %}calls child graph {{ entry.address }}{% elif entry.status == 'cyclic' %}calls child graph {{ entry.address }}, already expanded above{% else %}references child graph {{ entry.address }}, which is not in this document{% endif %}{% endmacro %}
+
+{% macro text_alternative(layout_, summary) %}
+<details><summary>{{ summary }}</summary><ul>{% for node in layout_.nodes %}<li>{{ node.id }}</li>{% endfor %}</ul>
+<ul>{% for edge in layout_.edges %}<li>{{ edge.source }} → {{ edge.target }} ({{ edge.kind }})</li>{% endfor %}</ul></details>
+{% endmacro %}
+
+{% macro child_graphs(entries) %}
+<ul class="subgraphs">
+{% for entry in entries %}
+<li>{% if entry.status == 'resolved' %}
+<details class="subgraph" id="{{ entry.key }}" data-subgraph-address="{{ entry.address }}">
+<summary>Node <strong>{{ entry.node }}</strong> → child graph <code>{{ entry.address }}</code></summary>
+{{ diagram(entry.diagram, entry.key ~ '-caption', 'Child graph ' ~ entry.address ~ ' called by Node ' ~ entry.node, entry.children) }}
+{{ text_alternative(entry.diagram, 'Child topology text alternative') }}
+{% if entry.children %}{{ child_graphs(entry.children) }}{% endif %}
+</details>
+{% else %}
+<p class="notice" id="{{ entry.key }}" data-subgraph-status="{{ entry.status }}">Node <strong>{{ entry.node }}</strong> {{ subgraph_phrase(entry) }}; {% if entry.status == 'cyclic' %}it is not expanded again.{% else %}no child structure is shown.{% endif %}</p>
+{% endif %}</li>
+{% endfor %}
+</ul>
+{% endmacro %}

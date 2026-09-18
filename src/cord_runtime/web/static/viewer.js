@@ -44,6 +44,11 @@ window.addEventListener('load', () => {
     });
     source.onerror = () => {alert.textContent = "Live stream disconnected — polling for the latest observation.";};
   }
+  // A topology Node that calls a child graph opens that child's disclosure (#85).
+  document.addEventListener("click", event => {
+    const link = event.target.closest("[data-expands]");
+    if (link) document.getElementById(link.dataset.expands)?.setAttribute("open", "");
+  });
   // Also discovers new recorded Runs and new connections. Fallback for SSE loss.
   const timer = setInterval(refresh, 3000);
   window.addEventListener("pagehide", () => {clearInterval(timer); source?.close();});

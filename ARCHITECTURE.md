@@ -631,8 +631,9 @@ and produce an unconfirmed warning (ADR-0015). Expanded documents continue
 to use the existing explicit `graph_map`: map the desired document-local
 Graph to the execution Graph, without flattening child Nodes or inferring
 runtime identity from `subgraphId`. Parent Node correlation works at positive
-depth; recursive child rendering and runtime child-call attribution remain
-unimplemented. See the [beta.4 adoption record](docs/topology-beta4.md).
+depth. The browser viewer expands the selected graph's children recursively
+from the same current document (#85, catalog `topology_subgraphs`); runtime
+child-call attribution remains unimplemented. See the [beta.4 adoption record](docs/topology-beta4.md).
 
 beta.5 changes only the producer. The spec pin stays `0.1.0b4`, and no
 `cord_runtime` source changed. It lifts two consumer limits. First, repeated or
@@ -641,9 +642,12 @@ Cordboard reported as `invalid`. They are now valid and drawn with one AND join.
 Second, a child that a graph calls through a wrapper function can be
 materialized when the graph calls Python `declare_children`. The child is then
 selectable through the existing `graph_map`, and R3 covers its static
-interrupts. Both remaining pieces are Cordboard work, not upstream limits.
-Recursive child rendering is tracked in
-[#85](https://github.com/agent-topology/cordboard/issues/85). Child-call
+interrupts. Both follow-ups were Cordboard work, not upstream limits.
+Recursive child rendering is now implemented
+([#85](https://github.com/agent-topology/cordboard/issues/85)): when
+`graph_map` selects the parent, each Node with a resolvable `subgraphId`
+expands to its child's structure (see
+[the browser guide](docs/browser-viewer.md#materialized-child-graphs-85)). Child-call
 attribution needs a nested-Step archive contract, because Steps currently
 must be children of the Run; it is tracked in
 [#86](https://github.com/agent-topology/cordboard/issues/86). LangGraph version support belongs to each graph's producer, not

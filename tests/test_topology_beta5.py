@@ -13,7 +13,7 @@ from cord_runtime.topology import (
     parallel_interrupt_warnings, refresh_snapshot,
 )
 from cord_runtime.viewer import correlate_topology
-from cord_runtime.web.presentation import layout, run_topology
+from cord_runtime.web.presentation import expansions, layout, run_topology
 from test_topology import publisher
 
 
@@ -98,6 +98,12 @@ def test_declared_wrapped_child_is_selectable_without_guessing(wrapped_graph, tm
         {"node": "call", "outcome": "passed", "awaiting_resume": False},
     ]})
     assert diagram["unmatched_steps"] == []
+    # The mapped parent expands its declared child from the same document (#85).
+    assert parent_result["subgraphs"] == {"main:call": graph_by_id(document, "main:call")["structure"]}
+    [entry] = expansions(parent_result["structure"], parent_result["subgraphs"])
+    assert (entry["node"], entry["address"], entry["status"]) == ("call", "main:call", "resolved")
+    assert [node["id"] for node in entry["diagram"]["nodes"]] == ["__end__", "__start__", "x", "y"]
+    assert entry["children"] == []
 
 
 def test_adopting_a_declaration_is_stale_until_explicit_sync(wrapped_graph, tmp_path):

@@ -116,6 +116,25 @@ The declaration does not give runtime identity, so child Steps are not
 attributed to the child graph. See
 [beta.5 adoption and verification](topology-beta5.md).
 
+## Materialized child graphs (#85)
+
+A correlated result also carries the selected graph's children. They are every
+structure the selected one references through `subgraphId`, directly or
+transitively, in the same current document. `correlate_topology` returns them
+as `subgraphs`, and the catalog exposes them as `topology_subgraphs`
+(`{document_address: structure}`). References are followed only by
+`subgraphId`; graph IDs are never split to reconstruct parentage, and the
+document is not rewritten. Mapping a child address exposes only that child's
+own descendants, never its siblings.
+
+Only the selected `structure` is correlated with recorded execution. Children
+are display structure: `node_ids`, `unmatched_node_names` and the Run overlay
+ignore them, and no Step is attributed to a child Node (#86). Whenever
+structure is withheld (absent, unreachable, invalid, stale, not checked, or a
+multi-graph document without a matching `graph_map` entry),
+`topology_subgraphs` is `{}` as well. `cord view`'s text output is unchanged;
+`--json` includes the new field.
+
 ## Unmatched execution evidence
 
 A recorded Step whose `cord.node.name` is not among a correlated topology's
@@ -226,8 +245,8 @@ than no number at all.
 
 ## Out of scope
 
-The approval inbox (#14), graph editing, and detailed subgraph expansion at
-positive depth. `cord view` reads through `check_freshness`, never
+The approval inbox (#14), graph editing, and attributing recorded Steps to
+child graph Nodes (#86). `cord view` reads through `check_freshness`, never
 `cord sync`; the explicit refresh/snapshot path remains a separate,
 still-unwired command (#11's CLI gap).
 

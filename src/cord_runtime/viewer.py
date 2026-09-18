@@ -220,6 +220,26 @@ def _resolve_multi_graph(document_graphs: list[dict], graph_id: str | None,
     return by_id[matches[0]] if len(matches) == 1 else None
 
 
+def _referenced_subgraphs(document_graphs: list[dict], structure: dict) -> dict[str, dict]:
+    """The child structures `structure` references through `subgraphId`,
+    directly or transitively, keyed by document address (#85).
+
+    References are followed only within this same document; graph IDs are
+    never split to reconstruct parentage. A dangling address is simply not a
+    key here, so the renderer can mark it unresolved instead of guessing.
+    """
+    by_id = {g["id"]: g["structure"] for g in document_graphs}
+    found: dict[str, dict] = {}
+    pending = [structure]
+    while pending:
+        for node in pending.pop()["nodes"]:
+            address = node.get("subgraphId")
+            if address in by_id and address not in found:
+                found[address] = by_id[address]
+                pending.append(by_id[address])
+    return found
+
+
 def correlate_topology(freshness: FreshnessCheck | None, graph_id: str | None = None,
                         graph_map: dict[str, str] | None = None) -> dict[str, Any]:
     """Map one Deployment endpoint's `FreshnessCheck` to viewer display facts.
@@ -238,6 +258,12 @@ def correlate_topology(freshness: FreshnessCheck | None, graph_id: str | None = 
     `graph_map`, no entry for `graph_id`, or more than one document-local
     graph mapped to it -- Node structure stays withheld exactly as for any
     other multi-graph document; the mapping is never guessed by name.
+
+    A correlated result also carries `subgraphs` (#85): every child structure
+    the selected one references through `subgraphId` in this same document,
+    directly or transitively, keyed by document address. Only the selected
+    `structure` is correlated with recorded execution; `subgraphs` is display
+    structure. Every uncorrelated result carries neither.
     """
     if freshness is None:
         return {"status": NOT_CHECKED, "node_ids": (), "warnings": (), "correlated": False}
@@ -254,10 +280,9 @@ def correlate_topology(freshness: FreshnessCheck | None, graph_id: str | None = 
     document_graphs = graphs(document)
     warnings = _document_warnings(document)
     if len(document_graphs) == 1:
-        node_ids = tuple(sorted(node["id"] for node in document_graphs[0]["structure"]["nodes"]))
-        return {"status": CURRENT, "node_ids": node_ids, "warnings": tuple(warnings), "correlated": True,
-                "structure": document_graphs[0]["structure"]}
-    resolved = _resolve_multi_graph(document_graphs, graph_id, graph_map)
+        resolved = document_graphs[0]
+    else:
+        resolved = _resolve_multi_graph(document_graphs, graph_id, graph_map)
     if resolved is None:
         warnings.append(
             "document publishes more than one graph; no explicit Deployment/Graph "
@@ -266,7 +291,8 @@ def correlate_topology(freshness: FreshnessCheck | None, graph_id: str | None = 
         return {"status": CURRENT, "node_ids": (), "warnings": tuple(warnings), "correlated": False}
     node_ids = tuple(sorted(node["id"] for node in resolved["structure"]["nodes"]))
     return {"status": CURRENT, "node_ids": node_ids, "warnings": tuple(warnings), "correlated": True,
-            "structure": resolved["structure"]}
+            "structure": resolved["structure"],
+            "subgraphs": _referenced_subgraphs(document_graphs, resolved["structure"])}
 
 
 def _subjects_view(graph_runs: list[dict]) -> list[dict]:
@@ -302,6 +328,7 @@ def _graph_view(graph_id: str, connection: dict | None, correlation: dict, graph
         "topology_status": correlation["status"],
         "topology_nodes": correlation["node_ids"],
         "topology_structure": correlation.get("structure"),
+        "topology_subgraphs": correlation.get("subgraphs", {}),
         "runs": graph_runs,
         "topology_warnings": correlation["warnings"],
         "unmatched_node_names": unmatched_node_names,
