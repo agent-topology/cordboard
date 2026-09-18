@@ -108,6 +108,44 @@ than one on the same Thread, or no approval authority configured for the
 connection, is shown as bounded explanatory text instead of a guess. The
 observation page markup itself carries no mutation form or JS handler.
 
+## Materialized child graphs (#85)
+
+A positive-depth document can publish a parent Graph and its materialized
+children in `graphs[]` (agent-topology beta.4+, including beta.5
+`declare_children`). When `graph_map` selects the parent, each parent Node
+that carries `subgraphId` is drawn as expandable (▸) and is a link. The Graph
+page lists a "Child graphs" disclosure per call site below the diagram.
+Activating the Node or its disclosure opens it. The child is laid out with the
+same `layout`, and its own expandable Nodes nest in turn. Each child diagram
+has its own text alternative. Without JavaScript the disclosures still work
+through native details/summary.
+
+The data comes only from the same current document. The catalog adds
+`topology_subgraphs`: `{document_address: structure}` for every child the
+selected `topology_structure` references through `subgraphId`, directly or
+transitively. It is `{}` whenever structure is withheld, so stale, invalid,
+absent, unreachable and unmapped multi-graph documents show no child either.
+`cord_runtime.web.presentation.expansions(structure, subgraphs)` turns it into
+one entry per call site: `node`, `address`, `status` (`resolved`,
+`unresolved` or `cyclic`), `diagram` (the child's `layout`, or `None`),
+`children`, and a per-call-site DOM `key`. Entries follow call sites, not
+addresses. Two call sites of a structurally identical child stay two
+expansions, even if they share an address.
+
+An address that is not in the document renders an explicit unresolved marker
+(dashed Node and a notice), and the rest of the diagram still renders. The
+pinned validator rejects a dangling `subgraphId`, so such a document normally
+reports `invalid` and draws nothing; the marker is a defensive path. A
+reference back to an address already open above the call site is marked
+`cyclic` and not expanded again.
+
+The Run page keeps its overlay on the selected graph only. `run_topology` is
+unchanged, and a Step whose Node exists only in a child stays in
+`unmatched_steps`. The Run page lists the same child graphs as structure only,
+with no Step status. Attribution to child Nodes (#86) should build on
+`topology_subgraphs` and the parent Node's `subgraphId`, without changing
+this shape.
+
 ## First-run orientation (#69)
 
 `GET /` states what Cordboard connects and records in one short paragraph, then

@@ -453,6 +453,39 @@ def layout(structure):
                       for edge in edges]}
 
 
+def expansions(structure, subgraphs, path=(), ancestors=()):
+    """One expandable entry per parent Node that carries `subgraphId` (#85).
+
+    Each entry lays out the referenced child with `layout` and nests that
+    child's own expansions. Entries follow call sites, not addresses, so two
+    call sites of a structurally identical child stay two entries. An address
+    absent from `subgraphs` (the same current document's `graphs[]`) is
+    `unresolved`, and an address already open above this call site is
+    `cyclic`; neither gets a diagram. `key` is a stable per-call-site DOM id.
+    Returns `[]` when there is no structure, so withheld topology never gains
+    child pictures.
+    """
+    if not structure:
+        return []
+    entries = []
+    for index, node in enumerate(structure["nodes"]):
+        address = node.get("subgraphId")
+        if address is None:
+            continue
+        entry = {"node": node["id"], "address": address, "key": "subgraph-" + "-".join(map(str, path + (index,))),
+                 "status": "resolved", "diagram": None, "children": []}
+        if address in ancestors:
+            entry["status"] = "cyclic"
+        elif address not in subgraphs:
+            entry["status"] = "unresolved"
+        else:
+            child = subgraphs[address]
+            entry["diagram"] = layout(child)
+            entry["children"] = expansions(child, subgraphs, path + (index,), ancestors + (address,))
+        entries.append(entry)
+    return entries
+
+
 def _node_status(node_steps):
     if not node_steps:
         return "not_observed"

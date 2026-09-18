@@ -6,6 +6,9 @@ main{padding:36px 42px;max-width:1280px;width:100%;min-width:0}h1{font-size:34px
 #live-status{font-size:12px;color:#446f59;margin-bottom:18px}form{display:flex;gap:12px;align-items:end;flex-wrap:wrap}form.stacked{display:block}form.stacked label{display:grid;gap:5px;margin:0 0 14px}label{display:grid;gap:5px;flex:1;min-width:0}input,button,select,textarea{font:inherit;max-width:100%;border:1px solid #96aaa2;border-radius:5px;padding:8px 10px}textarea{width:100%;min-height:110px;font-family:ui-monospace,monospace;font-size:13px}button{background:#205d51;color:white;cursor:pointer}summary{cursor:pointer;padding:6px 0}.step{border-left:2px solid #cbdcd3;margin:10px 0 10px 8px;padding:0 0 0 18px}.waiting-list{list-style:none;margin:0;padding:0}.waiting-list li{background:white;border:1px solid #d3dfda;border-radius:10px;padding:16px;margin:12px 0}
 .topology{display:block;width:100%;max-height:450px}svg rect{fill:#edf5f0;stroke:#719488}svg text{fill:#254c40;font:13px system-ui}.edge{stroke:#536b79;stroke-width:2;fill:none}
 svg text.status-icon{font-weight:700}
+g[data-subgraph-status=resolved] rect{stroke:#175e64;stroke-width:2}svg a:focus-visible rect,svg a:hover rect{fill:#dcebe5}
+g[data-subgraph-status=unresolved] rect,g[data-subgraph-status=cyclic] rect{fill:#fff0d9;stroke:#bb6c16;stroke-dasharray:4 3}
+.subgraphs{list-style:none;margin:8px 0 0;padding:0}.subgraphs .subgraphs{border-left:2px solid #cbdcd3;margin-left:8px;padding-left:18px}.subgraph .topology{max-height:360px}
 g[data-node-status=not_observed] rect{fill:#edf5f0;stroke-dasharray:4 3}
 g[data-node-status=passed] rect{fill:#e2f1e8;stroke:#357465}
 g[data-node-status=failed] rect{fill:#fbe7e2;stroke:#a5401f}

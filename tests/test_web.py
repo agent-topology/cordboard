@@ -15,6 +15,7 @@ from cord_runtime.web.observation import Observation
 from cord_runtime.web.presentation import (
     STATE_CATALOG,
     describe,
+    expansions,
     graph_url,
     layout,
     run_topology,
@@ -22,6 +23,7 @@ from cord_runtime.web.presentation import (
     timeline,
 )
 from cord_runtime.web.server import make_server, serve
+from cord_runtime.topology import NO_SNAPSHOT, VALID, FreshnessCheck, TopologyReading
 from test_viewer import _document, _run_tree, _merge, _span
 
 
@@ -539,3 +541,93 @@ def test_errors_are_legible_and_do_not_echo_payload():
         assert "Observation unavailable" in response.text
         assert "sensitive payload" not in response.text
         assert 'role="alert"' in response.text
+
+
+def _structure(*nodes):
+    """Nodes are ids or `(id, subgraphId)` pairs; one edge keeps `layout` valid."""
+    nodes = [{"id": n} if isinstance(n, str) else {"id": n[0], "subgraphId": n[1]} for n in nodes]
+    return {"nodes": nodes, "joins": [], "entryNodeIds": [nodes[0]["id"]], "exitNodeIds": [nodes[-1]["id"]],
+            "edges": [{"id": "e1", "source": nodes[0]["id"], "target": nodes[-1]["id"], "kind": "direct"}]}
+
+
+def test_expansions_mark_dangling_and_cyclic_references_and_keep_call_sites_apart():
+    leaf = _structure("work")
+    subgraphs = {"child": leaf, "loop": _structure(("again", "loop"))}
+    root = _structure("start", ("one", "child"), ("two", "child"), ("ghost", "missing"), ("spin", "loop"))
+    entries = expansions(root, subgraphs)
+    assert [(e["node"], e["address"], e["status"]) for e in entries] == [
+        ("one", "child", "resolved"), ("two", "child", "resolved"),
+        ("ghost", "missing", "unresolved"), ("spin", "loop", "resolved")]
+    one, two, ghost, spin = entries
+    # The same address at two call sites is still two separate expansions.
+    assert one["diagram"] == two["diagram"] == layout(leaf) and one["key"] != two["key"]
+    # A dangling reference gets a marker, never a guessed diagram.
+    assert ghost["diagram"] is None and ghost["children"] == []
+    [again] = spin["children"]
+    assert again["status"] == "cyclic" and again["diagram"] is None
+    assert expansions(None, subgraphs) == []
+
+
+def _child_graph_catalog():
+    """The published beta.5 depth-2 reuse graph, root mapped, one dangling call site added."""
+    from agent_topology.langgraph import describe as produce
+    from test_topology_beta4 import nested_graph
+    document = produce(nested_graph.__wrapped__(), graph_id="root", depth=2)
+    freshness = FreshnessCheck(status=NO_SNAPSHOT, reading=TopologyReading(status=VALID, document=document))
+    catalog = build_catalog({"demo": {"endpoint": "http://localhost", "graphs": ["g"], "reachable": True,
+                                      "graph_map": {"root": "g"}}},
+                            {"http://localhost": freshness}, _run_tree("g", "r", node="left"))
+    graph = catalog["graphs"][0]
+    # The pinned validator rejects a dangling `subgraphId`, so inject it past validation.
+    graph["topology_structure"] = {**graph["topology_structure"], "nodes": [
+        *graph["topology_structure"]["nodes"], {"id": "ghost", "subgraphId": "root:ghost"}]}
+    return catalog
+
+
+def test_graph_and_run_pages_render_child_graphs_without_step_status():
+    catalog = _child_graph_catalog()
+    graph = catalog["graphs"][0]
+    assert sorted(graph["topology_subgraphs"]) == ["root:left", "root:left:a", "root:left:b",
+                                                   "root:right", "root:right:a", "root:right:b"]
+    with running(StaticObservation(catalog)) as base:
+        page = requests.get(base + graph_url(graph)).text
+        for address in graph["topology_subgraphs"]:
+            assert page.count(f'data-subgraph-address="{address}"') == 1
+        assert 'data-subgraph-status="unresolved"' in page
+        assert "Node <strong>ghost</strong> references child graph root:ghost, which is not in this document" in page
+        run_page = requests.get(base + graph_url(graph) + "/runs/r").text
+        overlay, children = run_page.split("<h3>Child graphs</h3>")
+        assert 'data-node-status="passed"' in overlay and overlay.count("data-node-status=") == 5
+        assert "data-node-status=" not in children.split("<section>")[0]
+        assert 'data-subgraph-address="root:right:b"' in children
+
+
+def test_browser_expands_child_graphs_recursively(tmp_path):
+    playwright = pytest.importorskip("playwright.sync_api")
+    with running(StaticObservation(_child_graph_catalog())) as base, playwright.sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        errors = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.goto(base + "/connections/demo/graphs/g")
+        assert page.get_by_role("img", name="Published topology for g").count() == 1
+        left = page.get_by_role("img", name="Child graph root:left called by Node left")
+        assert not left.is_visible()
+        # Selecting the parent Node in the diagram opens that call site's child.
+        page.get_by_role("link", name="left — calls child graph root:left", exact=True).click()
+        playwright.expect(left).to_be_visible()
+        nested = page.get_by_role("img", name="Child graph root:left:a called by Node a")
+        assert not nested.is_visible()
+        page.get_by_role("link", name="a — calls child graph root:left:a", exact=True).click()
+        playwright.expect(nested).to_be_visible()
+        # The other call site of the same child is a separate, still-closed expansion.
+        assert not page.get_by_role("img", name="Child graph root:right called by Node right").is_visible()
+        page.locator("details[data-subgraph-address='root:right'] > summary").click()
+        playwright.expect(page.get_by_role("img", name="Child graph root:right called by Node right")).to_be_visible()
+        playwright.expect(page.get_by_text("Node ghost references child graph root:ghost")).to_be_visible()
+        page.screenshot(path=str(tmp_path / "child-graphs-desktop.png"), full_page=True)
+        page.set_viewport_size({"width": 375, "height": 667})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        page.screenshot(path=str(tmp_path / "child-graphs-narrow.png"), full_page=True)
+        assert errors == []
+        browser.close()

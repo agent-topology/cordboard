@@ -1,4 +1,5 @@
 {% import "_state.html" as state %}
+{% import "_topology.html" as topology %}
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -68,18 +69,12 @@ next to each entry.</p>
 <section aria-labelledby="topology-title"><h2 id="topology-title">Published topology</h2>
 {% set diagram = layout(graph.topology_structure) %}
 {% if diagram %}
-<svg class="topology" role="img" aria-labelledby="topology-caption" viewBox="0 0 {{ diagram.width }} {{ diagram.height }}">
-<title id="topology-caption">Published topology for {{ graph.graph_id }}</title>
-<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#536b79"/></marker></defs>
-{% for edge in diagram.edges %}
-<path class="edge" d="M {{ edge.start[0] }} {{ edge.start[1]+18 }} L {{ edge.end[0] }} {{ edge.end[1]-18 }}" marker-end="url(#arrow)"><title>{{ edge.source }} → {{ edge.target }} · {{ edge.kind }}</title></path>
-{% endfor %}
-{% for node in diagram.nodes %}
-<g><rect x="{{ node.x-100 }}" y="{{ node.y-18 }}" width="200" height="36" rx="8"/><text x="{{ node.x }}" y="{{ node.y+5 }}" text-anchor="middle">{{ node.id[:22] }}{% if node.id|length > 22 %}…{% endif %}</text><title>{{ node.id }}</title></g>
-{% endfor %}
-</svg>
-<details><summary>Topology text alternative</summary><ul>{% for node in diagram.nodes %}<li>{{ node.id }}</li>{% endfor %}</ul>
-<ul>{% for edge in diagram.edges %}<li>{{ edge.source }} → {{ edge.target }} ({{ edge.kind }})</li>{% endfor %}</ul></details>
+{% set children = expansions(graph.topology_structure, graph.topology_subgraphs) %}
+{{ topology.diagram(diagram, 'topology-caption', 'Published topology for ' ~ graph.graph_id, children) }}
+{{ topology.text_alternative(diagram, 'Topology text alternative') }}
+{% if children %}<h3>Child graphs</h3>
+<p>Nodes marked ▸ call a child graph published in this same document. Expand one to see its structure.</p>
+{{ topology.child_graphs(children) }}{% endif %}
 {% else %}<p>Topology unavailable for correlation. Execution records remain visible.</p>{% endif %}
 </section>
 <section><h2>Executions</h2>
@@ -127,6 +122,10 @@ next to each entry.</p>
 </ul>
 <ul>{% for edge in path.edges %}<li>{{ edge.source }} → {{ edge.target }} ({{ edge.kind }})</li>{% endfor %}</ul></details>
 {% for step in path.unmatched_steps %}<p class="notice">Recorded Node '{{ step.node }}' has no match in this Run's topology.</p>{% endfor %}
+{% set children = expansions(graph.topology_structure, graph.topology_subgraphs) %}
+{% if children %}<h3>Child graphs</h3>
+<p>Structure only: recorded Steps are not attributed to child graph Nodes.</p>
+{{ topology.child_graphs(children) }}{% endif %}
 {% else %}<p>Topology unavailable for correlation. Execution records remain visible.</p>{% endif %}
 </section>
 <section><h2>Execution timeline</h2><p>Bars share the recorded Run time axis. Exact boundaries are available per row.</p>
