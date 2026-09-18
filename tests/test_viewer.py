@@ -16,6 +16,7 @@ from agent_topology.spec import finalize_document
 import pytest
 
 from cord_runtime.archive_query import ArchiveError
+from cord_runtime.execution import SEMCONV_VERSION
 from cord_runtime.live_reconciliation import INGESTION_FAILED, INGESTION_PENDING, LIVE
 from cord_runtime.topology import (
     WELL_KNOWN_PATH,
@@ -300,6 +301,85 @@ def test_two_steps_resuming_the_same_span_flag_the_later_one_as_repeated():
     run = build_execution_tree(_merge(spans, first_resume, duplicate_resume))[0]
     flags = {(s["start_ns"]): s["repeated_execution"] for s in run["steps"]}
     assert flags == {1100: False, 2000: False, 3000: True}
+
+
+# --- nested Step under a declared child-graph call (ADR-0021, #86) ---------
+
+def _nested_step(graph_id, run_id, parent_step_sid, trace_id, *, node, outcome="passed",
+                  start=1200, end=1300, attempts=()):
+    """One nested Step under `parent_step_sid`, with optional Attempts, as a
+    spans dict merge-ready fragment. `attempts` is a list of outcome strings."""
+    step_sid, step_entry = _span("step", span_id=_sid(), parent_id=parent_step_sid, trace_id=trace_id,
+                                  graph_id=graph_id, run_id=run_id, node=node, outcome=outcome,
+                                  start=start, end=end)
+    fragment = {step_sid: step_entry}
+    for i, attempt_outcome in enumerate(attempts, start=1):
+        a_sid, a_entry = _span("attempt", span_id=_sid(), parent_id=step_sid, trace_id=trace_id,
+                               graph_id=graph_id, run_id=run_id, node=node, outcome=attempt_outcome,
+                               attempt=i, start=start + i, end=start + i + 1)
+        fragment[a_sid] = a_entry
+    return step_sid, fragment
+
+
+def test_execution_tree_nests_a_child_step_under_the_calling_step_not_the_run():
+    spans = _run_tree("fixture-a", "run-1", node="call-child", semconv=SEMCONV_VERSION)
+    parent_sid = next(sid for sid, (s, _) in spans.items() if s["name"] == "step:call-child")
+    trace_id = "a" * 32
+    _, child = _nested_step("fixture-a", "run-1", parent_sid, trace_id, node="left", attempts=("passed",))
+    run = build_execution_tree(_merge(spans, child))[0]
+    assert len(run["steps"]) == 1
+    parent_step = run["steps"][0]
+    assert parent_step["node"] == "call-child"
+    assert len(parent_step["child_steps"]) == 1
+    nested = parent_step["child_steps"][0]
+    assert nested["node"] == "left" and nested["outcome"] == "passed"
+    assert [a["outcome"] for a in nested["attempts"]] == ["passed"]
+
+
+def test_execution_tree_keeps_two_call_sites_of_the_same_child_node_separate():
+    trace_id = "a" * 32
+    # Build a Run with two top-level Steps, each calling the same child node.
+    run_sid, run_entry = _span("run", span_id=_sid(), parent_id=None, trace_id=trace_id,
+                               graph_id="fixture-a", run_id="run-1", semconv=SEMCONV_VERSION,
+                               start=1000, end=1000)
+    call_a_sid, call_a_entry = _span("step", span_id=_sid(), parent_id=run_sid, trace_id=trace_id,
+                                     graph_id="fixture-a", run_id="run-1", node="call-a", outcome="passed",
+                                     start=1100, end=1200)
+    call_b_sid, call_b_entry = _span("step", span_id=_sid(), parent_id=run_sid, trace_id=trace_id,
+                                     graph_id="fixture-a", run_id="run-1", node="call-b", outcome="passed",
+                                     start=1300, end=1400)
+    spans = dict([(run_sid, run_entry), (call_a_sid, call_a_entry), (call_b_sid, call_b_entry)])
+    _, child_a = _nested_step("fixture-a", "run-1", call_a_sid, trace_id, node="shared")
+    _, child_b = _nested_step("fixture-a", "run-1", call_b_sid, trace_id, node="shared")
+    run = build_execution_tree(_merge(spans, child_a, child_b))[0]
+    by_node = {s["node"]: s for s in run["steps"]}
+    assert len(by_node["call-a"]["child_steps"]) == 1
+    assert len(by_node["call-b"]["child_steps"]) == 1
+    assert by_node["call-a"]["child_steps"][0]["span_id"] != by_node["call-b"]["child_steps"][0]["span_id"]
+
+
+def test_execution_tree_supports_a_grandchild_nested_two_levels_deep():
+    spans = _run_tree("fixture-a", "run-1", node="call-child", semconv=SEMCONV_VERSION)
+    parent_sid = next(sid for sid, (s, _) in spans.items() if s["name"] == "step:call-child")
+    trace_id = "a" * 32
+    child_sid, child = _nested_step("fixture-a", "run-1", parent_sid, trace_id, node="a")
+    _, grandchild = _nested_step("fixture-a", "run-1", child_sid, trace_id, node="leaf")
+    run = build_execution_tree(_merge(spans, child, grandchild))[0]
+    nested = run["steps"][0]["child_steps"][0]
+    assert nested["node"] == "a"
+    assert nested["child_steps"][0]["node"] == "leaf"
+
+
+def test_run_end_ns_and_timeline_include_nested_child_step_evidence():
+    spans = _run_tree("fixture-a", "run-1", node="call-child", semconv=SEMCONV_VERSION)
+    parent_sid = next(sid for sid, (s, _) in spans.items() if s["name"] == "step:call-child")
+    trace_id = "a" * 32
+    _, child = _nested_step("fixture-a", "run-1", parent_sid, trace_id, node="left",
+                            start=5000, end=5100, attempts=("passed",))
+    run = build_execution_tree(_merge(spans, child))[0]
+    # The nested Step at 5000-5100 ends well after the Run span's own
+    # (earlier) endTimeUnixNano of 2000; the truthful end must reflect it.
+    assert run["end_ns"] == 5100
 
 
 def test_execution_tree_empty_run_steps_carry_resumed_from_none_by_default():

@@ -8,6 +8,7 @@ import pytest
 import requests
 
 from cord_runtime.connections import add_connection
+from cord_runtime.execution import SEMCONV_VERSION
 from cord_runtime.live_reconciliation import LiveRun
 from cord_runtime.run_continuity import record_submission
 from cord_runtime.viewer import build_catalog, build_execution_tree
@@ -24,7 +25,7 @@ from cord_runtime.web.presentation import (
 )
 from cord_runtime.web.server import make_server, serve
 from cord_runtime.topology import NO_SNAPSHOT, VALID, FreshnessCheck, TopologyReading
-from test_viewer import _document, _run_tree, _merge, _span
+from test_viewer import _document, _run_tree, _merge, _sid, _span
 
 
 class StaticObservation:
@@ -584,7 +585,7 @@ def _child_graph_catalog():
     return catalog
 
 
-def test_graph_and_run_pages_render_child_graphs_without_step_status():
+def test_graph_page_renders_child_graphs_and_run_page_has_no_attribution_when_nothing_was_recorded():
     catalog = _child_graph_catalog()
     graph = catalog["graphs"][0]
     assert sorted(graph["topology_subgraphs"]) == ["root:left", "root:left:a", "root:left:b",
@@ -596,10 +597,61 @@ def test_graph_and_run_pages_render_child_graphs_without_step_status():
         assert 'data-subgraph-status="unresolved"' in page
         assert "Node <strong>ghost</strong> references child graph root:ghost, which is not in this document" in page
         run_page = requests.get(base + graph_url(graph) + "/runs/r").text
-        overlay, children = run_page.split("<h3>Child graphs</h3>")
-        assert 'data-node-status="passed"' in overlay and overlay.count("data-node-status=") == 5
-        assert "data-node-status=" not in children.split("<section>")[0]
-        assert 'data-subgraph-address="root:right:b"' in children
+        assert run_page.count("data-node-status=") == 5
+        # This fixture's Run recorded no nested child Steps (#86) at all --
+        # nothing to attribute, and the run page never repeats the graph
+        # page's structure-only listing.
+        assert "Child graph execution" not in run_page
+        assert "data-subgraph-address=" not in run_page
+
+
+def _child_graph_catalog_with_nested_step(node="left", child_node="a"):
+    """Like `_child_graph_catalog`, but the recorded Run at `node` also made
+    a declared child-graph call recorded as a nested Step at `child_node`
+    (#86, `cord_runtime.execution.Step.child`)."""
+    from agent_topology.langgraph import describe as produce
+    from test_topology_beta4 import nested_graph
+    document = produce(nested_graph.__wrapped__(), graph_id="root", depth=2)
+    freshness = FreshnessCheck(status=NO_SNAPSHOT, reading=TopologyReading(status=VALID, document=document))
+    spans = _run_tree("g", "r", node=node, semconv=SEMCONV_VERSION)
+    parent_sid = next(sid for sid, (s, _) in spans.items() if s["name"] == f"step:{node}")
+    child_sid, child_entry = _span("step", span_id=_sid(), parent_id=parent_sid, trace_id="a" * 32,
+                                   graph_id="g", run_id="r", node=child_node, outcome="passed",
+                                   start=1150, end=1180)
+    catalog = build_catalog({"demo": {"endpoint": "http://localhost", "graphs": ["g"], "reachable": True,
+                                      "graph_map": {"root": "g"}}},
+                            {"http://localhost": freshness}, _merge(spans, {child_sid: child_entry}))
+    return catalog
+
+
+def test_run_page_attributes_a_recorded_child_step_onto_its_resolved_child_node():
+    catalog = _child_graph_catalog_with_nested_step()
+    graph = catalog["graphs"][0]
+    with running(StaticObservation(catalog)) as base:
+        run_page = requests.get(base + graph_url(graph) + "/runs/r").text
+        assert "Child graph execution" in run_page
+        assert 'data-subgraph-address="root:left"' in run_page
+        # Both the calling Node ("left") and the attributed child Node ("a")
+        # render their declared outcome status -- never left unmatched.
+        assert run_page.count('data-node-status="passed"') >= 2
+        assert "Recorded Node" not in run_page  # no unmatched-node evidence
+        assert "unattributed evidence" not in run_page
+
+
+def test_run_page_surfaces_unattributed_evidence_when_the_calling_node_has_no_subgraph_reference():
+    # "right" also resolves in this fixture topology (to "root:right");
+    # simulate an undeclared wrapper by stripping that Node's own reference.
+    catalog = _child_graph_catalog_with_nested_step(node="right", child_node="a")
+    graph = catalog["graphs"][0]
+    graph["topology_structure"] = {**graph["topology_structure"], "nodes": [
+        {k: v for k, v in n.items() if k != "subgraphId"} if n["id"] == "right" else n
+        for n in graph["topology_structure"]["nodes"]
+    ]}
+    with running(StaticObservation(catalog)) as base:
+        run_page = requests.get(base + graph_url(graph) + "/runs/r").text
+        assert "unattributed evidence" in run_page
+        assert "declares no" in run_page
+        assert 'data-subgraph-address="root:right"' not in run_page
 
 
 def test_browser_expands_child_graphs_recursively(tmp_path):

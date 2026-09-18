@@ -33,6 +33,29 @@
 | **0018** | **브라우저 관측 표면 — 서버/프론트엔드 스택, 공개 read/update 라우트, 접근성 시각 상태 확정** | **Accepted** | **[0018-browser-viewer-contract.md](0018-browser-viewer-contract.md)** |
 | **0019** | **브라우저 실행 제출/승인 controls — 세션·CSRF 경계, entity 권한 포트, POST 라우트, 중복 제출 방지 확정** | **Accepted** | **[0019-web-execution-and-approval-controls.md](0019-web-execution-and-approval-controls.md)** |
 | **0020** | **플레이그라운드 아티팩트, 소유권, 런치 계약** | **Accepted** | **[0020-playground-launch-contract.md](0020-playground-launch-contract.md)** |
+| **0021** | **자식 그래프 실행은 Step 아래 중첩 Step으로 기록한다 — semconv 0.4.0** | **Accepted** | **[0021-nested-step-child-attribution.md](0021-nested-step-child-attribution.md)** |
+
+---
+
+## 자식 그래프 실행 귀속 — 중첩 Step, semconv 0.4.0 (2026-09-18)
+
+**0021 · Accepted · [자식 그래프 실행 귀속](0021-nested-step-child-attribution.md)**
+
+[#86](https://github.com/agent-topology/cordboard/issues/86)이 요구한 span 계약
+결정이다. Step은 이제 다른 Step의 자식일 수 있다 — 부모 Node가 선언된 자식
+그래프를 부른 호출(`cord_runtime.execution.Step.child()`, ADR-0008이 Attempt에
+쓴 것과 같은 "자식 span" 논거)만 이 모양을 만든다. `cord.semconv.version`을
+`0.4.0`으로 올리되 `archive_query.SUPPORTED_RUN_VERSIONS`는 `0.2.0`/`0.3.0`을
+그대로 유지한다 — 이번 확장은 허용 모양을 넓힐 뿐 이전 계약을 좁히지 않는다.
+중첩은 `0.4.0` Run에서만 유효하다고 게이팅한다: 이전 계측은 이 모양을 애초에
+만들 수 없었으므로, 그런 아카이브에서 발견되면 새 증거가 아니라 손상으로
+거부한다. 귀속(어느 자식 Node에 해당하는지)은 아카이브 계약이 아니라
+`web.presentation.run_topology`의 표시 결정이다 — 기존 `correlate_topology`/
+`expansions`의 `subgraphId` 상관을 재사용해 호출 지점(call site)별로 겹치고,
+선언 없음/미해석/표류 토폴로지는 추측 없이 미귀속 증거로만 보여준다(#86 AC5).
+코드·문서·테스트는 이 ADR과 함께 구현했다: `execution.py`/`archive_query.py`/
+`viewer.py`/`web/presentation.py`와 템플릿, `tests/test_child_graph_attribution.py`의
+합성 부모+wrapped 자식 재현.
 
 ---
 

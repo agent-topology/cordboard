@@ -82,6 +82,16 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
     `awaiting_resume: True` (evidence of an open wait, not a gap). Each
     Run's `execution_ns` subtracts only the *known* approval waits from its
     total span.
+
+    Each Step record also carries `child_steps` (#86): any Steps recorded
+    under a declared child-graph call at that exact call site
+    (`cord_runtime.execution.Step.child`), in the same nested shape,
+    recursively. `steps` on the Run stays exactly the Run's own top-level
+    Steps; a Step's `child_steps` never mixes in with a sibling call site's.
+    Which child topology Node each `child_steps` entry maps to is a display
+    decision made against a specific topology document (see
+    `correlate_topology`/`web.presentation.run_topology`), not something
+    this function itself resolves.
     """
     if spans:
         query_spans(spans, reference=0, top=1)  # validation only; count is unused
@@ -104,7 +114,13 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
             }
         return runs[key]
 
-    def ensure_step(step_span, run_span):
+    def ensure_step(step_span):
+        """A Step's record, attached either to the Run it belongs to or --
+        for a declared child-graph call (#86) -- to the enclosing parent
+        Step's `child_steps`, any number of nesting levels deep. The archive
+        contract (`query_spans`, already run above) has validated every
+        span's parentage and identity; this only needs to find where each
+        Step attaches."""
         key = step_span["spanId"]
         if key not in steps:
             attrs = step_span["attributes"]
@@ -117,9 +133,14 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
                 "resumed_from": attrs.get("cord.resumed_from"),
                 "repeated_execution": False,
                 "attempts": [],
+                "child_steps": [],
             }
             steps[key] = record
-            ensure_run(run_span)["steps"].append(record)
+            parent_span = spans[step_span["parentSpanId"]][0]
+            if role(parent_span) == "run":
+                ensure_run(parent_span)["steps"].append(record)
+            else:
+                ensure_step(parent_span)["child_steps"].append(record)
         return steps[key]
 
     for span, location in spans.values():
@@ -128,10 +149,9 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
             if kind == "run":
                 ensure_run(span)
             elif kind == "step":
-                ensure_step(span, parent(spans, span, "run"))
+                ensure_step(span)
             elif kind == "attempt":
-                step_span = parent(spans, span, "step")
-                step = ensure_step(step_span, parent(spans, step_span, "run"))
+                step = ensure_step(parent(spans, span, "step"))
                 attrs = span["attributes"]
                 step["attempts"].append({
                     "number": attrs["cord.step.attempt"],
@@ -143,10 +163,14 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
         except ArchiveError as exc:
             raise ArchiveError(f"{location}: {exc}") from None
 
-    for record in runs.values():
-        record["steps"].sort(key=lambda s: s["start_ns"])
-        for step in record["steps"]:
+    def _sort_steps(step_list):
+        step_list.sort(key=lambda s: s["start_ns"])
+        for step in step_list:
             step["attempts"].sort(key=lambda a: a["start_ns"])
+            _sort_steps(step["child_steps"])
+
+    for record in runs.values():
+        _sort_steps(record["steps"])
 
     by_resumed_from: dict[str, list[dict]] = {}
     for step in steps.values():
@@ -170,16 +194,25 @@ def build_execution_tree(spans: dict) -> list[dict[str, Any]]:
         step["awaiting_resume"] = (step["outcome"] == "awaiting_approval"
                                    and step["span_id"] not in by_resumed_from)
 
+    def _flatten(step_list):
+        """Every Step at every nesting depth (#86), for aggregates a Run's
+        truthful end/wait must not undercount just because some evidence is
+        a declared child-graph call rather than a top-level Step."""
+        for step in step_list:
+            yield step
+            yield from _flatten(step["child_steps"])
+
     for record in runs.values():
-        end_candidates = [record["end_ns"]] + [s["end_ns"] for s in record["steps"]] \
-            + [a["end_ns"] for s in record["steps"] for a in s["attempts"]]
+        all_steps = list(_flatten(record["steps"]))
+        end_candidates = [record["end_ns"]] + [s["end_ns"] for s in all_steps] \
+            + [a["end_ns"] for s in all_steps for a in s["attempts"]]
         record["end_ns"] = max(end_candidates)
-        known_waits = [s["approval_wait_ns"] for s in record["steps"] if s["approval_wait_ns"] is not None]
+        known_waits = [s["approval_wait_ns"] for s in all_steps if s["approval_wait_ns"] is not None]
         record["approval_wait_ns"] = sum(known_waits)
         record["execution_ns"] = max(0, record["end_ns"] - record["start_ns"] - record["approval_wait_ns"])
         record["timeline_incomplete"] = any(
             (s["resumed_from"] is not None and s["approval_wait_ns"] is None) or s["awaiting_resume"]
-            for s in record["steps"]
+            for s in all_steps
         )
 
     return sorted(runs.values(), key=lambda r: r["start_ns"])
@@ -295,6 +328,19 @@ def correlate_topology(freshness: FreshnessCheck | None, graph_id: str | None = 
             "subgraphs": _referenced_subgraphs(document_graphs, resolved["structure"])}
 
 
+def _step_view(step: dict) -> dict:
+    return {
+        "node": step["node"], "outcome": step["outcome"],
+        "resumed_from": step["resumed_from"], "repeated_execution": step["repeated_execution"],
+        "approval_wait_ns": step["approval_wait_ns"], "awaiting_resume": step["awaiting_resume"],
+        "attempts": [{"number": a["number"], "tier": a["tier"], "outcome": a["outcome"]}
+                     for a in step["attempts"]],
+        # Recursive: a declared child-graph call (#86) at this exact call
+        # site, in the same reduced shape.
+        "child_steps": [_step_view(child) for child in step["child_steps"]],
+    }
+
+
 def _subjects_view(graph_runs: list[dict]) -> list[dict]:
     subjects: dict[tuple[str, str], list[dict]] = {}
     for run in graph_runs:
@@ -304,12 +350,7 @@ def _subjects_view(graph_runs: list[dict]) -> list[dict]:
             "execution_ns": run["execution_ns"],
             "approval_wait_ns": run["approval_wait_ns"],
             "timeline_incomplete": run["timeline_incomplete"],
-            "steps": [{"node": s["node"], "outcome": s["outcome"],
-                       "resumed_from": s["resumed_from"], "repeated_execution": s["repeated_execution"],
-                       "approval_wait_ns": s["approval_wait_ns"], "awaiting_resume": s["awaiting_resume"],
-                       "attempts": [
-                {"number": a["number"], "tier": a["tier"], "outcome": a["outcome"]} for a in s["attempts"]
-            ]} for s in run["steps"]],
+            "steps": [_step_view(s) for s in run["steps"]],
         })
     return [{"subject_type": subject_type, "subject_id": subject_id, "runs": subject_runs}
             for (subject_type, subject_id), subject_runs in sorted(subjects.items())]
