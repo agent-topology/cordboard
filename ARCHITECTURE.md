@@ -641,9 +641,12 @@ Cordboard reported as `invalid`. They are now valid and drawn with one AND join.
 Second, a child that a graph calls through a wrapper function can be
 materialized when the graph calls Python `declare_children`. The child is then
 selectable through the existing `graph_map`, and R3 covers its static
-interrupts. Declarations are extraction-time metadata, not runtime identity.
-Child-call attribution therefore remains unimplemented, as does recursive
-rendering. LangGraph version support belongs to each graph's producer, not
+interrupts. Both remaining pieces are Cordboard work, not upstream limits.
+Recursive child rendering is tracked in
+[#85](https://github.com/agent-topology/cordboard/issues/85). Child-call
+attribution needs a nested-Step archive contract, because Steps currently
+must be children of the Run; it is tracked in
+[#86](https://github.com/agent-topology/cordboard/issues/86). LangGraph version support belongs to each graph's producer, not
 to Cordboard: Python supports 1.2.10–1.2.11 and TypeScript LangGraph.js
 supports 1.4.*. Cordboard consumes the published JSON either way. The producer is
 pinned to `agent-topology-langgraph==0.1.0b5` in the dev group only, for real

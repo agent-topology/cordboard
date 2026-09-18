@@ -181,7 +181,9 @@ AT-1은 이제 "후보에서 해결"이 아니라 게시본에서 닫혔다. `RE
 그래서 위 "`"1"`만 인식" 문장은 당시 이력이다. beta.5는 생산자만 바뀐 릴리스이고 spec pin은
 `0.1.0b4` 그대로다. 두 제한이 풀렸다. 첫째, 반복·순서만 다른 join 선언이 더는 무효 문서를
 만들지 않는다. 둘째, entity가 `declare_children`을 쓰면 wrapper 뒤의 자식도 `graph_map`으로
-선택할 수 있다. 런타임 자식 호출 귀속과 재귀 렌더링은 여전히 미구현이다. 코드 변경은 없고,
+선택할 수 있다. 재귀 렌더링([#85](https://github.com/agent-topology/cordboard/issues/85))과
+자식 호출 귀속([#86](https://github.com/agent-topology/cordboard/issues/86))은 Cordboard 작업으로
+남아 있다. 코드 변경은 없고,
 dev 생산자 pin 갱신과 회귀 테스트만 추가했다(665 passed, 36 deselected). 새 플랫폼 결정이 아니다.
 상세는 [업스트림 요구사항 문서](cordboard-upstream-requirements.md)와
 [beta.5 채택 기록](../topology-beta5.md)을 따른다.

@@ -24,8 +24,8 @@ spec pin은 그대로 두고, dev 그룹의 생산자 pin만 b4에서 b5로 올�
 |---|---|
 | join id 중복 (업스트림 #182) | **풀림.** beta.4에서는 같은 source 집합·target의 join을 반복하거나 순서만 바꿔 선언하면 같은 id의 join이 둘 생겼다. 검증기가 이 문서를 거부했으므로 Cordboard는 `invalid`로만 보고하고 그림을 그리지 못했다. beta.5에서는 join이 하나로 합쳐져 문서가 유효하고, 그림·대조·AND join 표시가 된다. Cordboard는 공개 `derived_join_edges`만 쓰고 join id를 파싱하지 않으므로, escape된 id에도 코드를 바꿀 필요가 없다 |
 | wrapper 뒤의 자식 (업스트림 #179/#185, campaign R2) | **풀림, 조건 있음.** beta.4에서는 노드 함수 안에서 `child.invoke`로 호출하는 자식이 모든 depth에서 `identity-unavailable`이었다. beta.5에서 entity가 Python `declare_children`을 호출하면 양수 depth에서 자식이 별도 `graphs[]`로 나온다. 기존 `graph_map`으로 선택할 수 있고, 자식 안의 정적 interrupt에도 R3가 적용된다. 선언은 추출 시점 메타데이터일 뿐이며 런타임 식별자가 아니다 |
-| 런타임 자식 호출 귀속·재귀 렌더링 | **여전히 미구현.** 업스트림은 선언을 런타임 호출과 대조하지 않는다. 재귀 렌더링은 원래 Cordboard 쪽 작업이었다 |
-| 실제 entity | campaign-agent#63이 여섯 호출 위치에 선언을 채택했다. 하지만 Cordboard가 연결하는 entity 중 그 그래프를 제공하는 곳은 아직 없다. Omiologic에는 campaign 그래프가 등록돼 있지 않고 well-known 문서도 없다. 실제 소비자 검증은 업스트림 근거로만 인용한다 |
+| 재귀 렌더링·자식 호출 귀속 | **업스트림 요구가 아니라 Cordboard 작업이다.** 재귀 렌더링은 [#85](https://github.com/agent-topology/cordboard/issues/85)에서 한다. 자식 호출 귀속은 [#86](https://github.com/agent-topology/cordboard/issues/86)에서 한다. 현재 archive 계약은 Step의 부모를 Run으로만 허용하므로, 중첩 Step 계약을 먼저 정해야 한다. 귀속의 근거는 업스트림의 런타임 식별자가 아니라, Cordboard가 기록한 부모 Step 관계와 부모 Node의 `subgraphId`다 |
+| 실제 entity | campaign-agent#63이 여섯 호출 위치에 선언을 채택했다. 하지만 Cordboard가 연결하는 entity 중 그 그래프를 제공하는 곳은 아직 없다. Omiologic에는 campaign 그래프가 등록돼 있지 않고 well-known 문서도 없다. 실제 소비자 검증은 업스트림 근거로만 인용한다. entity 쪽 후속 작업은 [omiologic-aegra#60](https://github.com/milocosmopolitan/omiologic-aegra/issues/60) |
 | 동적 interrupt | 변화 없음. 정적 topology 밖이다 |
 | AT-6 LangGraph 버전 | **Cordboard 제약이 아니다.** 언어마다 생산자의 지원 범위가 다르다. Python은 LangGraph 1.2.10–1.2.11, TypeScript는 LangGraph.js 1.4.*다. `declare_children`도 Python 생산자에만 있다. 둘 다 graph 쪽 생산자의 사실이며, Cordboard는 게시된 JSON을 그대로 소비한다 |
 

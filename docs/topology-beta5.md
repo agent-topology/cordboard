@@ -28,20 +28,26 @@ beta.4. Documents from graphs that never used these shapes are not affected.
 
 ## Limits that remain
 
-- **Runtime child-call attribution.** `declare_children` is metadata read at
-  extraction time. It is not checked against actual invocation. A wrong
-  declaration is the entity's correctness bug, and Cordboard cannot detect it.
-  The child address is still a document reference, not a runtime Graph
-  identity. Cordboard still does not attribute child spans to it.
-- **Recursive child rendering.** This is Cordboard-side work and upstream
-  never blocked it. The viewer still shows one selected graph per mapping.
+- **Recursive child rendering (Cordboard work,
+  [#85](https://github.com/agent-topology/cordboard/issues/85)).** The viewer
+  still shows one selected graph per mapping. Following `subgraphId` within
+  the current document needs nothing more from upstream.
+- **Child-call attribution (Cordboard work,
+  [#86](https://github.com/agent-topology/cordboard/issues/86)).** The archive
+  contract requires every Step's parent to be the Run, so a child execution has
+  no valid recorded shape. The attribution will come from Cordboard's own
+  recorded parent-Step parentage, combined with the parent Node's `subgraphId`.
+  It will not come from upstream runtime identity: `declare_children` is
+  extraction-time metadata, and checking that a declaration is correct remains
+  the entity's responsibility.
 - **Real entity coverage.** campaign-agent adopted `declare_children` at all six
   wrapped call sites
   ([campaign-agent#63](https://github.com/milocosmopolitan/campaign-agent/pull/63)).
   No entity that Cordboard connects to serves those graphs yet: Omiologic
   registers no campaign graph and does not serve the well-known document
   ([real entity pilot](real-entity-pilot.md)). The real-consumer claim is
-  upstream's evidence, not Cordboard's.
+  upstream's evidence, not Cordboard's. The entity-side follow-up is
+  [omiologic-aegra#60](https://github.com/milocosmopolitan/omiologic-aegra/issues/60).
 - **Unchanged topology boundaries.** Dynamic `interrupt()` calls, approval
   validity and effects remain outside static topology. Sentinel and branch
   facts remain experimental.

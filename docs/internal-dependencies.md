@@ -16,8 +16,11 @@ ones. Wrapped child calls also become selectable child graphs, but only when
 the graph calls `declare_children`. campaign-agent adopted the declaration
 upstream at commit `a1532d5e…`, which is newer than the `9112b72…` snapshot
 below. That snapshot was not re-inspected, and no entity Cordboard connects
-to serves campaign graphs yet. Runtime child-call attribution and the gaps
-listed below are unchanged. The LangGraph ranges below belong to the
+to serves campaign graphs yet
+([omiologic-aegra#60](https://github.com/milocosmopolitan/omiologic-aegra/issues/60)). Child rendering and child-call attribution are
+Cordboard work ([#85](https://github.com/agent-topology/cordboard/issues/85),
+[#86](https://github.com/agent-topology/cordboard/issues/86)). The gaps listed
+below are unchanged. The LangGraph ranges below belong to the
 producers, not to Cordboard: Python supports 1.2.10–1.2.11, and TypeScript
 LangGraph.js supports 1.4.*. That supersedes the "remains 1.4.14" wording in
 the beta.4 candidate section.
