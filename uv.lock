@@ -310,6 +310,21 @@ wheels = [
 ]
 
 [[package]]
+name = "cord-langgraph-callbacks"
+version = "0.0.1"
+source = { editable = "cord-langgraph-callbacks" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "opentelemetry-api" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "langchain-core", specifier = ">=0.3,<2" },
+    { name = "opentelemetry-api", specifier = ">=1.20,<2" },
+]
+
+[[package]]
 name = "cord-runtime"
 version = "0.0.1"
 source = { editable = "." }
@@ -330,6 +345,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "agent-topology-langgraph" },
+    { name = "cord-langgraph-callbacks" },
     { name = "pytest" },
 ]
 proxy = [
@@ -357,6 +373,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "agent-topology-langgraph", specifier = "==0.1.0b5" },
+    { name = "cord-langgraph-callbacks", editable = "cord-langgraph-callbacks" },
     { name = "pytest", specifier = "==9.1.1" },
 ]
 proxy = [{ name = "litellm", extras = ["proxy"], specifier = "==1.87.0" }]
